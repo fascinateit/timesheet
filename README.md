@@ -444,6 +444,8 @@ sudo systemctl start certbot.timer
 cd /opt/projectpulse
 git pull origin main
 
+# rsync -av timesheet/ ./
+
 # Rebuild frontend if changed
 cd frontend && npm install && npm run build
 sudo cp -r build/* /var/www/projectpulse/
