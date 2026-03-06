@@ -1,0 +1,10 @@
+USE projectpulse;
+
+ALTER TABLE employees
+  ADD COLUMN dob DATE NULL,
+  ADD COLUMN address VARCHAR(500) NULL,
+  ADD COLUMN mobile VARCHAR(20) NULL,
+  ADD COLUMN bank_account_no VARCHAR(50) NULL,
+  ADD COLUMN bank_ifsc VARCHAR(20) NULL,
+  ADD COLUMN bank_name VARCHAR(150) NULL;
+  ADD COLUMN skillset VARCHAR(500) NULL;

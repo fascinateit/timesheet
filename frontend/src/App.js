@@ -11,7 +11,7 @@ const C = {
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const fmt$ = n => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0 }).format(n || 0);
+const fmt$ = n => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 0 }).format(n || 0);
 const fmtD = d => { try { return new Date(d).toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric" }); } catch { return d || "—"; } };
 const mkAvi = n => (n || "??").split(" ").map(x => x[0]).join("").slice(0, 2).toUpperCase();
 
@@ -54,25 +54,26 @@ const Btn = ({ onClick, children, variant = "primary", small, style = {}, disabl
     >{children}</button>
   );
 };
-const Inp = ({ label, value, onChange, type = "text", options, required, placeholder }) => (
+const Inp = ({ label, value, onChange, type = "text", options, required, placeholder, disabled }) => (
   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
     {label && <label style={{ fontSize: 12, color: C.textDim, fontWeight: 600, letterSpacing: .4 }}>
       {label}{required && <span style={{ color: C.red }}> *</span>}
     </label>}
     {options ? (
-      <select value={value} onChange={e => onChange(e.target.value)} style={{
-        background: C.surface,
+      <select value={value} onChange={e => onChange(e.target.value)} disabled={disabled} style={{
+        background: disabled ? C.bg : C.surface, opacity: disabled ? 0.7 : 1,
         border: `1px solid ${C.border}`, borderRadius: 8, color: value ? C.text : C.textMuted,
-        padding: "8px 12px", fontSize: 13, outline: "none"
+        padding: "8px 12px", fontSize: 13, outline: "none", cursor: disabled ? "not-allowed" : "pointer"
       }}>
         <option value="">Select…</option>
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
     ) : (
-      <input type={type} value={value} onChange={e => onChange(e.target.value)}
+      <input type={type} value={value} onChange={e => onChange(e.target.value)} disabled={disabled}
         placeholder={placeholder} style={{
-          background: C.surface, border: `1px solid ${C.border}`,
-          borderRadius: 8, color: C.text, padding: "8px 12px", fontSize: 13, outline: "none", width: "100%"
+          background: disabled ? C.bg : C.surface, opacity: disabled ? 0.7 : 1, border: `1px solid ${C.border}`,
+          borderRadius: 8, color: C.text, padding: "8px 12px", fontSize: 13, outline: "none", width: "100%",
+          cursor: disabled ? "not-allowed" : "text"
         }} />
     )}
   </div>
@@ -354,7 +355,7 @@ function ProjectForm({ init, saving, onCancel, onSave }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <Inp label="Project Name" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} required placeholder="e.g. Cloud Migration" />
       <Inp label="Client Name" value={form.client} onChange={v => setForm(f => ({ ...f, client: v }))} />
-      <Inp label="Budget (USD)" type="number" value={form.budget} onChange={v => setForm(f => ({ ...f, budget: v }))} required />
+      <Inp label="Budget (INR)" type="number" value={form.budget} onChange={v => setForm(f => ({ ...f, budget: v }))} required />
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <Inp label="Start Date" type="date" value={form.startDate} onChange={v => setForm(f => ({ ...f, startDate: v }))} />
         <Inp label="End Date" type="date" value={form.endDate} onChange={v => setForm(f => ({ ...f, endDate: v }))} />
@@ -462,7 +463,7 @@ function Resources({ readOnly = false }) {
                   {!readOnly && <Btn small variant="ghost" onClick={() => openAssign(emp)}>🗂 Projects</Btn>}
                 </div>
               </div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: C.green }}>${emp.hourly_rate || 0}/hr</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.green }}>₹{emp.hourly_rate || 0}/hr</div>
             </Card>
           ))}
         </div>
@@ -480,7 +481,7 @@ function Resources({ readOnly = false }) {
                 {!readOnly && <Btn small variant="ghost" onClick={() => setModal({ type: "grp", id: g.id, name: g.name, hourlyRate: g.hourly_rate, color: g.color })}>✏ Edit</Btn>}
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
-                <div><div style={{ fontSize: 11, color: C.textMuted }}>Hourly Rate</div><div style={{ fontSize: 18, fontWeight: 800, color: C.green }}>${g.hourly_rate}</div></div>
+                <div><div style={{ fontSize: 11, color: C.textMuted }}>Hourly Rate</div><div style={{ fontSize: 18, fontWeight: 800, color: C.green }}>₹{g.hourly_rate}</div></div>
                 <div><div style={{ fontSize: 11, color: C.textMuted }}>Members</div><div style={{ fontSize: 18, fontWeight: 800, color: C.text }}>{members.length}</div></div>
               </div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -543,6 +544,19 @@ function EmpForm({ init, groups, saving, onCancel, onSave, btnLabel }) {
         <Inp label="Joining Date" type="date" value={form.joiningDate || ""} onChange={v => setForm(f => ({ ...f, joiningDate: v }))} />
       </div>
       <Inp label="Annual CTC (₹)" type="number" value={form.ctcAnnual || ""} onChange={v => setForm(f => ({ ...f, ctcAnnual: v }))} placeholder="e.g. 1200000" />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Inp label="Date of Birth" type="date" value={form.dob || ""} onChange={v => setForm(f => ({ ...f, dob: v }))} />
+        <Inp label="Mobile" value={form.mobile || ""} onChange={v => setForm(f => ({ ...f, mobile: v }))} placeholder="+1 123 456 7890" />
+      </div>
+      <Inp label="Address" value={form.address || ""} onChange={v => setForm(f => ({ ...f, address: v }))} placeholder="Full address..." />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Inp label="Bank Name" value={form.bankName || ""} onChange={v => setForm(f => ({ ...f, bankName: v }))} placeholder="e.g. Chase" />
+        <Inp label="Account No" value={form.bankAccountNo || ""} onChange={v => setForm(f => ({ ...f, bankAccountNo: v }))} placeholder="1234567890" />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Inp label="IFSC Code" value={form.bankIfsc || ""} onChange={v => setForm(f => ({ ...f, bankIfsc: v }))} placeholder="CHAS0123456" />
+        <Inp label="Skillset" value={form.skillset || ""} onChange={v => setForm(f => ({ ...f, skillset: v }))} placeholder="e.g. React, Node, SQL" />
+      </div>
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
         <Btn variant="ghost" onClick={onCancel}>Cancel</Btn>
         <Btn onClick={() => onSave(form)} disabled={saving}>{saving ? "Saving…" : btnLabel}</Btn>
@@ -1157,7 +1171,7 @@ function Reports() {
                       <span style={{ fontSize: 13, color: C.text }}>{e.name}</span>
                     </div></Td>
                     <Td>{e.group_name && <Badge color={e.group_color || C.accent}>{e.group_name}</Badge>}</Td>
-                    <Td style={{ fontSize: 12, color: C.textDim }}>${e.hourly_rate}/hr</Td>
+                    <Td style={{ fontSize: 12, color: C.textDim }}>₹{e.hourly_rate}/hr</Td>
                     <Td style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{e.total_hours}h</Td>
                     <Td style={{ fontSize: 13, fontWeight: 700, color: C.green }}>{fmt$(e.total_cost)}</Td>
                   </tr>
@@ -1191,10 +1205,102 @@ function Reports() {
 }
 
 // ════════════════════════════════════════════════════════
+// MY PROFILE
+// ════════════════════════════════════════════════════════
+function MyProfile({ currentUser }) {
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+  const [form, setForm] = useState({});
+
+  useEffect(() => {
+    api.getEmployee(currentUser.employee_id)
+      .then(p => { setProfile(p); setForm({ ...p, bankAccountNo: p.bank_account_no, bankIfsc: p.bank_ifsc, bankName: p.bank_name }); })
+      .catch(e => setErr(e.message))
+      .finally(() => setLoading(false));
+  }, [currentUser.employee_id]);
+
+  async function handleSave() {
+    setSaving(true); setErr("");
+    try {
+      const payload = {
+        name: profile.name, email: profile.email, groupId: profile.group_id, joiningDate: profile.joining_date, ctcAnnual: profile.ctc_annual,
+        dob: form.dob, address: form.address, mobile: form.mobile, skillset: form.skillset,
+        bankAccountNo: form.bankAccountNo, bankIfsc: form.bankIfsc, bankName: form.bankName
+      };
+      await api.updateEmployee(currentUser.employee_id, payload);
+      alert("Profile updated successfully!");
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) return <Spinner />;
+  if (err && !profile) return <ErrBox msg={err} />;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      <div>
+        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>My Profile</h2>
+        <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>View your organizational details and manage your personal information.</p>
+      </div>
+
+      {err && <div style={{ background: C.red + "18", color: C.red, padding: "10px 14px", borderRadius: 8, fontSize: 13, border: `1px solid ${C.red}44` }}>⚠ {err}</div>}
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+        <Card>
+          <h4 style={{ margin: "0 0 16px", fontSize: 14, color: C.text, fontWeight: 800 }}>Organizational Details <span style={{ fontSize: 11, fontWeight: 500, color: C.textMuted, marginLeft: 8 }}>(Read-Only)</span></h4>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <Inp label="Full Name" value={profile.name} disabled />
+            <Inp label="Email" value={profile.email} disabled />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <Inp label="Group" value={profile.group_name || "—"} disabled />
+              <Inp label="Role" value={currentUser.role} disabled />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <Inp label="Joining Date" value={profile.joining_date ? fmtD(profile.joining_date) : "—"} disabled />
+              <Inp label="Annual CTC" value={profile.ctc_annual ? `₹${Number(profile.ctc_annual).toLocaleString("en-IN")}` : "—"} disabled />
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <h4 style={{ margin: "0 0 16px", fontSize: 14, color: C.text, fontWeight: 800 }}>Personal Information</h4>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <Inp label="Date of Birth" type="date" value={form.dob || ""} onChange={v => setForm(f => ({ ...f, dob: v }))} />
+              <Inp label="Mobile" value={form.mobile || ""} onChange={v => setForm(f => ({ ...f, mobile: v }))} placeholder="+1 123 456 7890" />
+            </div>
+            <Inp label="Address" value={form.address || ""} onChange={v => setForm(f => ({ ...f, address: v }))} placeholder="Full address..." />
+            <Inp label="Skillset" value={form.skillset || ""} onChange={v => setForm(f => ({ ...f, skillset: v }))} placeholder="e.g. React, Node, SQL, Python" />
+          </div>
+        </Card>
+      </div>
+
+      <Card>
+        <h4 style={{ margin: "0 0 16px", fontSize: 14, color: C.text, fontWeight: 800 }}>Banking Details</h4>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <Inp label="Bank Name" value={form.bankName || ""} onChange={v => setForm(f => ({ ...f, bankName: v }))} placeholder="e.g. Chase" />
+          <Inp label="Account No" value={form.bankAccountNo || ""} onChange={v => setForm(f => ({ ...f, bankAccountNo: v }))} placeholder="1234567890" />
+          <Inp label="IFSC Code" value={form.bankIfsc || ""} onChange={v => setForm(f => ({ ...f, bankIfsc: v }))} placeholder="CHAS0123456" />
+        </div>
+      </Card>
+
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <Btn onClick={handleSave} disabled={saving} style={{ padding: "12px 32px", fontSize: 15 }}>{saving ? "Saving…" : "Save Profile"}</Btn>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════
 // EMPLOYEE HOME
 // ════════════════════════════════════════════════════════
 function EmployeeHome({ currentUser }) {
-  const [tab, setTab] = useState("timesheets");
+  const [tab, setTab] = useState("profile");
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
       <Card style={{ background: `linear-gradient(135deg,${C.accentDim}22,${C.card})`, border: `1px solid ${C.accent}33` }}>
@@ -1208,7 +1314,7 @@ function EmployeeHome({ currentUser }) {
         </div>
       </Card>
       <div style={{ display: "flex", gap: 4, background: C.surface, padding: 4, borderRadius: 10, width: "fit-content", flexWrap: "wrap" }}>
-        {[["timesheets", "⏱ My Timesheets"], ["leave", "🌴 My Leave"], ["expenses", "💳 My Expenses"], ["pay", "💰 My Pay"]].map(([t, label]) => (
+        {[["profile", "👤 My Profile"], ["timesheets", "⏱ My Timesheets"], ["leave", "🌴 My Leave"], ["expenses", "💳 My Expenses"], ["pay", "💰 My Pay"]].map(([t, label]) => (
           <button key={t} onClick={() => setTab(t)} style={{
             background: tab === t ? C.card : "transparent", color: tab === t ? C.text : C.textMuted,
             border: tab === t ? `1px solid ${C.border}` : "1px solid transparent",
@@ -1216,6 +1322,7 @@ function EmployeeHome({ currentUser }) {
           }}>{label}</button>
         ))}
       </div>
+      {tab === "profile" && <MyProfile currentUser={currentUser} />}
       {tab === "timesheets" && <Timesheets currentUser={currentUser} viewOnly />}
       {tab === "leave" && <Leaves currentUser={currentUser} viewOnly />}
       {tab === "expenses" && <Expenses currentUser={currentUser} viewOnly />}
@@ -1454,7 +1561,7 @@ function Expenses({ currentUser, viewOnly }) {
                     </div>
                   </div>
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 20, fontWeight: 800, color: C.green }}>${(+ex.amount || 0).toFixed(2)}</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: C.green }}>₹{(+ex.amount || 0).toFixed(2)}</div>
                     <div style={{ marginTop: 4 }}><Badge color={statusColor}>{ex.status.replace("_", " ")}</Badge></div>
                   </div>
                 </div>
@@ -1548,6 +1655,7 @@ function AdminEmployees({ readOnly = false }) {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [modal, setModal] = useState(null); // null | "new" | emp-object
+  const [viewModal, setViewModal] = useState(null); // null | emp-object
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -1602,6 +1710,7 @@ function AdminEmployees({ readOnly = false }) {
                     <Td style={{ fontSize: 12, color: C.textDim }}>{emp.joining_date ? fmtD(emp.joining_date) : <span style={{ color: C.textMuted }}>—</span>}</Td>
                     <Td style={{ fontSize: 12, fontWeight: 700, color: C.green }}>{emp.ctc_annual ? `₹${Number(emp.ctc_annual).toLocaleString("en-IN")}` : <span style={{ color: C.textMuted, fontWeight: 400 }}>—</span>}</Td>
                     <Td><div style={{ display: "flex", gap: 6 }}>
+                      <Btn small variant="secondary" onClick={() => setViewModal(emp)}>👁 View</Btn>
                       {!readOnly && <Btn small variant="ghost" onClick={() => setModal(emp)}>✏ Edit</Btn>}
                     </div></Td>
                   </tr>
@@ -1617,10 +1726,74 @@ function AdminEmployees({ readOnly = false }) {
       {!readOnly && modal && (
         <Modal title={modal === "new" ? "New Employee" : "Edit Employee"} onClose={() => setModal(null)}>
           <EmpForm
-            init={modal === "new" ? { name: "", email: "", groupId: "", joiningDate: "", ctcAnnual: "" } : { name: modal.name, email: modal.email, groupId: modal.group_id || "", joiningDate: modal.joining_date || "", ctcAnnual: modal.ctc_annual || "" }}
+            init={modal === "new" ? { name: "", email: "", groupId: "", joiningDate: "", ctcAnnual: "", dob: "", address: "", mobile: "", bankAccountNo: "", bankIfsc: "", bankName: "", skillset: "" } : { name: modal.name, email: modal.email, groupId: modal.group_id || "", joiningDate: modal.joining_date || "", ctcAnnual: modal.ctc_annual || "", dob: modal.dob || "", address: modal.address || "", mobile: modal.mobile || "", bankAccountNo: modal.bank_account_no || "", bankIfsc: modal.bank_ifsc || "", bankName: modal.bank_name || "", skillset: modal.skillset || "" }}
             groups={groups} saving={saving} onCancel={() => setModal(null)} onSave={saveEmp}
             btnLabel={modal === "new" ? "Create Employee" : "Save Changes"}
           />
+        </Modal>
+      )}
+
+      {/* View employee profile modal */}
+      {viewModal && (
+        <Modal title="Employee Profile" onClose={() => setViewModal(null)}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              <Avatar initials={viewModal.avatar} color={viewModal.group_color || C.accent} size={64} />
+              <div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: C.text }}>{viewModal.name}</div>
+                <div style={{ fontSize: 13, color: C.textMuted }}>{viewModal.email}</div>
+                <div style={{ marginTop: 6 }}>
+                  {viewModal.group_name ? <Badge color={viewModal.group_color}>{viewModal.group_name}</Badge> : null}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ background: C.surface, padding: 16, borderRadius: 10, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Mobile</div>
+                <div style={{ fontSize: 14, color: C.text, fontWeight: 600 }}>{viewModal.mobile || "—"}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>DOB</div>
+                <div style={{ fontSize: 14, color: C.text, fontWeight: 600 }}>{viewModal.dob ? fmtD(viewModal.dob) : "—"}</div>
+              </div>
+              <div style={{ gridColumn: "span 2" }}>
+                <div style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Address</div>
+                <div style={{ fontSize: 14, color: C.text, fontWeight: 600 }}>{viewModal.address || "—"}</div>
+              </div>
+            </div>
+
+            <div style={{ background: C.surface, padding: 16, borderRadius: 10 }}>
+              <h4 style={{ margin: "0 0 12px", fontSize: 13, color: C.text, fontWeight: 700 }}>Banking & Compensation</h4>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Bank Name</div>
+                  <div style={{ fontSize: 14, color: C.text, fontWeight: 600 }}>{viewModal.bank_name || "—"}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>IFSC Code</div>
+                  <div style={{ fontSize: 14, color: C.text, fontWeight: 600, fontFamily: "monospace" }}>{viewModal.bank_ifsc || "—"}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Account No</div>
+                  <div style={{ fontSize: 14, color: C.text, fontWeight: 600, fontFamily: "monospace" }}>{viewModal.bank_account_no || "—"}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Annual CTC</div>
+                  <div style={{ fontSize: 14, color: C.green, fontWeight: 700 }}>{viewModal.ctc_annual ? `₹${Number(viewModal.ctc_annual).toLocaleString("en-IN")}` : "—"}</div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ background: C.surface, padding: 16, borderRadius: 10 }}>
+              <div style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700, marginBottom: 8 }}>Skillset</div>
+              <div style={{ fontSize: 14, color: C.text, fontWeight: 600 }}>{viewModal.skillset || "—"}</div>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 4 }}>
+              <Btn variant="ghost" onClick={() => setViewModal(null)}>Close</Btn>
+            </div>
+          </div>
         </Modal>
       )}
     </div>

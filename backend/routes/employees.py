@@ -13,7 +13,7 @@ EMP_SELECT = """
 
 
 def _fmt(row):
-    for k in ("joining_date", "created_at", "updated_at"):
+    for k in ("joining_date", "dob", "created_at", "updated_at"):
         if row and row.get(k) and hasattr(row[k], "isoformat"):
             row[k] = row[k].isoformat()
     return row
@@ -51,9 +51,13 @@ def create_employee():
         return jsonify(error="name and email are required"), 400
     initials = "".join(p[0].upper() for p in name.split())[:2]
     eid = execute(
-        "INSERT INTO employees (name, email, group_id, avatar, joining_date, ctc_annual) VALUES (%s,%s,%s,%s,%s,%s)",
+        "INSERT INTO employees (name, email, group_id, avatar, joining_date, ctc_annual, dob, address, mobile, bank_account_no, bank_ifsc, bank_name, skillset) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
         (name, email, d.get("groupId") or None, initials,
-         d.get("joiningDate") or None, float(d.get("ctcAnnual") or 0)),
+         d.get("joiningDate") or None, float(d.get("ctcAnnual") or 0),
+         d.get("dob") or None, d.get("address") or None,
+         d.get("mobile") or None, d.get("bankAccountNo") or None,
+         d.get("bankIfsc") or None, d.get("bankName") or None,
+         d.get("skillset") or None),
     )
     row = query(EMP_SELECT + " WHERE e.id=%s", (eid,), fetch="one")
     return jsonify(_fmt(row)), 201
@@ -64,9 +68,13 @@ def create_employee():
 def update_employee(eid):
     d = request.get_json(silent=True) or {}
     execute(
-        "UPDATE employees SET name=%s, email=%s, group_id=%s, joining_date=%s, ctc_annual=%s WHERE id=%s",
+        "UPDATE employees SET name=%s, email=%s, group_id=%s, joining_date=%s, ctc_annual=%s, dob=%s, address=%s, mobile=%s, bank_account_no=%s, bank_ifsc=%s, bank_name=%s, skillset=%s WHERE id=%s",
         (d.get("name"), d.get("email"), d.get("groupId") or None,
-         d.get("joiningDate") or None, float(d.get("ctcAnnual") or 0), eid),
+         d.get("joiningDate") or None, float(d.get("ctcAnnual") or 0),
+         d.get("dob") or None, d.get("address") or None,
+         d.get("mobile") or None, d.get("bankAccountNo") or None,
+         d.get("bankIfsc") or None, d.get("bankName") or None,
+         d.get("skillset") or None, eid),
     )
     row = query(EMP_SELECT + " WHERE e.id=%s", (eid,), fetch="one")
     return jsonify(_fmt(row)), 200
