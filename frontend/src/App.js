@@ -206,7 +206,7 @@ function LoginPage({ onLogin }) {
               {loading ? "Authenticating…" : "Sign In →"}
             </button>
           </div>
-          {/* <div style={{ marginTop: 22, background: C.surface, borderRadius: 10, padding: "14px 16px", border: `1px solid ${C.border}` }}>
+          <div style={{ marginTop: 22, background: C.surface, borderRadius: 10, padding: "14px 16px", border: `1px solid ${C.border}` }}>
             <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5, marginBottom: 10 }}>🔑 Demo Credentials</div>
             {[["admin", "admin123", "Admin", C.purple], ["arjun", "pass123", "Employee", C.green]].map(([u, p, role, col]) => (
               <button key={u} onClick={() => { setUsername(u); setPassword(p); }} style={{
@@ -220,7 +220,7 @@ function LoginPage({ onLogin }) {
                 <div style={{ fontSize: 11, color: C.textMuted, marginTop: 3 }}>pw: {p}</div>
               </button>
             ))}
-          </div> */}
+          </div>
         </Card>
       </div>
     </div>
@@ -280,7 +280,7 @@ function Dashboard() {
 // ════════════════════════════════════════════════════════
 // PROJECTS
 // ════════════════════════════════════════════════════════
-function Projects() {
+function Projects({ readOnly = false }) {
   const [projects, setProjects] = useState([]); const [loading, setLoading] = useState(true); const [err, setErr] = useState("");
   const [modal, setModal] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -296,7 +296,7 @@ function Projects() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
         <div><h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>Projects</h2>
           <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>Manage project codes & budgets</p></div>
-        <Btn onClick={() => setModal("new")}>+ New Project</Btn>
+        {!readOnly && <Btn onClick={() => setModal("new")}>+ New Project</Btn>}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(340px,1fr))", gap: 16 }}>
         {projects.map(p => {
@@ -308,7 +308,7 @@ function Projects() {
                 <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>{p.client}</div></div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <StatusBadge status={p.status} />
-                <Btn small variant="ghost" onClick={() => setModal(p)}>✏</Btn>
+                {!readOnly && <Btn small variant="ghost" onClick={() => setModal(p)}>✏</Btn>}
               </div>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
@@ -372,7 +372,7 @@ function ProjectForm({ init, saving, onCancel, onSave }) {
 // ════════════════════════════════════════════════════════
 // RESOURCES
 // ════════════════════════════════════════════════════════
-function Resources() {
+function Resources({ readOnly = false }) {
   const [tab, setTab] = useState("employees");
   const [employees, setEmployees] = useState([]); const [groups, setGroups] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -432,9 +432,11 @@ function Resources() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
         <div><h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>Resources</h2>
           <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>Manage employees &amp; billing groups</p></div>
-        <Btn onClick={() => setModal(tab === "employees" ? { type: "emp" } : { type: "grp" })}>
-          + {tab === "employees" ? "Add Employee" : "Add Group"}
-        </Btn>
+        {!readOnly && (
+          <Btn onClick={() => setModal(tab === "employees" ? { type: "emp" } : { type: "grp" })}>
+            + {tab === "employees" ? "Add Employee" : "Add Group"}
+          </Btn>
+        )}
       </div>
       <div style={{ display: "flex", gap: 4, background: C.surface, padding: 4, borderRadius: 10, width: "fit-content" }}>
         {["employees", "groups"].map(t => (
@@ -456,8 +458,8 @@ function Resources() {
                 {emp.joining_date && <div style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>Joined {emp.joining_date}</div>}
                 {emp.group_name && <div style={{ marginTop: 6 }}><Badge color={emp.group_color || C.accent}>{emp.group_name}</Badge></div>}
                 <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
-                  <Btn small variant="ghost" onClick={() => setModal({ type: "emp", id: emp.id, name: emp.name, email: emp.email, groupId: emp.group_id || "", joiningDate: emp.joining_date || "", ctcAnnual: emp.ctc_annual || "" })}>✏ Edit</Btn>
-                  <Btn small variant="ghost" onClick={() => openAssign(emp)}>🗂 Projects</Btn>
+                  {!readOnly && <Btn small variant="ghost" onClick={() => setModal({ type: "emp", id: emp.id, name: emp.name, email: emp.email, groupId: emp.group_id || "", joiningDate: emp.joining_date || "", ctcAnnual: emp.ctc_annual || "" })}>✏ Edit</Btn>}
+                  {!readOnly && <Btn small variant="ghost" onClick={() => openAssign(emp)}>🗂 Projects</Btn>}
                 </div>
               </div>
               <div style={{ fontSize: 13, fontWeight: 700, color: C.green }}>${emp.hourly_rate || 0}/hr</div>
@@ -475,7 +477,7 @@ function Resources() {
                   <div style={{ width: 10, height: 10, borderRadius: "50%", background: g.color }} />
                   <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{g.name}</span>
                 </div>
-                <Btn small variant="ghost" onClick={() => setModal({ type: "grp", id: g.id, name: g.name, hourlyRate: g.hourly_rate, color: g.color })}>✏ Edit</Btn>
+                {!readOnly && <Btn small variant="ghost" onClick={() => setModal({ type: "grp", id: g.id, name: g.name, hourlyRate: g.hourly_rate, color: g.color })}>✏ Edit</Btn>}
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
                 <div><div style={{ fontSize: 11, color: C.textMuted }}>Hourly Rate</div><div style={{ fontSize: 18, fontWeight: 800, color: C.green }}>${g.hourly_rate}</div></div>
@@ -488,14 +490,14 @@ function Resources() {
           })}
         </div>
       )}
-      {(isNewEmp || isEditEmp) && (
+      {!readOnly && (isNewEmp || isEditEmp) && (
         <Modal title={isNewEmp ? "Add Employee" : "Edit Employee"} onClose={() => setModal(null)}>
           <EmpForm init={{ name: modal.name || "", email: modal.email || "", groupId: modal.groupId || "", joiningDate: modal.joiningDate || "", ctcAnnual: modal.ctcAnnual || "" }}
             groups={groups} saving={saving} onCancel={() => setModal(null)} onSave={saveEmp}
             btnLabel={isNewEmp ? "Add Employee" : "Save Changes"} />
         </Modal>
       )}
-      {(isNewGrp || isEditGrp) && (
+      {!readOnly && (isNewGrp || isEditGrp) && (
         <Modal title={isNewGrp ? "Add Group" : "Edit Group"} onClose={() => setModal(null)}>
           <GrpForm init={{ name: modal.name || "", hourlyRate: modal.hourlyRate || "", color: modal.color || "#3B82F6" }}
             saving={saving} onCancel={() => setModal(null)} onSave={saveGrp}
@@ -652,82 +654,84 @@ function Timesheets({ currentUser, viewOnly }) {
         </div>
 
         {/* Day columns */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 8 }}>
-          {weekDays.map((day, i) => {
-            const iso = isoDate(day);
-            const isToday = iso === todayIso;
-            const dayRows = rows.filter(r => r.work_date?.slice(0, 10) === iso);
-            const totalHrs = dayRows.reduce((s, r) => s + (+r.hours || 0), 0);
-            const isAdding = addRow && addRow.dayIso === iso;
+        <div className="resp-table-wrap">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 8, minWidth: 560 }}>
+            {weekDays.map((day, i) => {
+              const iso = isoDate(day);
+              const isToday = iso === todayIso;
+              const dayRows = rows.filter(r => r.work_date?.slice(0, 10) === iso);
+              const totalHrs = dayRows.reduce((s, r) => s + (+r.hours || 0), 0);
+              const isAdding = addRow && addRow.dayIso === iso;
 
-            return (
-              <div key={iso} style={{ background: isToday ? C.accentGlow : C.card, border: `1px solid ${isToday ? C.accent : C.border}`, borderRadius: 10, padding: 12, minHeight: 160, display: "flex", flexDirection: "column", gap: 6 }}>
-                {/* Header */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: .5 }}>{DAY_NAMES[i]}</div>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: isToday ? C.accent : C.text }}>{day.getDate()}</div>
+              return (
+                <div key={iso} style={{ background: isToday ? C.accentGlow : C.card, border: `1px solid ${isToday ? C.accent : C.border}`, borderRadius: 10, padding: 12, minHeight: 160, display: "flex", flexDirection: "column", gap: 6 }}>
+                  {/* Header */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: .5 }}>{DAY_NAMES[i]}</div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: isToday ? C.accent : C.text }}>{day.getDate()}</div>
+                    </div>
+                    {totalHrs > 0 && <div style={{ fontSize: 11, fontWeight: 700, color: C.green, background: C.green + "18", borderRadius: 4, padding: "2px 6px" }}>{totalHrs}h</div>}
                   </div>
-                  {totalHrs > 0 && <div style={{ fontSize: 11, fontWeight: 700, color: C.green, background: C.green + "18", borderRadius: 4, padding: "2px 6px" }}>{totalHrs}h</div>}
-                </div>
 
-                {/* Timesheet rows */}
-                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 5 }}>
-                  {dayRows.map(r => (
-                    <div key={r.id} style={{ background: C.surface, borderRadius: 6, padding: "5px 8px", display: "flex", justifyContent: "space-between", alignItems: "center", border: `1px solid ${r.status === "approved" ? C.green + "44" : r.status === "rejected" ? C.red + "44" : C.border}` }}>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: C.accent, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.project_code}</div>
-                        {!viewOnly && <div style={{ fontSize: 10, color: C.textMuted }}>{r.employee_name}</div>}
-                        <div style={{ fontSize: 10, color: C.textMuted }}>{r.hours}h · <span style={{ color: r.status === "approved" ? C.green : r.status === "rejected" ? C.red : C.amber }}>{r.status}</span></div>
+                  {/* Timesheet rows */}
+                  <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 5 }}>
+                    {dayRows.map(r => (
+                      <div key={r.id} style={{ background: C.surface, borderRadius: 6, padding: "5px 8px", display: "flex", justifyContent: "space-between", alignItems: "center", border: `1px solid ${r.status === "approved" ? C.green + "44" : r.status === "rejected" ? C.red + "44" : C.border}` }}>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: C.accent, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.project_code}</div>
+                          {!viewOnly && <div style={{ fontSize: 10, color: C.textMuted }}>{r.employee_name}</div>}
+                          <div style={{ fontSize: 10, color: C.textMuted }}>{r.hours}h · <span style={{ color: r.status === "approved" ? C.green : r.status === "rejected" ? C.red : C.amber }}>{r.status}</span></div>
+                        </div>
+                        <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                          {!viewOnly && r.status === "pending" && (
+                            <button onClick={() => handleDelete(r.id)} title="Remove" style={{ background: "none", border: "none", cursor: "pointer", color: C.textMuted, fontSize: 13, padding: "0 2px", lineHeight: 1 }}>🗑</button>
+                          )}
+                          {viewOnly && r.status === "pending" && (
+                            <button onClick={() => handleDelete(r.id)} title="Remove" style={{ background: "none", border: "none", cursor: "pointer", color: C.textMuted, fontSize: 13, padding: "0 2px", lineHeight: 1 }}>🗑</button>
+                          )}
+                          {!viewOnly && r.status === "pending" && (
+                            <button onClick={() => handleApprove(r.id)} title="Approve" style={{ background: "none", border: "none", cursor: "pointer", color: C.green, fontSize: 13, padding: "0 2px", lineHeight: 1 }}>✓</button>
+                          )}
+                          {!viewOnly && r.status === "pending" && (
+                            <button onClick={() => handleReject(r.id)} title="Reject" style={{ background: "none", border: "none", cursor: "pointer", color: C.red, fontSize: 13, padding: "0 2px", lineHeight: 1 }}>✕</button>
+                          )}
+                        </div>
                       </div>
-                      <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-                        {!viewOnly && r.status === "pending" && (
-                          <button onClick={() => handleDelete(r.id)} title="Remove" style={{ background: "none", border: "none", cursor: "pointer", color: C.textMuted, fontSize: 13, padding: "0 2px", lineHeight: 1 }}>🗑</button>
-                        )}
-                        {viewOnly && r.status === "pending" && (
-                          <button onClick={() => handleDelete(r.id)} title="Remove" style={{ background: "none", border: "none", cursor: "pointer", color: C.textMuted, fontSize: 13, padding: "0 2px", lineHeight: 1 }}>🗑</button>
-                        )}
-                        {!viewOnly && r.status === "pending" && (
-                          <button onClick={() => handleApprove(r.id)} title="Approve" style={{ background: "none", border: "none", cursor: "pointer", color: C.green, fontSize: 13, padding: "0 2px", lineHeight: 1 }}>✓</button>
-                        )}
-                        {!viewOnly && r.status === "pending" && (
-                          <button onClick={() => handleReject(r.id)} title="Reject" style={{ background: "none", border: "none", cursor: "pointer", color: C.red, fontSize: 13, padding: "0 2px", lineHeight: 1 }}>✕</button>
-                        )}
+                    ))}
+                  </div>
+
+                  {/* Inline add form */}
+                  {isAdding ? (
+                    <div style={{ background: C.surface, borderRadius: 6, padding: 8, border: `1px solid ${C.accent}44`, display: "flex", flexDirection: "column", gap: 6 }}>
+                      <select value={addRow.projectId || ""} onChange={e => setAddRow(r => ({ ...r, projectId: e.target.value }))}
+                        style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, padding: "4px 6px", fontSize: 11, width: "100%" }}>
+                        <option value="">Project…</option>
+                        {myProjs.map(p => <option key={p.id} value={p.id}>{p.code}</option>)}
+                      </select>
+                      <input type="number" value={addRow.hours || ""} onChange={e => setAddRow(r => ({ ...r, hours: e.target.value }))}
+                        placeholder="Hours" min="0.5" max="24" step="0.5"
+                        style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, padding: "4px 6px", fontSize: 11, width: "100%" }} />
+                      <div style={{ display: "flex", gap: 4 }}>
+                        <button onClick={handleAdd} disabled={saving} style={{ flex: 1, background: C.accent, border: "none", borderRadius: 5, color: "#fff", fontSize: 11, fontWeight: 700, padding: "4px 0", cursor: "pointer" }}>
+                          {saving ? "…" : "Submit"}
+                        </button>
+                        <button onClick={() => setAddRow(null)} style={{ flex: 1, background: "transparent", border: `1px solid ${C.border}`, borderRadius: 5, color: C.textMuted, fontSize: 11, padding: "4px 0", cursor: "pointer" }}>✕</button>
                       </div>
                     </div>
-                  ))}
+                  ) : (
+                    <button onClick={() => setAddRow({ dayIso: iso, projectId: "", hours: "" })}
+                      style={{ background: "transparent", border: `1px dashed ${C.border}`, borderRadius: 6, color: C.textMuted, fontSize: 20, padding: "4px 0", cursor: "pointer", lineHeight: 1, transition: "all .15s" }}
+                      title="Add project hours"
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.textMuted; }}>
+                      ＋
+                    </button>
+                  )}
                 </div>
-
-                {/* Inline add form */}
-                {isAdding ? (
-                  <div style={{ background: C.surface, borderRadius: 6, padding: 8, border: `1px solid ${C.accent}44`, display: "flex", flexDirection: "column", gap: 6 }}>
-                    <select value={addRow.projectId || ""} onChange={e => setAddRow(r => ({ ...r, projectId: e.target.value }))}
-                      style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, padding: "4px 6px", fontSize: 11, width: "100%" }}>
-                      <option value="">Project…</option>
-                      {myProjs.map(p => <option key={p.id} value={p.id}>{p.code}</option>)}
-                    </select>
-                    <input type="number" value={addRow.hours || ""} onChange={e => setAddRow(r => ({ ...r, hours: e.target.value }))}
-                      placeholder="Hours" min="0.5" max="24" step="0.5"
-                      style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, padding: "4px 6px", fontSize: 11, width: "100%" }} />
-                    <div style={{ display: "flex", gap: 4 }}>
-                      <button onClick={handleAdd} disabled={saving} style={{ flex: 1, background: C.accent, border: "none", borderRadius: 5, color: "#fff", fontSize: 11, fontWeight: 700, padding: "4px 0", cursor: "pointer" }}>
-                        {saving ? "…" : "Submit"}
-                      </button>
-                      <button onClick={() => setAddRow(null)} style={{ flex: 1, background: "transparent", border: `1px solid ${C.border}`, borderRadius: 5, color: C.textMuted, fontSize: 11, padding: "4px 0", cursor: "pointer" }}>✕</button>
-                    </div>
-                  </div>
-                ) : (
-                  <button onClick={() => setAddRow({ dayIso: iso, projectId: "", hours: "" })}
-                    style={{ background: "transparent", border: `1px dashed ${C.border}`, borderRadius: 6, color: C.textMuted, fontSize: 20, padding: "4px 0", cursor: "pointer", lineHeight: 1, transition: "all .15s" }}
-                    title="Add project hours"
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.textMuted; }}>
-                    ＋
-                  </button>
-                )}
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
     );
@@ -754,30 +758,32 @@ function Timesheets({ currentUser, viewOnly }) {
           <button onClick={() => setMonthOf(({ y, m }) => m === 11 ? { y: y + 1, m: 0 } : { y, m: m + 1 })} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 14px", color: C.textDim, cursor: "pointer", fontSize: 16 }}>›</button>
           <Btn small variant="ghost" onClick={() => { const n = new Date(); setMonthOf({ y: n.getFullYear(), m: n.getMonth() }); }}>Today</Btn>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 2, marginBottom: 4 }}>
-          {DAY_NAMES.map(d => <div key={d} style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: C.textMuted, padding: "4px 0", textTransform: "uppercase" }}>{d}</div>)}
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4 }}>
-          {grid.map((day, idx) => {
-            if (!day) return <div key={idx} />;
-            const iso = isoDate(day);
-            const isToday = iso === todayIso;
-            const dayRows = rows.filter(r => r.work_date?.slice(0, 10) === iso);
-            const totalHrs = dayRows.reduce((s, r) => s + (+r.hours || 0), 0);
-            const hasApproved = dayRows.some(r => r.status === "approved");
-            const hasPending = dayRows.some(r => r.status === "pending");
-            const dotColor = hasApproved ? C.green : hasPending ? C.amber : "transparent";
-            return (
-              <div key={iso} onClick={() => { if (dayRows.length) setDayPanel({ iso, dayRows }); }}
-                style={{ background: isToday ? C.accentGlow : C.card, border: `1px solid ${isToday ? C.accent : C.border}`, borderRadius: 8, padding: "8px 4px", minHeight: 60, cursor: dayRows.length ? "pointer" : "default", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, transition: "opacity .15s" }}
-                onMouseEnter={e => { if (dayRows.length) e.currentTarget.style.opacity = ".8"; }}
-                onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}>
-                <div style={{ fontSize: 13, fontWeight: isToday ? 800 : 500, color: isToday ? C.accent : C.text }}>{day.getDate()}</div>
-                {totalHrs > 0 && <div style={{ fontSize: 10, fontWeight: 700, color: C.green }}>{totalHrs}h</div>}
-                {dotColor !== "transparent" && <div style={{ width: 6, height: 6, borderRadius: "50%", background: dotColor }} />}
-              </div>
-            );
-          })}
+        <div className="resp-table-wrap">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 2, marginBottom: 4, minWidth: 480 }}>
+            {DAY_NAMES.map(d => <div key={d} style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: C.textMuted, padding: "4px 0", textTransform: "uppercase" }}>{d}</div>)}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4, minWidth: 480 }}>
+            {grid.map((day, idx) => {
+              if (!day) return <div key={idx} />;
+              const iso = isoDate(day);
+              const isToday = iso === todayIso;
+              const dayRows = rows.filter(r => r.work_date?.slice(0, 10) === iso);
+              const totalHrs = dayRows.reduce((s, r) => s + (+r.hours || 0), 0);
+              const hasApproved = dayRows.some(r => r.status === "approved");
+              const hasPending = dayRows.some(r => r.status === "pending");
+              const dotColor = hasApproved ? C.green : hasPending ? C.amber : "transparent";
+              return (
+                <div key={iso} onClick={() => { if (dayRows.length) setDayPanel({ iso, dayRows }); }}
+                  style={{ background: isToday ? C.accentGlow : C.card, border: `1px solid ${isToday ? C.accent : C.border}`, borderRadius: 8, padding: "8px 4px", minHeight: 60, cursor: dayRows.length ? "pointer" : "default", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, transition: "opacity .15s" }}
+                  onMouseEnter={e => { if (dayRows.length) e.currentTarget.style.opacity = ".8"; }}
+                  onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}>
+                  <div style={{ fontSize: 13, fontWeight: isToday ? 800 : 500, color: isToday ? C.accent : C.text }}>{day.getDate()}</div>
+                  {totalHrs > 0 && <div style={{ fontSize: 10, fontWeight: 700, color: C.green }}>{totalHrs}h</div>}
+                  {dotColor !== "transparent" && <div style={{ width: 6, height: 6, borderRadius: "50%", background: dotColor }} />}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     );
@@ -1365,7 +1371,7 @@ function Expenses({ currentUser, viewOnly }) {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [modal, setModal] = useState(null); // null | "new" | row-object
-  const [noteModal, setNoteModal] = useState(null); // {id,action}
+  const [noteModal, setNoteModal] = useState(null); // {id, action}
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [filterStatus, setFilterStatus] = useState("");
@@ -1536,39 +1542,22 @@ function ExpenseForm({ init, projects, saving, onCancel, onSave, btnLabel }) {
 // ════════════════════════════════════════════════════════
 // ADMIN EMPLOYEES TAB
 // ════════════════════════════════════════════════════════
-function AdminEmployees() {
+function AdminEmployees({ readOnly = false }) {
   const [employees, setEmployees] = useState([]);
   const [groups, setGroups] = useState([]);
-  const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [modal, setModal] = useState(null); // null | "new" | emp-object
-  const [assignModal, setAssignModal] = useState(null); // emp-object
-  const [assignedIds, setAssignedIds] = useState([]);
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true); setErr("");
     try {
-      const [e, g, p] = await Promise.all([api.getEmployees(), api.getGroups(), api.getProjects()]);
-      setEmployees(e); setGroups(g); setProjects(p);
+      const [e, g] = await Promise.all([api.getEmployees(), api.getGroups()]);
+      setEmployees(e); setGroups(g);
     } catch (e) { setErr(e.message); } finally { setLoading(false); }
   });
   useEffect(() => { load(); }, []);
-
-  async function openAssign(emp) {
-    try {
-      const ids = await api.getEmployeeProjects(emp.id);
-      setAssignedIds(ids);
-      setAssignModal(emp);
-    } catch (e) { alert(e.message); }
-  }
-
-  async function saveAssign() {
-    setSaving(true);
-    try { await api.updateEmployeeProjects(assignModal.id, assignedIds); setAssignModal(null); }
-    catch (e) { alert(e.message); } finally { setSaving(false); }
-  }
 
   async function saveEmp(form) {
     if (!form.name || !form.email) return;
@@ -1590,19 +1579,18 @@ function AdminEmployees() {
           <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>Employees</h2>
           <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>Manage employees, groups & project assignments</p>
         </div>
-        <Btn onClick={() => setModal("new")}>+ New Employee</Btn>
+        {!readOnly && <Btn onClick={() => setModal("new")}>+ New Employee</Btn>}
       </div>
 
       <Card style={{ padding: 0, overflow: "hidden" }}>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead style={{ background: C.surface }}><tr>
-              {["Employee", "Email", "Group", "Rate", "Assigned Projects", "Actions"].map(h => <Th key={h}>{h}</Th>)}
+              {["Employee", "Email", "Group", "Joining Date", "CTC", "Actions"].map(h => <Th key={h}>{h}</Th>)}
             </tr></thead>
             <tbody>
               {employees.map((emp, idx) => {
                 const grp = groups.find(g => g.id === emp.group_id);
-                const empProjects = projects.filter(p => (p.assigned_employees || []).includes(emp.id));
                 return (
                   <tr key={emp.id} style={{ borderBottom: `1px solid ${C.border} 22`, background: idx % 2 === 0 ? "transparent" : C.bg + "44" }}>
                     <Td><div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1611,60 +1599,28 @@ function AdminEmployees() {
                     </div></Td>
                     <Td style={{ fontSize: 12, color: C.textDim }}>{emp.email}</Td>
                     <Td>{grp ? <Badge color={grp.color}>{grp.name}</Badge> : <span style={{ color: C.textMuted, fontSize: 12 }}>—</span>}</Td>
-                    <Td style={{ fontSize: 12, color: C.green }}>${emp.hourly_rate || 0}/hr</Td>
-                    <Td>
-                      <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                        {empProjects.length === 0 ? <span style={{ fontSize: 11, color: C.textMuted }}>None</span> :
-                          empProjects.slice(0, 3).map(p => <span key={p.id} style={{ fontSize: 10, background: C.accent + "22", color: C.accent, borderRadius: 4, padding: "2px 6px" }}>{p.code}</span>)
-                        }
-                        {empProjects.length > 3 && <span style={{ fontSize: 10, color: C.textMuted }}>+{empProjects.length - 3}</span>}
-                      </div>
-                    </Td>
+                    <Td style={{ fontSize: 12, color: C.textDim }}>{emp.joining_date ? fmtD(emp.joining_date) : <span style={{ color: C.textMuted }}>—</span>}</Td>
+                    <Td style={{ fontSize: 12, fontWeight: 700, color: C.green }}>{emp.ctc_annual ? `₹${Number(emp.ctc_annual).toLocaleString("en-IN")}` : <span style={{ color: C.textMuted, fontWeight: 400 }}>—</span>}</Td>
                     <Td><div style={{ display: "flex", gap: 6 }}>
-                      <Btn small variant="ghost" onClick={() => setModal(emp)}>✏ Edit</Btn>
-                      <Btn small variant="ghost" onClick={() => openAssign(emp)}>🗂 Projects</Btn>
+                      {!readOnly && <Btn small variant="ghost" onClick={() => setModal(emp)}>✏ Edit</Btn>}
                     </div></Td>
                   </tr>
                 );
               })}
-              {employees.length === 0 && <tr><td colSpan={6} style={{ padding: 40, textAlign: "center", color: C.textMuted }}>No employees found.</td></tr>}
+              {employees.length === 0 && <tr><td colSpan={readOnly ? 5 : 6} style={{ padding: 40, textAlign: "center", color: C.textMuted }}>No employees found.</td></tr>}
             </tbody>
           </table>
         </div>
       </Card>
 
       {/* Create / Edit employee modal */}
-      {modal && (
+      {!readOnly && modal && (
         <Modal title={modal === "new" ? "New Employee" : "Edit Employee"} onClose={() => setModal(null)}>
           <EmpForm
-            init={modal === "new" ? { name: "", email: "", groupId: "" } : { name: modal.name, email: modal.email, groupId: modal.group_id || "" }}
+            init={modal === "new" ? { name: "", email: "", groupId: "", joiningDate: "", ctcAnnual: "" } : { name: modal.name, email: modal.email, groupId: modal.group_id || "", joiningDate: modal.joining_date || "", ctcAnnual: modal.ctc_annual || "" }}
             groups={groups} saving={saving} onCancel={() => setModal(null)} onSave={saveEmp}
             btnLabel={modal === "new" ? "Create Employee" : "Save Changes"}
           />
-        </Modal>
-      )}
-
-      {/* Project assignment modal */}
-      {assignModal && (
-        <Modal title={`Assign Projects — ${assignModal.name} `} onClose={() => setAssignModal(null)}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <p style={{ margin: "0 0 8px", fontSize: 13, color: C.textMuted }}>Select the projects this employee can log hours against.</p>
-            {projects.filter(p => p.status === "active").map(p => (
-              <label key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "6px 0" }}>
-                <input type="checkbox" checked={assignedIds.includes(p.id)}
-                  onChange={e => setAssignedIds(ids => e.target.checked ? [...ids, p.id] : ids.filter(i => i !== p.id))}
-                  style={{ width: 16, height: 16, cursor: "pointer" }} />
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{p.name}</div>
-                  <div style={{ fontSize: 11, color: C.accent }}>{p.code}</div>
-                </div>
-              </label>
-            ))}
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8 }}>
-              <Btn variant="ghost" onClick={() => setAssignModal(null)}>Cancel</Btn>
-              <Btn onClick={saveAssign} disabled={saving}>{saving ? "Saving…" : "Save Assignments"}</Btn>
-            </div>
-          </div>
         </Modal>
       )}
     </div>
@@ -1688,80 +1644,80 @@ function printPayslipData(ps, origin) {
   const totalDed = Number(ps.pf_employee) + Number(ps.professional_tax) + extraDed;
 
   const html = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8"/>
-<title>Payslip - ${monthLabel} - ${ps.employee_name}</title>
-<style>
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'Segoe UI',Arial,sans-serif;background:#f4f6fb;color:#111}
-  .slip{max-width:780px;margin:32px auto;border-radius:14px;overflow:hidden;box-shadow:0 4px 32px rgba(0,0,0,.12);background:#fff}
-  .hdr{background:linear-gradient(135deg,#1a2340,#2d3d6e);color:#fff;padding:28px 36px;display:flex;align-items:center;gap:24px}
-  .hdr img{height:56px;object-fit:contain}
-  .hdr-t h2{font-size:20px;font-weight:800}
-  .hdr-t p{margin-top:4px;font-size:13px;opacity:.75}
-  .info{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid #eee}
-  .ic{padding:14px 32px;font-size:13px;border-right:1px solid #eee}
-  .ic:nth-child(even){border-right:none}
-  .lbl{color:#888;font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
-  .val{font-weight:700}
-  .tables{display:grid;grid-template-columns:1fr 1fr}
-  table{width:100%;border-collapse:collapse}
-  th{background:#f7f9fc;padding:11px 28px;text-align:left;font-size:11px;color:#666;text-transform:uppercase;border-bottom:1px solid #eee}
-  td{padding:10px 28px;font-size:13px;border-bottom:1px solid #f4f4f4}
-  .amt{text-align:right;font-weight:600}
-  .highlight{background:#fffbeb}
-  .tot td{background:#f0f4ff;font-weight:800;font-size:14px;border-top:2px solid #dde3f0}
-  .rt{border-left:1px solid #eee}
-  .net{background:linear-gradient(135deg,#1a2340,#2d3d6e);color:#fff;padding:22px 36px;display:flex;justify-content:space-between;align-items:center}
-  .net-lbl{font-size:13px;opacity:.8}
-  .net-amt{font-size:26px;font-weight:800}
-  .foot{text-align:center;padding:14px;font-size:11px;color:#aaa;border-top:1px solid #eee}
-  @media print{body{background:#fff} .slip{box-shadow:none;margin:0;border-radius:0}}
-</style>
-</head>
-<body>
-<div class="slip">
-  <div class="hdr">
-    <img src="${origin}/paysliplogo.png" alt="Logo"/>
-    <div class="hdr-t"><h2>Salary Slip</h2><p>Period: ${monthLabel}</p></div>
-  </div>
-  <div class="info">
-    <div class="ic"><div class="lbl">Employee Name</div><div class="val">${ps.employee_name}</div></div>
-    <div class="ic"><div class="lbl">Email</div><div class="val">${ps.email || ''}</div></div>
-    <div class="ic"><div class="lbl">Department</div><div class="val">${ps.group_name || '&#8212;'}</div></div>
-    <div class="ic"><div class="lbl">Pay Period</div><div class="val">${monthLabel}</div></div>
-  </div>
-  <div class="tables">
-    <div><table>
-      <thead><tr><th>Earnings</th><th style="text-align:right">Amount</th></tr></thead>
-      <tbody>
-        <tr><td>Basic Salary</td><td class="amt">${fmt(ps.basic)}</td></tr>
-        <tr><td>House Rent Allowance</td><td class="amt">${fmt(ps.hra)}</td></tr>
-        <tr><td>Transport Allowance</td><td class="amt">${fmt(ps.transport)}</td></tr>
-        <tr><td>Special Allowance</td><td class="amt">${fmt(ps.special_allowance)}</td></tr>
-        ${bonus > 0 ? `<tr class="highlight"><td>Bonus</td><td class="amt">${fmt(bonus)}</td></tr>` : ''}
-        <tr class="tot"><td>Gross Salary</td><td class="amt">${fmt(ps.gross)}</td></tr>
-      </tbody>
-    </table></div>
-    <div class="rt"><table>
-      <thead><tr><th>Deductions</th><th style="text-align:right">Amount</th></tr></thead>
-      <tbody>
-        <tr><td>Provident Fund (12% Basic)</td><td class="amt">${fmt(ps.pf_employee)}</td></tr>
-        <tr><td>Professional Tax</td><td class="amt">${fmt(ps.professional_tax)}</td></tr>
-        ${extraDed > 0 ? `<tr class="highlight"><td>Additional Deductions</td><td class="amt">${fmt(extraDed)}</td></tr>` : ''}
-        <tr class="tot"><td>Total Deductions</td><td class="amt">${fmt(totalDed)}</td></tr>
-      </tbody>
-    </table></div>
-  </div>
-  <div class="net">
-    <div class="net-lbl">Net Pay (${monthLabel})</div>
-    <div class="net-amt">${fmt(ps.net_pay)}</div>
-  </div>
-  <div class="foot">This is a computer-generated payslip and does not require a signature.</div>
-</div>
-<script>window.onload=function(){window.print();}<\/script>
-</body></html>`;
+        <html>
+          <head>
+            <meta charset="UTF-8" />
+            <title>Payslip - ${monthLabel} - ${ps.employee_name}</title>
+            <style>
+              *{box - sizing:border-box;margin:0;padding:0}
+              body{font - family:'Segoe UI',Arial,sans-serif;background:#f4f6fb;color:#111}
+              .slip{max - width:780px;margin:32px auto;border-radius:14px;overflow:hidden;box-shadow:0 4px 32px rgba(0,0,0,.12);background:#fff}
+              .hdr{background:linear-gradient(135deg,#1a2340,#2d3d6e);color:#fff;padding:28px 36px;display:flex;align-items:center;gap:24px}
+              .hdr img{height:56px;object-fit:contain}
+              .hdr-t h2{font - size:20px;font-weight:800}
+              .hdr-t p{margin - top:4px;font-size:13px;opacity:.75}
+              .info{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid #eee}
+              .ic{padding:14px 32px;font-size:13px;border-right:1px solid #eee}
+              .ic:nth-child(even){border - right:none}
+              .lbl{color:#888;font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+              .val{font - weight:700}
+              .tables{display:grid;grid-template-columns:1fr 1fr}
+              table{width:100%;border-collapse:collapse}
+              th{background:#f7f9fc;padding:11px 28px;text-align:left;font-size:11px;color:#666;text-transform:uppercase;border-bottom:1px solid #eee}
+              td{padding:10px 28px;font-size:13px;border-bottom:1px solid #f4f4f4}
+              .amt{text - align:right;font-weight:600}
+              .highlight{background:#fffbeb}
+              .tot td{background:#f0f4ff;font-weight:800;font-size:14px;border-top:2px solid #dde3f0}
+              .rt{border - left:1px solid #eee}
+              .net{background:linear-gradient(135deg,#1a2340,#2d3d6e);color:#fff;padding:22px 36px;display:flex;justify-content:space-between;align-items:center}
+              .net-lbl{font - size:13px;opacity:.8}
+              .net-amt{font - size:26px;font-weight:800}
+              .foot{text - align:center;padding:14px;font-size:11px;color:#aaa;border-top:1px solid #eee}
+              @media print{body{background:#fff} .slip{box - shadow:none;margin:0;border-radius:0}}
+            </style>
+          </head>
+          <body>
+            <div class="slip">
+              <div class="hdr">
+                <img src="${origin}/paysliplogo.png" alt="Logo" />
+                <div class="hdr-t"><h2>Salary Slip</h2><p>Period: ${monthLabel}</p></div>
+              </div>
+              <div class="info">
+                <div class="ic"><div class="lbl">Employee Name</div><div class="val">${ps.employee_name}</div></div>
+                <div class="ic"><div class="lbl">Email</div><div class="val">${ps.email || ''}</div></div>
+                <div class="ic"><div class="lbl">Department</div><div class="val">${ps.group_name || '&#8212;'}</div></div>
+                <div class="ic"><div class="lbl">Pay Period</div><div class="val">${monthLabel}</div></div>
+              </div>
+              <div class="tables">
+                <div><table>
+                  <thead><tr><th>Earnings</th><th style="text-align:right">Amount</th></tr></thead>
+                  <tbody>
+                    <tr><td>Basic Salary</td><td class="amt">${fmt(ps.basic)}</td></tr>
+                    <tr><td>House Rent Allowance</td><td class="amt">${fmt(ps.hra)}</td></tr>
+                    <tr><td>Transport Allowance</td><td class="amt">${fmt(ps.transport)}</td></tr>
+                    <tr><td>Special Allowance</td><td class="amt">${fmt(ps.special_allowance)}</td></tr>
+                    ${bonus > 0 ? `<tr class="highlight"><td>Bonus</td><td class="amt">${fmt(bonus)}</td></tr>` : ''}
+                    <tr class="tot"><td>Gross Salary</td><td class="amt">${fmt(ps.gross)}</td></tr>
+                  </tbody>
+                </table></div>
+                <div class="rt"><table>
+                  <thead><tr><th>Deductions</th><th style="text-align:right">Amount</th></tr></thead>
+                  <tbody>
+                    <tr><td>Provident Fund (12% Basic)</td><td class="amt">${fmt(ps.pf_employee)}</td></tr>
+                    <tr><td>Professional Tax</td><td class="amt">${fmt(ps.professional_tax)}</td></tr>
+                    ${extraDed > 0 ? `<tr class="highlight"><td>Additional Deductions</td><td class="amt">${fmt(extraDed)}</td></tr>` : ''}
+                    <tr class="tot"><td>Total Deductions</td><td class="amt">${fmt(totalDed)}</td></tr>
+                  </tbody>
+                </table></div>
+              </div>
+              <div class="net">
+                <div class="net-lbl">Net Pay (${monthLabel})</div>
+                <div class="net-amt">${fmt(ps.net_pay)}</div>
+              </div>
+              <div class="foot">This is a computer-generated payslip and does not require a signature.</div>
+            </div>
+            <script>window.onload=function(){window.print();}<\/script>
+          </body></html>`;
 
   // Use Blob URL to avoid document.write DOCTYPE rendering bug
   const blob = new Blob([html], { type: 'text/html' });
@@ -1970,14 +1926,29 @@ const ADMIN_NAV = [
 // ════════════════════════════════════════════════════════
 // ROOT APP
 // ════════════════════════════════════════════════════════
-const STYLE = `
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
-  * { box- sizing: border - box}
-input, select, button{ font - family: inherit!important }
-  :: -webkit - scrollbar{ width: 4px; height: 4px }
-  :: -webkit - scrollbar - track{ background: transparent }
-  :: -webkit - scrollbar - thumb{ background:#1E2740; border - radius: 4px }
-`;
+const STYLE = [
+  "@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');",
+  "* { box-sizing: border-box; }",
+  "input, select, button { font-family: inherit !important; }",
+  "::-webkit-scrollbar { width: 4px; height: 4px; }",
+  "::-webkit-scrollbar-track { background: transparent; }",
+  "::-webkit-scrollbar-thumb { background: #1E2740; border-radius: 4px; }",
+  "@keyframes spin { to { transform: rotate(360deg); } }",
+  ".app-layout { display: flex; min-height: 100vh; }",
+  ".app-nav { width: 224px; flex-shrink: 0; display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; transition: transform 0.25s ease; z-index: 200; }",
+  ".emp-nav { width: 200px; }",
+  ".hamburger-btn { display: none; position: fixed; top: 12px; left: 12px; z-index: 300; background: #161B2A; border: 1px solid #1E2740; color: #E2E8F0; border-radius: 8px; padding: 8px 11px; font-size: 18px; cursor: pointer; line-height: 1; }",
+  ".nav-overlay { display: none; position: fixed; inset: 0; z-index: 199; background: rgba(0,0,0,0.6); }",
+  ".nav-overlay.open { display: block; }",
+  ".main-content { flex: 1; padding: 32px 36px; overflow-y: auto; max-width: calc(100vw - 224px); }",
+  ".emp-main { flex: 1; padding: 32px 36px; overflow-y: auto; }",
+  ".resp-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }",
+  ".mobile-top-bar { display: none; height: 52px; align-items: center; padding: 0 16px; position: sticky; top: 0; z-index: 100; }",
+  "@media (max-width: 1023px) { .app-nav { width: 200px; } .emp-nav { width: 180px; } .main-content { padding: 24px 20px; max-width: calc(100vw - 200px); } .emp-main { padding: 24px 20px; } }",
+  "@media (max-width: 767px) { .hamburger-btn { display: block; } .mobile-top-bar { display: flex; } .app-nav { position: fixed; top: 0; left: 0; height: 100vh; width: 240px !important; transform: translateX(-100%); box-shadow: 4px 0 24px rgba(0,0,0,0.5); } .app-nav.nav-open { transform: translateX(0); } .main-content { padding: 70px 14px 24px; max-width: 100vw; width: 100%; } .emp-main { padding: 70px 14px 24px; } }"
+].join("\n");
+
+
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState(() => {
@@ -1987,6 +1958,8 @@ export default function App() {
     } catch { return null; }
   });
   const [page, setPage] = useState("dashboard");
+  const [navOpen, setNavOpen] = useState(false);
+  const nav = (p) => { setPage(p); setNavOpen(false); };
 
   async function handleLogin(username, password) {
     const data = await api.login(username, password);
@@ -2004,28 +1977,32 @@ export default function App() {
   if (!currentUser) return (<><style>{STYLE}</style><LoginPage onLogin={handleLogin} /></>);
 
   const isAdmin = currentUser.role === "admin" || currentUser.role === "manager";
+  const isManager = currentUser.role === "manager";
 
   if (!isAdmin) return (
-    <div style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "'DM Sans','Segoe UI',sans-serif", display: "flex" }}>
+    <div className="app-layout" style={{ background: C.bg, color: C.text, fontFamily: "'DM Sans','Segoe UI',sans-serif" }}>
       <style>{STYLE}</style>
-      <nav style={{
-        width: 200, background: C.surface, borderRight: `1px solid ${C.border} `, display: "flex",
-        flexDirection: "column", padding: "24px 0", position: "sticky", top: 0, height: "100vh", flexShrink: 0
+      {/* Hamburger button */}
+      <button className="hamburger-btn" onClick={() => setNavOpen(v => !v)}>☰</button>
+      {/* Overlay */}
+      <div className={`nav-overlay${navOpen ? " open" : ""}`} onClick={() => setNavOpen(false)} />
+      <nav className={`app-nav emp-nav${navOpen ? " nav-open" : ""}`} style={{
+        background: C.surface, borderRight: `1px solid ${C.border}`, padding: "24px 0"
       }}>
-        <div style={{ padding: "0 16px 22px", borderBottom: `1px solid ${C.border} ` }}>
+        <div style={{ padding: "0 16px 22px", borderBottom: `1px solid ${C.border}` }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
             <img src="/image.png" alt="Logo" style={{ height: 60, objectFit: "contain" }} />
           </div>
         </div>
         <div style={{ padding: "14px 10px", flex: 1 }}>
-          <button style={{
+          <button onClick={() => nav("employee-home")} style={{
             width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "9px 12px",
             borderRadius: 8, border: "none", cursor: "pointer", textAlign: "left",
             background: C.accentGlow, color: C.accent, fontWeight: 700, fontSize: 13,
-            borderLeft: `2px solid ${C.accent} `
+            borderLeft: `2px solid ${C.accent}`
           }}>🏠 My Portal</button>
         </div>
-        <div style={{ padding: "14px 16px", borderTop: `1px solid ${C.border} ` }}>
+        <div style={{ padding: "14px 16px", borderTop: `1px solid ${C.border}` }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 12 }}>
             <Avatar initials={currentUser.avatar || mkAvi(currentUser.emp_name || "")} color={C.accent} size={30} />
             <div><div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{currentUser.emp_name || currentUser.username}</div>
@@ -2034,57 +2011,63 @@ export default function App() {
           <Btn variant="ghost" onClick={handleLogout} style={{ width: "100%", justifyContent: "center", fontSize: 12 }}>↩ Sign Out</Btn>
         </div>
       </nav>
-      <main style={{ flex: 1, padding: "32px 36px", overflowY: "auto" }}>
+      <main className="emp-main">
         <EmployeeHome currentUser={currentUser} />
       </main>
     </div>
   );
 
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "'DM Sans','Segoe UI',sans-serif", display: "flex" }}>
+    <div className="app-layout" style={{ background: C.bg, color: C.text, fontFamily: "'DM Sans','Segoe UI',sans-serif" }}>
       <style>{STYLE}</style>
-      <nav style={{
-        width: 224, background: C.surface, borderRight: `1px solid ${C.border} `, display: "flex",
-        flexDirection: "column", padding: "24px 0", position: "sticky", top: 0, height: "100vh", flexShrink: 0
+      {/* Hamburger button */}
+      <button className="hamburger-btn" onClick={() => setNavOpen(v => !v)}>☰</button>
+      {/* Overlay */}
+      <div className={`nav-overlay${navOpen ? " open" : ""}`} onClick={() => setNavOpen(false)} />
+      <nav className={`app-nav${navOpen ? " nav-open" : ""}`} style={{
+        background: C.surface, borderRight: `1px solid ${C.border}`, padding: "24px 0"
       }}>
-        <div style={{ padding: "0 20px 22px", borderBottom: `1px solid ${C.border} ` }}>
+        <div style={{ padding: "0 20px 22px", borderBottom: `1px solid ${C.border}` }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
             <img src="/image.png" alt="Logo" style={{ height: 60, objectFit: "contain" }} />
           </div>
         </div>
         {currentUser.role === "admin" && (
-          <div style={{ margin: "12px 12px 4px", background: C.purple + "18", border: `1px solid ${C.purple} 33`, borderRadius: 8, padding: "6px 12px" }}>
+          <div style={{ margin: "12px 12px 4px", background: C.purple + "18", border: `1px solid ${C.purple}33`, borderRadius: 8, padding: "6px 12px" }}>
             <div style={{ fontSize: 10, color: C.purple, fontWeight: 700, letterSpacing: .5, textTransform: "uppercase" }}>🔑 Administrator</div>
           </div>
         )}
         {currentUser.role === "manager" && (
-          <div style={{ margin: "12px 12px 4px", background: C.green + "18", border: `1px solid ${C.green} 33`, borderRadius: 8, padding: "6px 12px" }}>
+          <div style={{ margin: "12px 12px 4px", background: C.green + "18", border: `1px solid ${C.green}33`, borderRadius: 8, padding: "6px 12px" }}>
             <div style={{ fontSize: 10, color: C.green, fontWeight: 700, letterSpacing: .5, textTransform: "uppercase" }}>📋 Manager</div>
           </div>
         )}
         <div style={{ padding: "8px 10px", flex: 1, overflowY: "auto" }}>
           {currentUser.role === "manager" && (
-            <button onClick={() => setPage("mywork")} style={{
+            <button onClick={() => nav("mywork")} style={{
               width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "8px 12px",
               marginBottom: 2, borderRadius: 8, border: "none", cursor: "pointer", textAlign: "left",
               background: page === "mywork" ? C.accentGlow : "transparent",
               color: page === "mywork" ? C.accent : C.textMuted,
               fontWeight: page === "mywork" ? 700 : 500, fontSize: 13,
-              borderLeft: page === "mywork" ? `2px solid ${C.accent} ` : "2px solid transparent"
+              borderLeft: page === "mywork" ? `2px solid ${C.accent}` : "2px solid transparent"
             }}><span style={{ fontSize: 14 }}>👤</span><span>My Work</span></button>
           )}
-          {ADMIN_NAV.filter(n => !(n.id === "useraccounts" && currentUser.role === "manager")).map(n => {
+          {ADMIN_NAV.filter(n =>
+            !(n.id === "useraccounts" && isManager) &&
+            !(n.id === "payslips" && isManager)
+          ).map(n => {
             const active = page === n.id;
-            return (<button key={n.id} onClick={() => setPage(n.id)} style={{
+            return (<button key={n.id} onClick={() => nav(n.id)} style={{
               width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "8px 12px",
               borderRadius: 8, border: "none", cursor: "pointer", marginBottom: 2, textAlign: "left",
               background: active ? C.accentGlow : "transparent", color: active ? C.accent : C.textMuted,
               fontWeight: active ? 700 : 500, fontSize: 13, transition: "all .15s",
-              borderLeft: active ? `2px solid ${C.accent} ` : "2px solid transparent"
+              borderLeft: active ? `2px solid ${C.accent}` : "2px solid transparent"
             }}><span style={{ fontSize: 14, opacity: active ? 1 : .7 }}>{n.icon}</span><span style={{ flex: 1 }}>{n.label}</span></button>);
           })}
         </div>
-        <div style={{ padding: "14px 18px", borderTop: `1px solid ${C.border} ` }}>
+        <div style={{ padding: "14px 18px", borderTop: `1px solid ${C.border}` }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 10 }}>
             <Avatar initials={currentUser.avatar || mkAvi(currentUser.emp_name || "")} color={currentUser.role === "manager" ? C.green : C.purple} size={30} />
             <div><div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{currentUser.emp_name || currentUser.username}</div>
@@ -2093,15 +2076,15 @@ export default function App() {
           <Btn variant="ghost" onClick={handleLogout} style={{ width: "100%", justifyContent: "center", fontSize: 12 }}>↩ Sign Out</Btn>
         </div>
       </nav>
-      <main style={{ flex: 1, padding: "32px 36px", overflowY: "auto", maxWidth: "calc(100vw - 224px)" }}>
+      <main className="main-content">
         {page === "dashboard" && <Dashboard />}
-        {page === "projects" && <Projects />}
-        {page === "employees" && <AdminEmployees />}
-        {page === "resources" && <Resources />}
+        {page === "projects" && <Projects readOnly={isManager} />}
+        {page === "employees" && <AdminEmployees readOnly={isManager} />}
+        {page === "resources" && <Resources readOnly={isManager} />}
         {page === "timesheets" && <Timesheets currentUser={currentUser} viewOnly={false} />}
         {page === "leaves" && <Leaves currentUser={currentUser} viewOnly={false} />}
         {page === "expenses" && <Expenses currentUser={currentUser} viewOnly={false} />}
-        {page === "payslips" && <AdminPayslips />}
+        {page === "payslips" && !isManager && <AdminPayslips />}
         {page === "reports" && <Reports />}
         {page === "useraccounts" && <UserAccounts />}
         {page === "mywork" && <EmployeeHome currentUser={currentUser} />}
