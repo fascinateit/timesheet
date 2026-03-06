@@ -1,0 +1,22 @@
+[Unit]
+Description=ProjectPulse Flask API (Gunicorn)
+After=network.target mysql.service
+Wants=mysql.service
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/projectpulse/backend
+EnvironmentFile=/opt/projectpulse/backend/.env
+ExecStart=/opt/projectpulse/venv/bin/gunicorn \
+    --config gunicorn.conf.py \
+    app:app
+Restart=on-failure
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=projectpulse
+
+[Install]
+WantedBy=multi-user.target
