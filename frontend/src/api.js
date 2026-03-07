@@ -82,4 +82,10 @@ export const api = {
   getPayslips: (params = {}) => req("GET", `/payslips/?${new URLSearchParams(params)}`),
   generatePayslip: (d) => req("POST", "/payslips/generate", d),
   deletePayslip: (id) => req("DELETE", `/payslips/${id}`),
+
+  // Documents
+  getDocuments: () => req("GET", "/documents/"),
+  createDocument: (d) => req("POST", "/documents/", d),
+  updateDocument: (id, d) => req("PUT", `/documents/${id}`, d),
+  deleteDocument: (id) => req("DELETE", `/documents/${id}`),
 };

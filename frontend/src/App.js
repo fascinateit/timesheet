@@ -2001,9 +2001,9 @@ function AdminPayslips() {
           </div>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              Special Allowance Override <span style={{ color: C.textMuted, fontSize: 11 }}>(₹) blank=auto</span>
+              Additional Special Allowance <span style={{ color: C.textMuted, fontSize: 11 }}>(₹) added to auto</span>
             </div>
-            <input type="number" min="0" placeholder="Auto-compute" value={form.specialAllowance}
+            <input type="number" min="0" placeholder="0" value={form.specialAllowance}
               onChange={e => setForm(f => ({ ...f, specialAllowance: e.target.value }))}
               style={inpStyle} />
           </div>
@@ -2082,6 +2082,93 @@ function AdminPayslips() {
   );
 }
 
+function AdminDocuments() {
+  const [docs, setDocs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState(null); // { id, title, url }
+  const [saving, setSaving] = useState(false);
+
+  async function load() {
+    setLoading(true);
+    try { setDocs(await api.getDocuments()); } catch (e) { alert("Failed to fetch documents: " + e.message); }
+    setLoading(false);
+  }
+  useEffect(() => { load(); }, []);
+
+  async function save() {
+    if (!modal.title || !modal.url) return alert("Title and URL required");
+    setSaving(true);
+    try {
+      if (modal.id) await api.updateDocument(modal.id, { title: modal.title, url: modal.url });
+      else await api.createDocument({ title: modal.title, url: modal.url });
+      setModal(null);
+      load();
+    } catch (e) { alert(e.message); }
+    setSaving(false);
+  }
+
+  async function del(id) {
+    if (!window.confirm("Delete this document link?")) return;
+    try { await api.deleteDocument(id); setDocs(ds => ds.filter(d => d.id !== id)); } catch (e) { alert(e.message); }
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>Documents</h2>
+          <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>Manage important links</p>
+        </div>
+        <Btn onClick={() => setModal({ title: "", url: "" })}>+ Add Document Link</Btn>
+      </div>
+
+      {loading ? <div style={{ padding: 40, textAlign: "center" }}><Spinner /></div> : docs.length === 0 ? (
+        <Card style={{ padding: 40, textAlign: "center", color: C.textMuted }}>No documents found.</Card>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
+          {docs.map(d => (
+            <Card key={d.id} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div style={{ fontWeight: 700, fontSize: 16, color: C.text }}>{d.title}</div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button onClick={() => setModal(d)} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 14 }}>✏</button>
+                  <button onClick={() => del(d.id)} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 14, color: C.red }}>🗑</button>
+                </div>
+              </div>
+              <div style={{ fontSize: 12, color: C.textMuted }}>Added by {d.creator_name || "Unknown"} on {d.created_at?.slice(0, 10)}</div>
+              <a href={d.url} target="_blank" rel="noreferrer" style={{
+                marginTop: "auto", display: "inline-block", backgroundColor: C.surface, color: C.accent,
+                textDecoration: "none", padding: "8px 12px", borderRadius: 8, fontSize: 13, fontWeight: 600,
+                border: `1px solid ${C.border}`, textAlign: "center"
+              }}>↗ Open Link</a>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {modal && (
+        <Modal title={modal.id ? "Edit Document" : "New Document"} onClose={() => setModal(null)}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div>
+              <div style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700, marginBottom: 6 }}>Title</div>
+              <input value={modal.title} onChange={e => setModal({ ...modal, title: e.target.value })}
+                placeholder="e.g. Employee Handbook" style={{ width: "100%", background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13 }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700, marginBottom: 6 }}>URL</div>
+              <input value={modal.url} onChange={e => setModal({ ...modal, url: e.target.value })}
+                placeholder="https://..." style={{ width: "100%", background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13 }} />
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 8, justifyContent: "flex-end" }}>
+              <Btn variant="ghost" onClick={() => setModal(null)}>Cancel</Btn>
+              <Btn onClick={save} disabled={saving}>{saving ? "Saving…" : "Save"}</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
 
 const ADMIN_NAV = [
   { id: "dashboard", label: "Dashboard", icon: "⬡" },
@@ -2094,6 +2181,7 @@ const ADMIN_NAV = [
   { id: "payslips", label: "Payslips", icon: "💰" },
   { id: "reports", label: "Reports", icon: "◫" },
   { id: "useraccounts", label: "User Accounts", icon: "🔑" },
+  { id: "documents", label: "Documents", icon: "📄" },
 ];
 
 // ════════════════════════════════════════════════════════
@@ -2260,6 +2348,7 @@ export default function App() {
         {page === "payslips" && !isManager && <AdminPayslips />}
         {page === "reports" && <Reports />}
         {page === "useraccounts" && <UserAccounts />}
+        {page === "documents" && <AdminDocuments />}
         {page === "mywork" && <EmployeeHome currentUser={currentUser} />}
       </main>
     </div>

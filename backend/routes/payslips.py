@@ -12,17 +12,17 @@ def _compute(ctc, bonus=0, extra_deductions=0, special_override=None):
     basic       = round(gross * 0.40, 2)
     hra         = round(basic * 0.50, 2)
     transport   = 1600.00
-    # Use override if provided, else auto-compute
+    # Always auto-compute the base special allowance first
+    special = max(0, round(gross - basic - hra - transport, 2))
+    # If override is provided, add it to the auto-computed base
     if special_override is not None and float(special_override) >= 0:
-        special = round(float(special_override), 2)
-    else:
-        special = max(0, round(gross - basic - hra - transport, 2))
+        special = round(special + float(special_override), 2)
     bonus       = round(float(bonus or 0), 2)
     extra_ded   = round(float(extra_deductions or 0), 2)
     pf_emp      = round(basic * 0.12, 2)
     prof_tax    = 200.00
-    # Gross includes bonus; net = gross + bonus - pf - prof_tax - extra_ded
-    gross_total = round(gross + bonus, 2)
+    # Gross includes all allowances and bonus; net = gross - deductions
+    gross_total = round(basic + hra + transport + special + bonus, 2)
     net_pay     = round(gross_total - pf_emp - prof_tax - extra_ded, 2)
     return dict(
         gross=gross_total, basic=basic, hra=hra, transport=transport,

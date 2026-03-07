@@ -137,6 +137,20 @@ CREATE TABLE IF NOT EXISTS expenses (
     CONSTRAINT fk_exp_emp FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE,
     CONSTRAINT fk_exp_prj FOREIGN KEY (project_id)  REFERENCES projects(id)  ON DELETE SET NULL
 ) ENGINE=InnoDB;
+
+-- ────────────────────────────────────────────────────────────
+-- 10. DOCUMENT LINKS
+-- ────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS document_links (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    title       VARCHAR(150) NOT NULL,
+    url         VARCHAR(1000) NOT NULL,
+    created_by  INT NULL,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_doc_emp FOREIGN KEY (created_by) REFERENCES employees(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
 -- ============================================================
 --  SEED DATA
 -- ============================================================
@@ -158,8 +172,10 @@ CREATE TABLE IF NOT EXISTS payslips (
     hra               DECIMAL(12,2) NOT NULL DEFAULT 0.00,
     transport         DECIMAL(12,2) NOT NULL DEFAULT 0.00,
     special_allowance DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    bonus             DECIMAL(12,2) NOT NULL DEFAULT 0.00,
     pf_employee       DECIMAL(12,2) NOT NULL DEFAULT 0.00,
     professional_tax  DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    extra_deductions  DECIMAL(12,2) NOT NULL DEFAULT 0.00,
     net_pay           DECIMAL(12,2) NOT NULL DEFAULT 0.00,
     generated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uq_emp_month (employee_id, month, year),

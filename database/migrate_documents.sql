@@ -1,0 +1,11 @@
+USE projectpulse;
+
+CREATE TABLE IF NOT EXISTS document_links (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    title       VARCHAR(150) NOT NULL,
+    url         VARCHAR(1000) NOT NULL,
+    created_by  INT NULL,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_doc_emp FOREIGN KEY (created_by) REFERENCES employees(id) ON DELETE SET NULL
+) ENGINE=InnoDB;

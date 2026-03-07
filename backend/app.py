@@ -33,6 +33,7 @@ def create_app():
     from routes.reports    import reports_bp
     from routes.expenses   import expenses_bp
     from routes.payslips   import payslips_bp
+    from routes.documents  import documents_bp
 
     app.register_blueprint(auth_bp,       url_prefix="/api/auth")
     app.register_blueprint(groups_bp,     url_prefix="/api/groups")
@@ -44,6 +45,7 @@ def create_app():
     app.register_blueprint(reports_bp,    url_prefix="/api/reports")
     app.register_blueprint(expenses_bp,   url_prefix="/api/expenses")
     app.register_blueprint(payslips_bp,   url_prefix="/api/payslips")
+    app.register_blueprint(documents_bp,  url_prefix="/api/documents")
 
     @app.route("/api/health")
     def health():
