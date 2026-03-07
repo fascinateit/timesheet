@@ -207,7 +207,7 @@ function LoginPage({ onLogin }) {
               {loading ? "Authenticating…" : "Sign In →"}
             </button>
           </div>
-          {/* <div style={{ marginTop: 22, background: C.surface, borderRadius: 10, padding: "14px 16px", border: `1px solid ${C.border}` }}>
+          <div style={{ marginTop: 22, background: C.surface, borderRadius: 10, padding: "14px 16px", border: `1px solid ${C.border}` }}>
             <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5, marginBottom: 10 }}>🔑 Demo Credentials</div>
             {[["admin", "admin123", "Admin", C.purple], ["arjun", "pass123", "Employee", C.green]].map(([u, p, role, col]) => (
               <button key={u} onClick={() => { setUsername(u); setPassword(p); }} style={{
@@ -221,7 +221,7 @@ function LoginPage({ onLogin }) {
                 <div style={{ fontSize: 11, color: C.textMuted, marginTop: 3 }}>pw: {p}</div>
               </button>
             ))}
-          </div> */}
+          </div>
         </Card>
       </div>
     </div>
@@ -1214,9 +1214,14 @@ function MyProfile({ currentUser }) {
   const [err, setErr] = useState("");
   const [form, setForm] = useState({});
 
+  const [pwForm, setPwForm] = useState({ oldPassword: "", newPassword: "" });
+  const [pwSaving, setPwSaving] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [showPwModal, setShowPwModal] = useState(false);
+
   useEffect(() => {
     api.getEmployee(currentUser.employee_id)
-      .then(p => { setProfile(p); setForm({ ...p, bankAccountNo: p.bank_account_no, bankIfsc: p.bank_ifsc, bankName: p.bank_name }); })
+      .then(p => { setProfile(p); setForm({ ...p, bankAccountNo: p.bank_account_no, bankIfsc: p.bank_ifsc, bankName: p.bank_name, emergencyContact: p.emergency_contact }); })
       .catch(e => setErr(e.message))
       .finally(() => setLoading(false));
   }, [currentUser.employee_id]);
@@ -1226,11 +1231,12 @@ function MyProfile({ currentUser }) {
     try {
       const payload = {
         name: profile.name, email: profile.email, groupId: profile.group_id, joiningDate: profile.joining_date, ctcAnnual: profile.ctc_annual,
-        dob: form.dob, address: form.address, mobile: form.mobile, skillset: form.skillset,
+        dob: form.dob, address: form.address, mobile: form.mobile, emergencyContact: form.emergencyContact, skillset: form.skillset,
         bankAccountNo: form.bankAccountNo, bankIfsc: form.bankIfsc, bankName: form.bankName
       };
       await api.updateEmployee(currentUser.employee_id, payload);
       alert("Profile updated successfully!");
+      setIsEditing(false);
     } catch (e) {
       setErr(e.message);
     } finally {
@@ -1238,14 +1244,48 @@ function MyProfile({ currentUser }) {
     }
   }
 
+  async function handleSavePw() {
+    if (!pwForm.oldPassword || !pwForm.newPassword) return setErr("Both password fields are required.");
+    setPwSaving(true);
+    try {
+      await api.updatePassword(pwForm);
+      alert("Password updated successfully!");
+      setPwForm({ oldPassword: "", newPassword: "" });
+      setErr(null);
+      setShowPwModal(false);
+    } catch (e) { setErr(e.message); }
+    setPwSaving(false);
+  }
+
   if (loading) return <Spinner />;
   if (err && !profile) return <ErrBox msg={err} />;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <div>
-        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>My Profile</h2>
-        <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>View your organizational details and manage your personal information.</p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>My Profile</h2>
+          <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>
+            View your organizational details and manage your personal information.
+            {" "}
+            <span style={{ color: C.accent, cursor: "pointer", textDecoration: "underline", fontWeight: 600, marginLeft: 8 }} onClick={() => setShowPwModal(true)}>
+              Change Password
+            </span>
+          </p>
+        </div>
+        <div>
+          {!isEditing ? (
+            <Btn onClick={() => setIsEditing(true)}>✏ Edit Profile</Btn>
+          ) : (
+            <div style={{ display: "flex", gap: 8 }}>
+              <Btn variant="ghost" onClick={() => {
+                setIsEditing(false);
+                setForm({ ...profile, bankAccountNo: profile.bank_account_no, bankIfsc: profile.bank_ifsc, bankName: profile.bank_name });
+              }}>Cancel</Btn>
+              <Btn onClick={handleSave} disabled={saving}>{saving ? "Saving…" : "Save Profile"}</Btn>
+            </div>
+          )}
+        </div>
       </div>
 
       {err && <div style={{ background: C.red + "18", color: C.red, padding: "10px 14px", borderRadius: 8, fontSize: 13, border: `1px solid ${C.red}44` }}>⚠ {err}</div>}
@@ -1257,11 +1297,13 @@ function MyProfile({ currentUser }) {
             <Inp label="Full Name" value={profile.name} disabled />
             <Inp label="Email" value={profile.email} disabled />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <Inp label="Group" value={profile.group_name || "—"} disabled />
-              <Inp label="Role" value={currentUser.role} disabled />
+              <Inp label="Designation" value={profile.group_name || "—"} disabled />
+              {/* <Inp label="Role" value={currentUser.role} disabled /> */}
+              <Inp label="Joining Date" value={profile.joining_date ? fmtD(profile.joining_date) : "—"} disabled />
+
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <Inp label="Joining Date" value={profile.joining_date ? fmtD(profile.joining_date) : "—"} disabled />
+              {/* <Inp label="Joining Date" value={profile.joining_date ? fmtD(profile.joining_date) : "—"} disabled /> */}
               <Inp label="Annual CTC" value={profile.ctc_annual ? `₹${Number(profile.ctc_annual).toLocaleString("en-IN")}` : "—"} disabled />
             </div>
           </div>
@@ -1271,27 +1313,44 @@ function MyProfile({ currentUser }) {
           <h4 style={{ margin: "0 0 16px", fontSize: 14, color: C.text, fontWeight: 800 }}>Personal Information</h4>
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <Inp label="Date of Birth" type="date" value={form.dob || ""} onChange={v => setForm(f => ({ ...f, dob: v }))} />
-              <Inp label="Mobile" value={form.mobile || ""} onChange={v => setForm(f => ({ ...f, mobile: v }))} placeholder="+1 123 456 7890" />
+              <Inp disabled={!isEditing} label="Date of Birth" type="date" value={form.dob || ""} onChange={v => setForm(f => ({ ...f, dob: v }))} />
+              <Inp disabled={!isEditing} label="Mobile" value={form.mobile || ""} onChange={v => setForm(f => ({ ...f, mobile: v }))} placeholder="+1 123 456 7890" />
+              <Inp disabled={!isEditing} label="Emergency Contact" value={form.emergencyContact || ""} onChange={v => setForm(f => ({ ...f, emergencyContact: v }))} placeholder="+1 ... (Emergency)" />
             </div>
-            <Inp label="Address" value={form.address || ""} onChange={v => setForm(f => ({ ...f, address: v }))} placeholder="Full address..." />
-            <Inp label="Skillset" value={form.skillset || ""} onChange={v => setForm(f => ({ ...f, skillset: v }))} placeholder="e.g. React, Node, SQL, Python" />
+            <Inp disabled={!isEditing} label="Address" value={form.address || ""} onChange={v => setForm(f => ({ ...f, address: v }))} placeholder="Full address..." />
+            <Inp disabled={!isEditing} label="Skillset" value={form.skillset || ""} onChange={v => setForm(f => ({ ...f, skillset: v }))} placeholder="e.g. React, Node, SQL, Python" />
           </div>
         </Card>
       </div>
 
       <Card>
         <h4 style={{ margin: "0 0 16px", fontSize: 14, color: C.text, fontWeight: 800 }}>Banking Details</h4>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <Inp label="Bank Name" value={form.bankName || ""} onChange={v => setForm(f => ({ ...f, bankName: v }))} placeholder="e.g. Chase" />
-          <Inp label="Account No" value={form.bankAccountNo || ""} onChange={v => setForm(f => ({ ...f, bankAccountNo: v }))} placeholder="1234567890" />
-          <Inp label="IFSC Code" value={form.bankIfsc || ""} onChange={v => setForm(f => ({ ...f, bankIfsc: v }))} placeholder="CHAS0123456" />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
+          <Inp disabled={!isEditing} label="Bank Name" value={form.bankName || ""} onChange={v => setForm(f => ({ ...f, bankName: v }))} placeholder="e.g. Chase" />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Inp disabled={!isEditing} label="Account No" value={form.bankAccountNo || ""} onChange={v => setForm(f => ({ ...f, bankAccountNo: v }))} placeholder="1234567890" />
+            <Inp disabled={!isEditing} label="IFSC Code" value={form.bankIfsc || ""} onChange={v => setForm(f => ({ ...f, bankIfsc: v }))} placeholder="CHAS0123456" />
+          </div>
         </div>
       </Card>
 
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <Btn onClick={handleSave} disabled={saving} style={{ padding: "12px 32px", fontSize: 15 }}>{saving ? "Saving…" : "Save Profile"}</Btn>
-      </div>
+      {showPwModal && (
+        <Modal title="Change Password" onClose={() => setShowPwModal(false)}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
+              <Inp label="Current Password" type="password" value={pwForm.oldPassword} onChange={v => setPwForm(f => ({ ...f, oldPassword: v }))} placeholder="••••••••" />
+              <Inp label="New Password" type="password" value={pwForm.newPassword} onChange={v => setPwForm(f => ({ ...f, newPassword: v }))} placeholder="••••••••" />
+            </div>
+            <div style={{ fontSize: 12, color: C.textDim }}>Updates your login credentials immediately.</div>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+              <Btn onClick={handleSavePw} disabled={pwSaving} style={{ padding: "8px 24px", fontSize: 13, background: `linear-gradient(135deg,${C.purple},${C.purple}dd)` }}>
+                {pwSaving ? "Updating…" : "Update Password"}
+              </Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
+
     </div>
   );
 }
@@ -1314,7 +1373,7 @@ function EmployeeHome({ currentUser }) {
         </div>
       </Card>
       <div style={{ display: "flex", gap: 4, background: C.surface, padding: 4, borderRadius: 10, width: "fit-content", flexWrap: "wrap" }}>
-        {[["profile", "👤 My Profile"], ["timesheets", "⏱ My Timesheets"], ["leave", "🌴 My Leave"], ["expenses", "💳 My Expenses"], ["pay", "💰 My Pay"]].map(([t, label]) => (
+        {[["profile", "👤 My Profile"], ["timesheets", "⏱ My Timesheets"], ["leave", "🌴 My Leave"], ["expenses", "💳 My Expenses"], ["pay", "💰 My Pay"], ["policies", "📜 Company Policy"]].map(([t, label]) => (
           <button key={t} onClick={() => setTab(t)} style={{
             background: tab === t ? C.card : "transparent", color: tab === t ? C.text : C.textMuted,
             border: tab === t ? `1px solid ${C.border}` : "1px solid transparent",
@@ -1327,6 +1386,7 @@ function EmployeeHome({ currentUser }) {
       {tab === "leave" && <Leaves currentUser={currentUser} viewOnly />}
       {tab === "expenses" && <Expenses currentUser={currentUser} viewOnly />}
       {tab === "pay" && <MyPay currentUser={currentUser} />}
+      {tab === "policies" && <DocumentGrid type="policy" allowEdit={false} />}
     </div>
   );
 }
@@ -2082,25 +2142,28 @@ function AdminPayslips() {
   );
 }
 
-function AdminDocuments() {
+function DocumentGrid({ type = "document", allowEdit = false }) {
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null); // { id, title, url }
   const [saving, setSaving] = useState(false);
 
+  const titleText = type === "policy" ? "Company Policies" : "Documents";
+  const descText = type === "policy" ? "Review important guidelines" : "Manage important links";
+
   async function load() {
     setLoading(true);
-    try { setDocs(await api.getDocuments()); } catch (e) { alert("Failed to fetch documents: " + e.message); }
+    try { setDocs(await api.getDocuments({ type })); } catch (e) { alert("Failed to fetch: " + e.message); }
     setLoading(false);
   }
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [type]);
 
   async function save() {
     if (!modal.title || !modal.url) return alert("Title and URL required");
     setSaving(true);
     try {
-      if (modal.id) await api.updateDocument(modal.id, { title: modal.title, url: modal.url });
-      else await api.createDocument({ title: modal.title, url: modal.url });
+      if (modal.id) await api.updateDocument(modal.id, { title: modal.title, url: modal.url, type });
+      else await api.createDocument({ title: modal.title, url: modal.url, type });
       setModal(null);
       load();
     } catch (e) { alert(e.message); }
@@ -2116,24 +2179,26 @@ function AdminDocuments() {
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>Documents</h2>
-          <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>Manage important links</p>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>{titleText}</h2>
+          <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>{descText}</p>
         </div>
-        <Btn onClick={() => setModal({ title: "", url: "" })}>+ Add Document Link</Btn>
+        {allowEdit && <Btn onClick={() => setModal({ title: "", url: "" })}>+ Add Link</Btn>}
       </div>
 
       {loading ? <div style={{ padding: 40, textAlign: "center" }}><Spinner /></div> : docs.length === 0 ? (
-        <Card style={{ padding: 40, textAlign: "center", color: C.textMuted }}>No documents found.</Card>
+        <Card style={{ padding: 40, textAlign: "center", color: C.textMuted }}>No {type === "policy" ? "policies" : "documents"} found.</Card>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
           {docs.map(d => (
             <Card key={d.id} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div style={{ fontWeight: 700, fontSize: 16, color: C.text }}>{d.title}</div>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <button onClick={() => setModal(d)} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 14 }}>✏</button>
-                  <button onClick={() => del(d.id)} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 14, color: C.red }}>🗑</button>
-                </div>
+                {allowEdit && (
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button onClick={() => setModal(d)} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 14 }}>✏</button>
+                    <button onClick={() => del(d.id)} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 14, color: C.red }}>🗑</button>
+                  </div>
+                )}
               </div>
               <div style={{ fontSize: 12, color: C.textMuted }}>Added by {d.creator_name || "Unknown"} on {d.created_at?.slice(0, 10)}</div>
               <a href={d.url} target="_blank" rel="noreferrer" style={{
@@ -2182,6 +2247,7 @@ const ADMIN_NAV = [
   { id: "reports", label: "Reports", icon: "◫" },
   { id: "useraccounts", label: "User Accounts", icon: "🔑" },
   { id: "documents", label: "Documents", icon: "📄" },
+  { id: "policies", label: "Company Policy", icon: "📜" },
 ];
 
 // ════════════════════════════════════════════════════════
@@ -2348,7 +2414,8 @@ export default function App() {
         {page === "payslips" && !isManager && <AdminPayslips />}
         {page === "reports" && <Reports />}
         {page === "useraccounts" && <UserAccounts />}
-        {page === "documents" && <AdminDocuments />}
+        {page === "documents" && <DocumentGrid type="document" allowEdit={isAdmin} />}
+        {page === "policies" && <DocumentGrid type="policy" allowEdit={currentUser.role === "admin"} />}
         {page === "mywork" && <EmployeeHome currentUser={currentUser} />}
       </main>
     </div>

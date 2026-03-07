@@ -64,6 +64,7 @@ export const api = {
   createAccount: (d) => req("POST", "/accounts/", d),
   updateAccount: (id, d) => req("PUT", `/accounts/${id}`, d),
   deleteAccount: (id) => req("DELETE", `/accounts/${id}`),
+  updatePassword: (d) => req("PUT", "/auth/password", d),
 
   // Expenses
   getExpenses: (params = {}) => req("GET", `/expenses/?${new URLSearchParams(params)}`),
@@ -84,7 +85,7 @@ export const api = {
   deletePayslip: (id) => req("DELETE", `/payslips/${id}`),
 
   // Documents
-  getDocuments: () => req("GET", "/documents/"),
+  getDocuments: (params = {}) => req("GET", `/documents/?${new URLSearchParams(params)}`),
   createDocument: (d) => req("POST", "/documents/", d),
   updateDocument: (id, d) => req("PUT", `/documents/${id}`, d),
   deleteDocument: (id) => req("DELETE", `/documents/${id}`),

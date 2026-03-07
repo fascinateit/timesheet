@@ -10,14 +10,22 @@ documents_bp = Blueprint("documents", __name__)
 @jwt_required()
 def get_documents():
     user = json.loads(get_jwt_identity())
-    if user["role"] not in ("admin", "manager"):
+    role = user.get("role")
+    req_type = request.args.get("type", "document")
+
+    # Access Control for Viewing
+    if req_type == "document" and role not in ("admin", "manager"):
         return jsonify(error="Forbidden"), 403
+    
+    # "policy" can be viewed by anyone, so no restriction block here.
 
     docs = query(
         "SELECT d.*, e.name AS creator_name "
         "FROM document_links d "
         "LEFT JOIN employees e ON e.id = d.created_by "
-        "ORDER BY d.created_at DESC"
+        "WHERE d.type = %s "
+        "ORDER BY d.created_at DESC",
+        (req_type,)
     )
     
     # Format datetimes
@@ -33,19 +41,25 @@ def get_documents():
 @jwt_required()
 def create_document():
     user = json.loads(get_jwt_identity())
-    if user["role"] not in ("admin", "manager"):
-        return jsonify(error="Forbidden"), 403
+    role = user.get("role")
 
     d = request.get_json(silent=True) or {}
     title = d.get("title")
     url = d.get("url")
+    doc_type = d.get("type", "document")
+
+    # Access Control for Creating
+    if doc_type == "policy" and role != "admin":
+        return jsonify(error="Only admins can create policies"), 403
+    if doc_type == "document" and role not in ("admin", "manager"):
+        return jsonify(error="Forbidden"), 403
 
     if not title or not url:
         return jsonify(error="Title and URL are required"), 400
 
     did = execute(
-        "INSERT INTO document_links (title, url, created_by) VALUES (%s, %s, %s)",
-        (title.strip(), url.strip(), user.get("employee_id"))
+        "INSERT INTO document_links (title, url, type, created_by) VALUES (%s, %s, %s, %s)",
+        (title.strip(), url.strip(), doc_type, user.get("employee_id"))
     )
 
     doc = query("SELECT * FROM document_links WHERE id=%s", (did,), fetch="one")
@@ -55,8 +69,7 @@ def create_document():
 @jwt_required()
 def update_document(did):
     user = json.loads(get_jwt_identity())
-    if user["role"] not in ("admin", "manager"):
-        return jsonify(error="Forbidden"), 403
+    role = user.get("role")
 
     d = request.get_json(silent=True) or {}
     title = d.get("title")
@@ -64,6 +77,19 @@ def update_document(did):
 
     if not title or not url:
         return jsonify(error="Title and URL are required"), 400
+
+    # Retrieve existing document to check its type
+    existing = query("SELECT type FROM document_links WHERE id=%s", (did,), fetch="one")
+    if not existing:
+        return jsonify(error="Document not found"), 404
+
+    doc_type = existing["type"]
+
+    # Access Control for Editing
+    if doc_type == "policy" and role != "admin":
+        return jsonify(error="Only admins can edit policies"), 403
+    if doc_type == "document" and role not in ("admin", "manager"):
+        return jsonify(error="Forbidden"), 403
 
     execute(
         "UPDATE document_links SET title=%s, url=%s WHERE id=%s",
@@ -77,7 +103,18 @@ def update_document(did):
 @jwt_required()
 def delete_document(did):
     user = json.loads(get_jwt_identity())
-    if user["role"] not in ("admin", "manager"):
+    role = user.get("role")
+    
+    existing = query("SELECT type FROM document_links WHERE id=%s", (did,), fetch="one")
+    if not existing:
+        return jsonify(error="Document not found"), 404
+
+    doc_type = existing["type"]
+
+    # Access Control for Deleting
+    if doc_type == "policy" and role != "admin":
+        return jsonify(error="Only admins can delete policies"), 403
+    if doc_type == "document" and role not in ("admin", "manager"):
         return jsonify(error="Forbidden"), 403
 
     execute("DELETE FROM document_links WHERE id=%s", (did,))

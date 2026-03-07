@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS employees (
     email      VARCHAR(200)  NOT NULL UNIQUE,
     group_id   INT           NULL,
     avatar     VARCHAR(10)   NOT NULL DEFAULT '??',
+    emergency_contact VARCHAR(20) NULL,
     created_at DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_emp_group FOREIGN KEY (group_id) REFERENCES `groups`(id) ON DELETE SET NULL
@@ -145,6 +146,7 @@ CREATE TABLE IF NOT EXISTS document_links (
     id          INT AUTO_INCREMENT PRIMARY KEY,
     title       VARCHAR(150) NOT NULL,
     url         VARCHAR(1000) NOT NULL,
+    type        ENUM('document', 'policy') NOT NULL DEFAULT 'document',
     created_by  INT NULL,
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
