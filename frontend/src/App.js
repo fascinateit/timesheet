@@ -207,7 +207,7 @@ function LoginPage({ onLogin }) {
               {loading ? "Authenticating…" : "Sign In →"}
             </button>
           </div>
-          <div style={{ marginTop: 22, background: C.surface, borderRadius: 10, padding: "14px 16px", border: `1px solid ${C.border}` }}>
+          {/* <div style={{ marginTop: 22, background: C.surface, borderRadius: 10, padding: "14px 16px", border: `1px solid ${C.border}` }}>
             <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5, marginBottom: 10 }}>🔑 Demo Credentials</div>
             {[["admin", "admin123", "Admin", C.purple], ["arjun", "pass123", "Employee", C.green]].map(([u, p, role, col]) => (
               <button key={u} onClick={() => { setUsername(u); setPassword(p); }} style={{
@@ -221,7 +221,7 @@ function LoginPage({ onLogin }) {
                 <div style={{ fontSize: 11, color: C.textMuted, marginTop: 3 }}>pw: {p}</div>
               </button>
             ))}
-          </div>
+          </div> */}
         </Card>
       </div>
     </div>
