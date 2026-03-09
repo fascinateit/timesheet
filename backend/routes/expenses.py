@@ -143,6 +143,23 @@ def approve_expense(eid):
     return jsonify(updated=True), 200
 
 
+@expenses_bp.route("/<int:eid>/pay", methods=["PATCH"])
+@jwt_required()
+def pay_expense(eid):
+    user = json.loads(get_jwt_identity())
+    ex = query("SELECT employee_id, status FROM expenses WHERE id=%s", (eid,), fetch="one")
+    if not ex: return jsonify(error="Not found"), 404
+    if ex["status"] != "approved":
+        return jsonify(error="Expense must be approved before marking as paid"), 400
+    if user["role"] == "manager" and ex["employee_id"] != user["employee_id"]:
+        emp = query("SELECT manager_id FROM employees WHERE id=%s", (ex["employee_id"],), fetch="one")
+        if not emp or emp.get("manager_id") != user["employee_id"]:
+            return jsonify(error="Forbidden"), 403
+
+    execute("UPDATE expenses SET status='paid' WHERE id=%s", (eid,))
+    return jsonify(updated=True), 200
+
+
 @expenses_bp.route("/<int:eid>/reject", methods=["PATCH"])
 @jwt_required()
 def reject_expense(eid):

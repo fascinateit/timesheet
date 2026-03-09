@@ -71,6 +71,7 @@ export const api = {
   createExpense: (d) => req("POST", "/expenses/", d),
   updateExpense: (id, d) => req("PUT", `/expenses/${id}`, d),
   approveExpense: (id) => req("PATCH", `/expenses/${id}/approve`),
+  payExpense: (id) => req("PATCH", `/expenses/${id}/pay`),
   rejectExpense: (id, note) => req("PATCH", `/expenses/${id}/reject`, { note }),
   sendbackExpense: (id, note) => req("PATCH", `/expenses/${id}/sendback`, { note }),
   deleteExpense: (id) => req("DELETE", `/expenses/${id}`),
@@ -96,5 +97,12 @@ export const api = {
   updateInvoice: (id, d) => req("PUT", `/invoices/${id}`, d),
   updateInvoiceStatus: (id, status) => req("PUT", `/invoices/${id}/status`, { status }),
   deleteInvoice: (id) => req("DELETE", `/invoices/${id}`),
+
+  // Company Expenses
+  getCompanyExpenses: () => req("GET", "/company-expenses/"),
+  createCompanyExpense: (d) => req("POST", "/company-expenses/", d),
+  updateCompanyExpense: (id, d) => req("PUT", `/company-expenses/${id}`, d),
+  updateCompanyExpenseStatus: (id, status) => req("PUT", `/company-expenses/${id}/status`, { status }),
+  deleteCompanyExpense: (id) => req("DELETE", `/company-expenses/${id}`),
 
 };

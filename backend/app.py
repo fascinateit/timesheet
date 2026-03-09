@@ -48,7 +48,9 @@ def create_app():
     app.register_blueprint(documents_bp,  url_prefix="/api/documents")
     
     from routes.invoices import invoices_bp
+    from routes.company_expenses import company_expenses_bp
     app.register_blueprint(invoices_bp,   url_prefix="/api/invoices")
+    app.register_blueprint(company_expenses_bp, url_prefix="/api/company-expenses")
 
     @app.route("/api/health")
     def health():

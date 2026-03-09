@@ -91,8 +91,8 @@ const SearchableSelect = ({ label, value, onChange, options, placeholder = "Sear
     return () => window.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const filtered = options.filter(o => o.label.toLowerCase().includes(search.toLowerCase()));
-  const selected = options.find(o => o.value === value);
+  const filtered = options.filter(o => (o?.label || "").toLowerCase().includes(search.toLowerCase()));
+  const selected = options.find(o => o?.value === value);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6, position: "relative" }} ref={ref}>
@@ -396,7 +396,7 @@ function ProjectDashboard({ projects, invoices }) {
   );
 }
 
-function ProjectManagement({ readOnly = false }) {
+function ProjectManagement({ readOnly = false, currentUser }) {
   const [tab, setTab] = useState("dashboard");
   const [invoices, setInvoices] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -470,18 +470,19 @@ function ProjectManagement({ readOnly = false }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
-        <div><h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>Project Management</h2>
-          <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>Monitor client budgets & track raised invoices for projects</p></div>
+        <div><h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>Project Management & Ledger</h2>
+          <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>Monitor client budgets & track company expenses or invoices</p></div>
         {!readOnly && tab === "invoices" && <Btn onClick={() => setModal(true)}>+ Raise Invoice</Btn>}
+        {!readOnly && tab === "company_expenses" && <Btn onClick={() => setModal("newExpense")}>+ Add Expense</Btn>}
       </div>
 
-      <div style={{ display: "flex", gap: 4, background: C.surface, padding: 4, borderRadius: 10, width: "fit-content" }}>
-        {["dashboard", "invoices"].map(t => (
+      <div style={{ display: "flex", gap: 4, background: C.surface, padding: 4, borderRadius: 10, width: "fit-content", overflowX: "auto" }}>
+        {["dashboard", "invoices", "company_expenses"].map(t => (
           <button key={t} onClick={() => setTab(t)} style={{
             background: tab === t ? C.card : "transparent", color: tab === t ? C.text : C.textMuted,
             border: tab === t ? `1px solid ${C.border}` : "1px solid transparent",
             borderRadius: 8, padding: "6px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", textTransform: "capitalize"
-          }}>{t === "dashboard" ? "Dashboard" : "Client Budgets & Invoiced"}</button>
+          }}>{t === "dashboard" ? "Dashboard" : t === "company_expenses" ? "Company Expenses" : "Client Budgets & Invoiced"}</button>
         ))}
       </div>
 
@@ -623,6 +624,331 @@ function ProjectManagement({ readOnly = false }) {
           />
         </Modal>
       )}
+
+      {tab === "company_expenses" && (
+        <CompanyExpenses modal={modal} setModal={setModal} currentUser={currentUser} projects={projects} />
+      )}
+    </div>
+  );
+}
+
+function CompanyExpenses({ modal, setModal, currentUser, projects }) {
+  const [expenses, setExpenses] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [editObj, setEditObj] = useState(null);
+  const [filterMonth, setFilterMonth] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [chartOffset, setChartOffset] = useState(0);
+
+  const initForm = { expenseDate: "", purpose: "", amount: "", paidBy: "", itrType: "", taxType: "", gstAmount: "", status: "pending" };
+  const [form, setForm] = useState({ ...initForm });
+
+  const load = useCallback(async () => {
+    setLoading(true); setErr("");
+    try {
+      const [exps, emps] = await Promise.all([api.getCompanyExpenses(), api.getEmployees()]);
+      setExpenses(exps);
+      setEmployees(emps);
+    }
+    catch (e) { setErr(e.message); }
+    finally { setLoading(false); }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (modal === "editExpense" && editObj) {
+      setForm({ ...editObj, expenseDate: editObj.expense_date, itrType: editObj.itr_type || "", taxType: editObj.tax_type || "", gstAmount: editObj.gst_amount || "", paidBy: editObj.paid_by });
+    } else if (modal === "newExpense") {
+      setForm({ ...initForm });
+    }
+  }, [modal, editObj]);
+
+  async function handleSave(e) {
+    if (e) e.preventDefault();
+    setSaving(true); setErr("");
+    try {
+      if (modal === "editExpense" && editObj) {
+        await api.updateCompanyExpense(editObj.id, form);
+      } else {
+        await api.createCompanyExpense(form);
+      }
+      setModal(false); setEditObj(null);
+      await load();
+    } catch (ex) { setErr(ex.message); }
+    finally { setSaving(false); }
+  }
+
+  async function handleDelete(id) {
+    if (!window.confirm("Are you sure you want to delete this expense?")) return;
+    try {
+      await api.deleteCompanyExpense(id);
+      await load();
+    } catch (e) { alert(e.message); }
+  }
+
+  async function handleToggleStatus(id, newStatus) {
+    try {
+      await api.updateCompanyExpenseStatus(id, newStatus);
+      await load();
+    } catch (e) { alert(e.message); }
+  }
+
+  function handleDownloadCSV() {
+    if (!filteredList || !filteredList.length) return alert("No company expenses to export.");
+    const headers = ["Expense Date", "Purpose", "Amount (INR)", "GST Amount (INR)", "Paid By", "ITR Type", "Tax Type", "Status"];
+    const rows = filteredList.map(e => {
+      // Parse strictly as dd-mm-yyyy per requirements
+      const [yr, mo, da] = (e.expense_date || "").split("-");
+      const fmtDate = yr && mo && da ? `${da}-${mo}-${yr}` : e.expense_date;
+      return [
+        fmtDate,
+        `"${(e.purpose || "").replace(/"/g, '""')}"`,
+        e.amount,
+        e.gst_amount || 0,
+        `"${(e.paid_by || "").replace(/"/g, '""')}"`,
+        e.itr_type || "",
+        e.tax_type || "",
+        e.status.toUpperCase()
+      ];
+    });
+    const csvStr = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+    const blob = new Blob([csvStr], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `company-expenses-export-${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  if (loading) return <Spinner />;
+
+  const totalExpenses = expenses.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
+
+  // Apply chart window offset
+  const last6Months = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date();
+    d.setMonth(d.getMonth() - i - (chartOffset * 6));
+    const yr = d.getFullYear();
+    const mo = String(d.getMonth() + 1).padStart(2, '0');
+    last6Months.push(`${yr}-${mo}`);
+  }
+
+  const chartDataMap = {};
+  const monthOptions = Array.from(new Set(expenses.map(e => e.expense_date?.slice(0, 7)).filter(Boolean))).sort().reverse();
+  const filteredList = expenses.filter(e => {
+    if (filterMonth !== "all" && !e.expense_date?.startsWith(filterMonth)) return false;
+    if (filterStatus !== "all" && e.status !== filterStatus) return false;
+    return true;
+  });
+  const filteredTotal = filteredList.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
+
+  const chartData = last6Months.map(m => {
+    const amt = expenses.filter(e => e.expense_date?.startsWith(m)).reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
+    return { name: new Date(m + "-01T12:00:00").toLocaleDateString('en-US', { month: 'short', year: 'numeric' }), amount: amt };
+  });
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+        <Card>
+          <div style={{ fontSize: 13, color: C.textMuted, fontWeight: 700, letterSpacing: .5 }}>TOTAL EXPENSES (ALL TIME)</div>
+          <div style={{ fontSize: 28, fontWeight: 800, color: C.text, marginTop: 8 }}>{fmt$(totalExpenses)}</div>
+        </Card>
+        <Card>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div style={{ fontSize: 13, color: C.textMuted, fontWeight: 700, letterSpacing: .5 }}>FILTERED EXPENSES</div>
+              <div style={{ fontSize: 28, fontWeight: 800, color: C.text, marginTop: 8 }}>{fmt$(filteredTotal)}</div>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 12px", outline: "none", fontSize: 13 }}>
+                <option value="all">All Statuses</option>
+                <option value="pending">Pending</option>
+                <option value="cleared">Cleared</option>
+                <option value="sent to auditing">Sent to Auditing</option>
+              </select>
+              <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} style={{ background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 12px", outline: "none", fontSize: 13 }}>
+                <option value="all">All Months</option>
+                {monthOptions.map(m => <option key={m} value={m}>{new Date(m + "-01T12:00:00").toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</option>)}
+              </select>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+
+      <Card>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 16 }}>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: C.text }}>Monthly Trace</h3>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Btn variant="ghost" small onClick={() => setChartOffset(o => o + 1)}>← Prev 6 Months</Btn>
+            <Btn variant="ghost" small onClick={() => setChartOffset(o => Math.max(0, o - 1))} disabled={chartOffset === 0}>Next 6 Months →</Btn>
+          </div>
+        </div>
+        <div style={{ width: "100%", height: 260 }}>
+          <ResponsiveContainer>
+            <BarChart data={chartData}>
+              <XAxis dataKey="name" stroke={C.border} tick={{ fill: C.textMuted, fontSize: 12 }} />
+              <YAxis stroke={C.border} tick={{ fill: C.textMuted, fontSize: 12 }} tickFormatter={v => `₹${v / 1000}k`} />
+              <Tooltip contentStyle={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text }} itemStyle={{ color: C.amber }} />
+              <Bar dataKey="amount" fill={C.amber} radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </Card>
+
+      <Card>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 16 }}>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: C.text }}>Company Expenses Ledger</h3>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Btn variant="outline" onClick={handleDownloadCSV} disabled={!filteredList.length}>⬇ Export Excel</Btn>
+          </div>
+        </div>
+
+        {err && <div style={{ background: C.red + "18", color: C.red, padding: "10px 14px", borderRadius: 8, fontSize: 13, border: `1px solid ${C.red}44`, marginBottom: 16 }}>⚠ {err}</div>}
+
+        {!filteredList.length ? (
+          <div style={{ padding: "40px 20px", textAlign: "center", color: C.textMuted }}>No company expenses recorded yet.</div>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  <Th>Expense Date</Th>
+                  <Th>Purpose</Th>
+                  <Th>Amount</Th>
+                  <Th>Paid By</Th>
+                  <Th>ITR / Tax Type</Th>
+                  <Th>GST Amount</Th>
+                  <Th>Status</Th>
+                  <Th>Action</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredList.map(exp => {
+                  const [yr, mo, da] = (exp.expense_date || "").split("-");
+                  const fmtDmy = yr && mo && da ? `${da}-${mo}-${yr}` : exp.expense_date;
+                  return (
+                    <tr key={exp.id} style={{ borderBottom: `1px solid ${C.border}` }}>
+                      <Td><div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{fmtDmy}</div></Td>
+                      <Td><div style={{ fontSize: 13, color: C.textMuted }}>{exp.purpose}</div></Td>
+                      <Td><div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{fmt$(exp.amount)}</div></Td>
+                      <Td><div style={{ fontSize: 13, color: C.textMuted }}>{exp.paid_by}</div></Td>
+                      <Td>
+                        <div style={{ fontSize: 13, color: C.text }}>{exp.itr_type || "—"}</div>
+                        <div style={{ fontSize: 11, color: C.accent }}>{exp.tax_type || "—"}</div>
+                      </Td>
+                      <Td><div style={{ fontSize: 13, color: C.textMuted }}>{fmt$(exp.gst_amount || 0)}</div></Td>
+                      <Td>
+                        <Badge color={exp.status === "cleared" ? C.green : exp.status === "sent to auditing" ? C.purple : C.amber}>
+                          {exp.status}
+                        </Badge>
+                      </Td>
+                      <Td>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          {(!exp.paid_by?.toUpperCase().includes('FIT') && exp.status !== "sent to auditing") && (
+                            <Btn small variant="outline" onClick={() => { setEditObj(exp); setModal("generateExpense"); }}>Generate Exp</Btn>
+                          )}
+                          {exp.status === "pending" && (
+                            <Btn small variant="success" onClick={() => handleToggleStatus(exp.id, "cleared")}>Mark Cleared</Btn>
+                          )}
+                          {exp.status === "cleared" && (
+                            <Btn small style={{ background: C.purple, color: "#fff", border: "none" }} onClick={() => handleToggleStatus(exp.id, "sent to auditing")}>Send to Auditing</Btn>
+                          )}
+                          {exp.status !== "sent to auditing" && (
+                            <>
+                              <Btn small variant="ghost" onClick={() => { setEditObj(exp); setModal("editExpense"); }}>✏</Btn>
+                              <Btn small variant="danger" onClick={() => handleDelete(exp.id)}>🗑</Btn>
+                            </>
+                          )}
+                        </div>
+                      </Td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {modal === "generateExpense" && editObj && (
+        <Modal title="Generate Employee Expense" onClose={() => { setModal(false); setEditObj(null); }}>
+          <ExpenseForm
+            init={{
+              title: editObj.purpose || "",
+              amount: editObj.amount || "",
+              category: "Other",
+              projectId: "",
+              description: `Auto-generated from Company Expense ID ${editObj.id} (Paid by: ${editObj.paid_by})`
+            }}
+            projects={projects}
+            employees={employees}
+            saving={saving}
+            onCancel={() => { setModal(false); setEditObj(null); }}
+            onSave={async (f) => {
+              setSaving(true);
+              try {
+                await api.createExpense({ ...f, employeeId: f.employeeId || currentUser.employee_id });
+                setModal(false);
+                setEditObj(null);
+                alert("Employee expense drafted & submitted for approval!");
+              } catch (ex) { alert(ex.message); }
+              finally { setSaving(false); }
+            }}
+            btnLabel="Generate & Submit"
+          />
+        </Modal>
+      )}
+
+      {(modal === "newExpense" || modal === "editExpense") && (
+        <Modal title={modal === "newExpense" ? "Add Company Expense" : "Edit Expense"} onClose={() => { setModal(false); setEditObj(null); }}>
+          <form onSubmit={handleSave} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {err && <div style={{ color: C.red, fontSize: 13 }}>⚠ {err}</div>}
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <Inp label="Expense Date *" type="date" value={form.expenseDate} onChange={v => setForm({ ...form, expenseDate: v })} required />
+              <Inp label="Paid By *" value={form.paidBy} onChange={v => setForm({ ...form, paidBy: v })} placeholder="e.g. Corporate Card, Arjun" required />
+            </div>
+
+            <Inp label="Purpose *" value={form.purpose} onChange={v => setForm({ ...form, purpose: v })} placeholder="e.g. AWS Hosting, Office Supplies" required />
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <Inp label="Net Amount *" type="number" step="0.01" value={form.amount} onChange={v => setForm({ ...form, amount: v })} required />
+              <Inp label="GST Amount" type="number" step="0.01" value={form.gstAmount} onChange={v => setForm({ ...form, gstAmount: v })} />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <Inp label="ITR Type" value={form.itrType} onChange={v => setForm({ ...form, itrType: v })} placeholder="e.g. ITR-4" />
+              <Inp label="Tax Type" value={form.taxType} onChange={v => setForm({ ...form, taxType: v })} placeholder="e.g. CGST, IGST" />
+            </div>
+
+            <div>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.textMuted, marginBottom: 6, textTransform: "uppercase" }}>Clearance Status</label>
+              <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} style={{
+                width: "100%", padding: "8px 12px", borderRadius: 8, border: `1px solid ${C.border}`,
+                background: C.surface, color: C.text, fontSize: 14, outline: "none"
+              }}>
+                <option value="pending">Pending</option>
+                <option value="cleared">Cleared</option>
+                <option value="sent to auditing">Sent to Auditing</option>
+              </select>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
+              <Btn type="button" variant="ghost" onClick={() => { setModal(false); setEditObj(null); }}>Cancel</Btn>
+              <Btn type="submit" disabled={saving || !form.expenseDate || !form.amount || !form.purpose || !form.paidBy}>
+                {saving ? "Saving…" : (modal === "newExpense" ? "Create Expense" : "Save Changes")}
+              </Btn>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -732,21 +1058,8 @@ function LoginPage({ onLogin }) {
               {loading ? "Authenticating…" : "Sign In →"}
             </button>
           </div>
-          {/* <div style={{ marginTop: 22, background: C.surface, borderRadius: 10, padding: "14px 16px", border: `1px solid ${C.border}` }}>
-            <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5, marginBottom: 10 }}>🔑 Demo Credentials</div>
-            {[["admin", "admin123", "Admin", C.purple], ["arjun", "pass123", "Employee", C.green]].map(([u, p, role, col]) => (
-              <button key={u} onClick={() => { setUsername(u); setPassword(p); }} style={{
-                width: "100%", background: "transparent", border: `1px solid ${C.border}`, borderRadius: 8,
-                padding: "8px 12px", cursor: "pointer", textAlign: "left", marginBottom: 6
-              }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ color: C.accent, fontWeight: 700, fontSize: 13, fontFamily: "monospace" }}>{u}</span>
-                  <Badge color={col}>{role}</Badge>
-                </div>
-                <div style={{ fontSize: 11, color: C.textMuted, marginTop: 3 }}>pw: {p}</div>
-              </button>
-            ))}
-          </div> */}
+
+
         </Card>
       </div>
     </div>
@@ -1069,8 +1382,16 @@ function EmpForm({ init, groups, employees, saving, onCancel, onSave, btnLabel }
         <SearchableSelect label="Manager" value={form.managerId} onChange={v => setForm(f => ({ ...f, managerId: v }))} options={(employees || []).map(e => ({ value: e.id, label: e.name }))} />
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <Inp label="Joining Date" type="date" value={form.joiningDate || ""} onChange={v => setForm(f => ({ ...f, joiningDate: v }))} />
         <Inp label="Annual CTC (₹)" type="number" value={form.ctcAnnual || ""} onChange={v => setForm(f => ({ ...f, ctcAnnual: v }))} placeholder="e.g. 1200000" />
+        <Inp label="Variable Pay (₹)" type="number" value={form.variablePay || ""} onChange={v => setForm(f => ({ ...f, variablePay: v }))} placeholder="e.g. 200000" />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Inp label="Designation" value={form.designation || ""} onChange={v => setForm(f => ({ ...f, designation: v }))} placeholder="e.g. Software Engineer" />
+        <Inp label="Location" value={form.location || ""} onChange={v => setForm(f => ({ ...f, location: v }))} placeholder="e.g. Bangalore" />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Inp label="PAN Number" value={form.panNumber || ""} onChange={v => setForm(f => ({ ...f, panNumber: v }))} placeholder="ABCDE1234F" />
+        <Inp label="Joining Date" type="date" value={form.joiningDate || ""} onChange={v => setForm(f => ({ ...f, joiningDate: v }))} />
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <Inp label="Date of Birth" type="date" value={form.dob || ""} onChange={v => setForm(f => ({ ...f, dob: v }))} />
@@ -1866,7 +2187,8 @@ function MyProfile({ currentUser }) {
       const payload = {
         name: profile.name, email: profile.email, groupId: profile.group_id, joiningDate: profile.joining_date, ctcAnnual: profile.ctc_annual,
         dob: form.dob, address: form.address, mobile: form.mobile, emergencyContact: form.emergencyContact, skillset: form.skillset,
-        bankAccountNo: form.bankAccountNo, bankIfsc: form.bankIfsc, bankName: form.bankName
+        bankAccountNo: form.bankAccountNo, bankIfsc: form.bankIfsc, bankName: form.bankName,
+        panNumber: form.panNumber, designation: profile.designation, location: profile.location, variablePay: profile.variable_pay_amount
       };
       await api.updateEmployee(currentUser.employee_id, payload);
       alert("Profile updated successfully!");
@@ -1931,8 +2253,12 @@ function MyProfile({ currentUser }) {
             <Inp label="Full Name" value={profile.name} disabled />
             <Inp label="Email" value={profile.email} disabled />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <Inp label="Designation" value={profile.group_name || "—"} disabled />
+              <Inp label="Role / Group" value={profile.group_name || "—"} disabled />
               <Inp label="Manager" value={profile.manager_name || "—"} disabled />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <Inp label="Designation" value={profile.designation || "—"} disabled />
+              <Inp label="Location" value={profile.location || "—"} disabled />
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Inp label="Joining Date" value={profile.joining_date ? fmtD(profile.joining_date) : "—"} disabled />
@@ -1956,13 +2282,14 @@ function MyProfile({ currentUser }) {
       </div>
 
       <Card>
-        <h4 style={{ margin: "0 0 16px", fontSize: 14, color: C.text, fontWeight: 800 }}>Banking Details</h4>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
+        <h4 style={{ margin: "0 0 16px", fontSize: 14, color: C.text, fontWeight: 800 }}>Banking Details & Taxation</h4>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <Inp disabled={!isEditing} label="PAN Number" value={form.panNumber || profile.pan_number || ""} onChange={v => setForm(f => ({ ...f, panNumber: v }))} placeholder="ABCDE1234F" />
           <Inp disabled={!isEditing} label="Bank Name" value={form.bankName || ""} onChange={v => setForm(f => ({ ...f, bankName: v }))} placeholder="e.g. Chase" />
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <Inp disabled={!isEditing} label="Account No" value={form.bankAccountNo || ""} onChange={v => setForm(f => ({ ...f, bankAccountNo: v }))} placeholder="1234567890" />
-            <Inp disabled={!isEditing} label="IFSC Code" value={form.bankIfsc || ""} onChange={v => setForm(f => ({ ...f, bankIfsc: v }))} placeholder="CHAS0123456" />
-          </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 12 }}>
+          <Inp disabled={!isEditing} label="Account No" value={form.bankAccountNo || ""} onChange={v => setForm(f => ({ ...f, bankAccountNo: v }))} placeholder="1234567890" />
+          <Inp disabled={!isEditing} label="IFSC Code" value={form.bankIfsc || ""} onChange={v => setForm(f => ({ ...f, bankIfsc: v }))} placeholder="CHAS0123456" />
         </div>
       </Card>
 
@@ -2103,24 +2430,38 @@ function MyPay({ currentUser }) {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
               <div>
                 <div style={{ fontSize: 12, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>Earnings</div>
-                {[["Basic Salary", selected.basic], ["HRA", selected.hra], ["Transport Allowance", selected.transport], ["Special Allowance", selected.special_allowance]].map(([k, v]) => (
+                {[
+                  ["Basic Salary", selected.basic], ["HRA", selected.hra],
+                  ["Leave Travel Allowance", selected.leave_travel_allowance],
+                  ["Special Allowance", selected.special_allowance],
+                  ["Transport Allowance", selected.transport],
+                  ["Medical Allowance", selected.medical_allowance],
+                  ["Internet & Broadband Allowance", selected.internet_allowance],
+                  ["Variable Pay", selected.variable_pay],
+                  ["Bonus", selected.bonus]
+                ].map(([k, v]) => Number(v) > 0 ? (
                   <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.border}22`, fontSize: 13 }}>
                     <span style={{ color: C.textDim }}>{k}</span><span style={{ fontWeight: 600, color: C.text }}>{fmt(v)}</span>
                   </div>
-                ))}
+                ) : null)}
                 <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", fontSize: 14, fontWeight: 800, color: C.green, borderTop: `2px solid ${C.border}44`, marginTop: 4 }}>
                   <span>Gross Salary</span><span>{fmt(selected.gross)}</span>
                 </div>
               </div>
               <div>
                 <div style={{ fontSize: 12, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>Deductions</div>
-                {[["Provident Fund (12%)", selected.pf_employee], ["Professional Tax", selected.professional_tax]].map(([k, v]) => (
+                {[
+                  ["Professional Tax", selected.professional_tax],
+                  ["Income Tax (TDS)", selected.income_tax],
+                  ["Provident Fund", selected.pf_employee],
+                  ["Other Deductions", selected.extra_deductions]
+                ].map(([k, v]) => Number(v) > 0 ? (
                   <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.border}22`, fontSize: 13 }}>
                     <span style={{ color: C.textDim }}>{k}</span><span style={{ fontWeight: 600, color: C.red }}>{fmt(v)}</span>
                   </div>
-                ))}
+                ) : null)}
                 <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", fontSize: 14, fontWeight: 800, color: C.red, borderTop: `2px solid ${C.border}44`, marginTop: 4 }}>
-                  <span>Total Deductions</span><span>{fmt(Number(selected.pf_employee) + Number(selected.professional_tax))}</span>
+                  <span>Total Deductions</span><span>{fmt(Number(selected.pf_employee) + Number(selected.professional_tax) + Number(selected.income_tax) + Number(selected.extra_deductions))}</span>
                 </div>
               </div>
             </div>
@@ -2162,7 +2503,7 @@ function MyPay({ currentUser }) {
 
 // ════════════════════════════════════════════════════════
 const EXP_CATEGORIES = ["Travel", "Meals", "Software", "Hardware", "Training", "Other"];
-const EXP_STATUS_COLOR = { pending: C.amber, approved: C.green, rejected: C.red, needs_correction: C.purple };
+const EXP_STATUS_COLOR = { pending: C.amber, approved: C.green, rejected: C.red, needs_correction: C.purple, paid: C.accent };
 
 
 function Expenses({ currentUser, viewOnly }) {
@@ -2204,6 +2545,7 @@ function Expenses({ currentUser, viewOnly }) {
     setSaving(true);
     try {
       if (noteModal.action === "approve") await api.approveExpense(noteModal.id);
+      else if (noteModal.action === "pay") await api.payExpense(noteModal.id);
       else if (noteModal.action === "reject") await api.rejectExpense(noteModal.id, note);
       else await api.sendbackExpense(noteModal.id, note);
       setNoteModal(null); setNote(""); await load();
@@ -2213,7 +2555,7 @@ function Expenses({ currentUser, viewOnly }) {
   if (loading) return <Spinner />;
   if (err) return <ErrBox msg={err} onRetry={load} />;
 
-  const statusOpts = ["pending", "approved", "rejected", "needs_correction"].map(s => ({ value: s, label: s.replace("_", " ") }));
+  const statusOpts = ["pending", "approved", "rejected", "needs_correction", "paid"].map(s => ({ value: s, label: s.replace("_", " ") }));
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
@@ -2275,6 +2617,9 @@ function Expenses({ currentUser, viewOnly }) {
                       <Btn small variant="ghost" onClick={() => setNoteModal({ id: ex.id, action: "sendback" })}>↩ Send Back</Btn>
                     </>
                   )}
+                  {!viewOnly && ex.status === "approved" && (
+                    <Btn small variant="success" onClick={() => setNoteModal({ id: ex.id, action: "pay" })}>💵 Mark Paid</Btn>
+                  )}
                 </div>
               </div>
             </Card>
@@ -2299,17 +2644,18 @@ function Expenses({ currentUser, viewOnly }) {
 
       {/* Admin action note modal */}
       {noteModal && (
-        <Modal title={noteModal.action === "approve" ? "Approve Expense" : noteModal.action === "reject" ? "Reject Expense" : "Send Back for Correction"} onClose={() => { setNoteModal(null); setNote(""); }}>
+        <Modal title={noteModal.action === "pay" ? "Mark Expense Paid" : noteModal.action === "approve" ? "Approve Expense" : noteModal.action === "reject" ? "Reject Expense" : "Send Back for Correction"} onClose={() => { setNoteModal(null); setNote(""); }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {noteModal.action !== "approve" && (
+            {noteModal.action !== "approve" && noteModal.action !== "pay" && (
               <Inp label={noteModal.action === "reject" ? "Rejection reason" : "Correction notes"} value={note} onChange={setNote}
                 placeholder={noteModal.action === "reject" ? "Please explain why…" : "What needs to be fixed…"} />
             )}
             {noteModal.action === "approve" && <p style={{ color: C.textDim, fontSize: 13, margin: 0 }}>Confirm approval of this expense?</p>}
+            {noteModal.action === "pay" && <p style={{ color: C.textDim, fontSize: 13, margin: 0 }}>Confirm this approved expense has been paid out?</p>}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
               <Btn variant="ghost" onClick={() => { setNoteModal(null); setNote(""); }}>Cancel</Btn>
-              <Btn variant={noteModal.action === "approve" ? "success" : "danger"} onClick={handleAction} disabled={saving}>
-                {saving ? "Saving…" : noteModal.action === "approve" ? "✓ Approve" : noteModal.action === "reject" ? "✕ Reject" : "↩ Send Back"}
+              <Btn variant={noteModal.action === "approve" || noteModal.action === "pay" ? "success" : "danger"} onClick={handleAction} disabled={saving}>
+                {saving ? "Saving…" : noteModal.action === "approve" ? "✓ Approve" : noteModal.action === "pay" ? "💵 Mark Paid" : noteModal.action === "reject" ? "✕ Reject" : "↩ Send Back"}
               </Btn>
             </div>
           </div>
@@ -2319,13 +2665,27 @@ function Expenses({ currentUser, viewOnly }) {
   );
 }
 
-function ExpenseForm({ init, projects, saving, onCancel, onSave, btnLabel }) {
+function ExpenseForm({ init, projects, employees, saving, onCancel, onSave, btnLabel }) {
   const [form, setForm] = useState(init);
+
+  const empOptions = employees ? [
+    ...employees.map(e => ({ value: e.id, label: e.name || e.username }))
+  ] : [];
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <Inp label="Title" value={form.title} onChange={v => setForm(f => ({ ...f, title: v }))} required placeholder="e.g. Flight to NYC" />
+      {employees && (
+        <SearchableSelect
+          label="Paid By / Owner *"
+          value={form.employeeId || ""}
+          onChange={v => setForm(f => ({ ...f, employeeId: v }))}
+          options={empOptions}
+          placeholder="Search Employee..."
+        />
+      )}
+      <Inp label="Title / Purpose *" value={form.title} onChange={v => setForm(f => ({ ...f, title: v }))} required placeholder="e.g. Flight to NYC" />
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <Inp label="Amount ($)" type="number" value={form.amount} onChange={v => setForm(f => ({ ...f, amount: v }))} required />
+        <Inp label="Amount (INR) *" type="number" value={form.amount} onChange={v => setForm(f => ({ ...f, amount: v }))} required />
         <Inp label="Category" value={form.category} onChange={v => setForm(f => ({ ...f, category: v }))}
           options={EXP_CATEGORIES.map(c => ({ value: c, label: c }))} />
       </div>
@@ -2334,7 +2694,11 @@ function ExpenseForm({ init, projects, saving, onCancel, onSave, btnLabel }) {
       <Inp label="Description" value={form.description} onChange={v => setForm(f => ({ ...f, description: v }))} placeholder="Details…" />
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
         <Btn variant="ghost" onClick={onCancel}>Cancel</Btn>
-        <Btn onClick={() => onSave(form)} disabled={saving}>{saving ? "Saving…" : btnLabel}</Btn>
+        <Btn onClick={() => {
+          if (!form.title || !form.amount) return alert("Title and Amount are required");
+          if (employees && form.employeeId === undefined) return alert("Please select an employee owning this expense.");
+          onSave(form);
+        }} disabled={saving}>{saving ? "Saving…" : btnLabel}</Btn>
       </div>
     </div>
   );
@@ -2421,7 +2785,7 @@ function AdminEmployees({ readOnly = false }) {
       {!readOnly && modal && (
         <Modal title={modal === "new" ? "New Employee" : "Edit Employee"} onClose={() => setModal(null)}>
           <EmpForm
-            init={modal === "new" ? { name: "", email: "", groupId: "", managerId: "", joiningDate: "", ctcAnnual: "", dob: "", address: "", mobile: "", bankAccountNo: "", bankIfsc: "", bankName: "", skillset: "" } : { name: modal.name, email: modal.email, groupId: modal.group_id || "", managerId: modal.manager_id || "", joiningDate: modal.joining_date || "", ctcAnnual: modal.ctc_annual || "", dob: modal.dob || "", address: modal.address || "", mobile: modal.mobile || "", bankAccountNo: modal.bank_account_no || "", bankIfsc: modal.bank_ifsc || "", bankName: modal.bank_name || "", skillset: modal.skillset || "" }}
+            init={modal === "new" ? { name: "", email: "", groupId: "", managerId: "", joiningDate: "", ctcAnnual: "", variablePay: "", designation: "", location: "", panNumber: "", dob: "", address: "", mobile: "", bankAccountNo: "", bankIfsc: "", bankName: "", skillset: "" } : { name: modal.name, email: modal.email, groupId: modal.group_id || "", managerId: modal.manager_id || "", joiningDate: modal.joining_date || "", ctcAnnual: modal.ctc_annual || "", variablePay: modal.variable_pay_amount || "", designation: modal.designation || "", location: modal.location || "", panNumber: modal.pan_number || "", dob: modal.dob || "", address: modal.address || "", mobile: modal.mobile || "", bankAccountNo: modal.bank_account_no || "", bankIfsc: modal.bank_ifsc || "", bankName: modal.bank_name || "", skillset: modal.skillset || "" }}
             groups={groups} employees={employees} saving={saving} onCancel={() => setModal(null)} onSave={saveEmp}
             btnLabel={modal === "new" ? "Create Employee" : "Save Changes"}
           />
@@ -2437,8 +2801,10 @@ function AdminEmployees({ readOnly = false }) {
               <div>
                 <div style={{ fontSize: 22, fontWeight: 800, color: C.text }}>{viewModal.name}</div>
                 <div style={{ fontSize: 13, color: C.textMuted }}>{viewModal.email}</div>
-                <div style={{ marginTop: 6 }}>
+                <div style={{ marginTop: 6, display: "flex", gap: 8, alignItems: "center" }}>
                   {viewModal.group_name ? <Badge color={viewModal.group_color}>{viewModal.group_name}</Badge> : null}
+                  {viewModal.designation && <span style={{ fontSize: 12, color: C.text, fontWeight: 600 }}>• {viewModal.designation}</span>}
+                  {viewModal.location && <span style={{ fontSize: 12, color: C.textDim }}>({viewModal.location})</span>}
                 </div>
               </div>
             </div>
@@ -2459,7 +2825,7 @@ function AdminEmployees({ readOnly = false }) {
             </div>
 
             <div style={{ background: C.surface, padding: 16, borderRadius: 10 }}>
-              <h4 style={{ margin: "0 0 12px", fontSize: 13, color: C.text, fontWeight: 700 }}>Banking & Compensation</h4>
+              <h4 style={{ margin: "0 0 12px", fontSize: 13, color: C.text, fontWeight: 700 }}>Banking, Tax & Compensation</h4>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div>
                   <div style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Bank Name</div>
@@ -2474,8 +2840,16 @@ function AdminEmployees({ readOnly = false }) {
                   <div style={{ fontSize: 14, color: C.text, fontWeight: 600, fontFamily: "monospace" }}>{viewModal.bank_account_no || "—"}</div>
                 </div>
                 <div>
+                  <div style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>PAN Number</div>
+                  <div style={{ fontSize: 14, color: C.text, fontWeight: 600, fontFamily: "monospace" }}>{viewModal.pan_number || "—"}</div>
+                </div>
+                <div>
                   <div style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Annual CTC</div>
                   <div style={{ fontSize: 14, color: C.green, fontWeight: 700 }}>{viewModal.ctc_annual ? `₹${Number(viewModal.ctc_annual).toLocaleString("en-IN")}` : "—"}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Variable Pay</div>
+                  <div style={{ fontSize: 14, color: C.amber, fontWeight: 700 }}>{viewModal.variable_pay_amount ? `₹${Number(viewModal.variable_pay_amount).toLocaleString("en-IN")}` : "—"}</div>
                 </div>
               </div>
             </div>
@@ -2504,94 +2878,169 @@ function AdminEmployees({ readOnly = false }) {
 const SLIP_MONTHS = ["January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December"];
 
-function printPayslipData(ps, origin) {
-  const fmt = n => `₹${Number(n).toLocaleString("en-IN")}`;
+function inWords(num) {
+  const a = ['', 'one ', 'two ', 'three ', 'four ', 'five ', 'six ', 'seven ', 'eight ', 'nine ', 'ten ', 'eleven ', 'twelve ', 'thirteen ', 'fourteen ', 'fifteen ', 'sixteen ', 'seventeen ', 'eighteen ', 'nineteen '];
+  const b = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+  if ((num = num.toString()).length > 9) return 'overflow';
+  let n = ('000000000' + num).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
+  if (!n) return; let str = '';
+  str += (n[1] != 0) ? (a[Number(n[1])] || b[n[1][0]] + ' ' + a[n[1][1]]) + 'crore ' : '';
+  str += (n[2] != 0) ? (a[Number(n[2])] || b[n[2][0]] + ' ' + a[n[2][1]]) + 'lakh ' : '';
+  str += (n[3] != 0) ? (a[Number(n[3])] || b[n[3][0]] + ' ' + a[n[3][1]]) + 'thousand ' : '';
+  str += (n[4] != 0) ? (a[Number(n[4])] || b[n[4][0]] + ' ' + a[n[4][1]]) + 'hundred ' : '';
+  str += (n[5] != 0) ? ((str != '') ? 'and ' : '') + (a[Number(n[5])] || b[n[5][0]] + ' ' + a[n[5][1]]) : '';
+  return str.trim();
+}
+
+function printPayslipData(ps) {
+  const origin = window.location.origin;
+  const fmt = n => Number(n).toLocaleString("en-IN");
   const monthLabel = `${SLIP_MONTHS[ps.month - 1]} ${ps.year}`;
-  const bonus = Number(ps.bonus || 0);
-  const extraDed = Number(ps.extra_deductions || 0);
-  const totalDed = Number(ps.pf_employee) + Number(ps.professional_tax) + extraDed;
+  const totalDed = Number(ps.pf_employee) + Number(ps.professional_tax) + Number(ps.income_tax) + Number(ps.extra_deductions);
+  const words = inWords(Math.round(ps.net_pay));
 
   const html = `<!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="UTF-8" />
-            <title>Payslip - ${monthLabel} - ${ps.employee_name}</title>
-            <style>
-              *{box - sizing:border-box;margin:0;padding:0}
-              body{font - family:'Segoe UI',Arial,sans-serif;background:#f4f6fb;color:#111}
-              .slip{max - width:780px;margin:32px auto;border-radius:14px;overflow:hidden;box-shadow:0 4px 32px rgba(0,0,0,.12);background:#fff}
-              .hdr{background:linear-gradient(135deg,#1a2340,#2d3d6e);color:#fff;padding:28px 36px;display:flex;align-items:center;gap:24px}
-              .hdr img{height:56px;object-fit:contain}
-              .hdr-t h2{font - size:20px;font-weight:800}
-              .hdr-t p{margin - top:4px;font-size:13px;opacity:.75}
-              .info{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid #eee}
-              .ic{padding:14px 32px;font-size:13px;border-right:1px solid #eee}
-              .ic:nth-child(even){border - right:none}
-              .lbl{color:#888;font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
-              .val{font - weight:700}
-              .tables{display:grid;grid-template-columns:1fr 1fr}
-              table{width:100%;border-collapse:collapse}
-              th{background:#f7f9fc;padding:11px 28px;text-align:left;font-size:11px;color:#666;text-transform:uppercase;border-bottom:1px solid #eee}
-              td{padding:10px 28px;font-size:13px;border-bottom:1px solid #f4f4f4}
-              .amt{text - align:right;font-weight:600}
-              .highlight{background:#fffbeb}
-              .tot td{background:#f0f4ff;font-weight:800;font-size:14px;border-top:2px solid #dde3f0}
-              .rt{border - left:1px solid #eee}
-              .net{background:linear-gradient(135deg,#1a2340,#2d3d6e);color:#fff;padding:22px 36px;display:flex;justify-content:space-between;align-items:center}
-              .net-lbl{font - size:13px;opacity:.8}
-              .net-amt{font - size:26px;font-weight:800}
-              .foot{text - align:center;padding:14px;font-size:11px;color:#aaa;border-top:1px solid #eee}
-              @media print{body{background:#fff} .slip{box - shadow:none;margin:0;border-radius:0}}
-            </style>
-          </head>
-          <body>
-            <div class="slip">
-              <div class="hdr">
-                <img src="${origin}/paysliplogo.png" alt="Logo" />
-                <div class="hdr-t"><h2>Salary Slip</h2><p>Period: ${monthLabel}</p></div>
-              </div>
-              <div class="info">
-                <div class="ic"><div class="lbl">Employee Name</div><div class="val">${ps.employee_name}</div></div>
-                <div class="ic"><div class="lbl">Email</div><div class="val">${ps.email || ''}</div></div>
-                <div class="ic"><div class="lbl">Department</div><div class="val">${ps.group_name || '&#8212;'}</div></div>
-                <div class="ic"><div class="lbl">Pay Period</div><div class="val">${monthLabel}</div></div>
-              </div>
-              <div class="tables">
-                <div><table>
-                  <thead><tr><th>Earnings</th><th style="text-align:right">Amount</th></tr></thead>
-                  <tbody>
-                    <tr><td>Basic Salary</td><td class="amt">${fmt(ps.basic)}</td></tr>
-                    <tr><td>House Rent Allowance</td><td class="amt">${fmt(ps.hra)}</td></tr>
-                    <tr><td>Transport Allowance</td><td class="amt">${fmt(ps.transport)}</td></tr>
-                    <tr><td>Special Allowance</td><td class="amt">${fmt(ps.special_allowance)}</td></tr>
-                    ${bonus > 0 ? `<tr class="highlight"><td>Bonus</td><td class="amt">${fmt(bonus)}</td></tr>` : ''}
-                    <tr class="tot"><td>Gross Salary</td><td class="amt">${fmt(ps.gross)}</td></tr>
-                  </tbody>
-                </table></div>
-                <div class="rt"><table>
-                  <thead><tr><th>Deductions</th><th style="text-align:right">Amount</th></tr></thead>
-                  <tbody>
-                    <tr><td>Provident Fund (12% Basic)</td><td class="amt">${fmt(ps.pf_employee)}</td></tr>
-                    <tr><td>Professional Tax</td><td class="amt">${fmt(ps.professional_tax)}</td></tr>
-                    ${extraDed > 0 ? `<tr class="highlight"><td>Additional Deductions</td><td class="amt">${fmt(extraDed)}</td></tr>` : ''}
-                    <tr class="tot"><td>Total Deductions</td><td class="amt">${fmt(totalDed)}</td></tr>
-                  </tbody>
-                </table></div>
-              </div>
-              <div class="net">
-                <div class="net-lbl">Net Pay (${monthLabel})</div>
-                <div class="net-amt">${fmt(ps.net_pay)}</div>
-              </div>
-              <div class="foot">This is a computer-generated payslip and does not require a signature.</div>
-            </div>
-            <script>window.onload=function(){window.print();}<\/script>
-          </body></html>`;
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Payslip - ${monthLabel} - ${ps.employee_name}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: #fff; color: #000; font-size: 13px; }
+    .wrapper { max-width: 900px; margin: 20px auto; padding: 10px; }
+    table { width: 100%; border-collapse: collapse; border: 3px solid #000; }
+    table, th, td { border: 1px solid #000; text-align: left; }
+    th { padding: 6px 10px; font-size: 14px; font-weight: bold; }
+    td { padding: 4px 10px; height: 26px; font-size: 13px; }
+    .center { text-align: center; }
+    .right { text-align: right; }
+    .bold { font-weight: bold; }
+    .header-box { text-align: center; border-bottom: 2px solid #000; position: relative; }
+    .header-box h2 { font-size: 18px; margin: 8px 0 4px; }
+    .header-box h3 { font-size: 15px; margin-bottom: 8px; font-weight: normal; }
+    .divider { border-bottom: 2px solid #000; }
+    .cols-2 td { width: 50%; vertical-align: top; padding: 0; border: none; }
+    .inner-t { width: 100%; border-collapse: collapse; border: none; }
+    .inner-t td { border-top: none; border-bottom: none; border-left: none; }
+    .inner-t td:last-child { border-right: none; }
+    .sub-h { font-weight: bold; text-align: center; border-bottom: 1px solid #000; padding: 6px; }
+    .footer-msg { margin-top: 8px; font-size: 13px; text-align: left; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <table>
+      <tr>
+        <td colspan="4" class="header-box" style="border-bottom: 1px solid #000; padding: 12px 0 8px;">
+          <img src="${origin}/paysliplogo.png" alt="Logo" style="position: absolute; left: 16px; top: 12px; height: 44px; object-fit: contain;" />
+          <h2>FASCINATE IT INDIA PRIVATE LIMITED</h2>
+          <h3>Payslip for the Month of ${monthLabel}</h3>
+        </td>
+      </tr>
+      <tr>
+        <td style="width: 25%;">Employee Id</td>
+        <td style="width: 25%;" class="center">FASIT/${String(ps.employee_id).padStart(3, '0')}</td>
+        <td style="width: 25%;">Employee Name</td>
+        <td style="width: 25%;" class="center">${ps.employee_name || ''}</td>
+      </tr>
+      <tr>
+        <td>Designation</td>
+        <td class="center">${ps.designation || 'Associate'}</td>
+        <td>Location</td>
+        <td class="center">${ps.location || 'Bangalore'}</td>
+      </tr>
+      <tr>
+        <td>Date of Joining</td>
+        <td class="center">${ps.joining_date ? new Date(ps.joining_date).toLocaleDateString('en-GB') : '-'}</td>
+        <td>PAN</td>
+        <td class="center">${ps.pan_number || '-'}</td>
+      </tr>
+      <tr>
+        <td>Bank Name</td>
+        <td class="center">${ps.bank_name || '-'}</td>
+        <td>Bank Account No</td>
+        <td class="center">${ps.bank_account_no || '-'}</td>
+      </tr>
+      <tr>
+        <td>Fixed Days</td>
+        <td class="center">31</td>
+        <td>Present Days</td>
+        <td class="center">31</td>
+      </tr>
+      <tr>
+        <td>LOP</td>
+        <td class="center">0</td>
+        <td></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td colspan="4" style="padding: 0; border: none;">
+          <table class="inner-t" style="border: none;">
+            <tr>
+              <td style="width: 50%; padding: 0; border-right: 1px solid #000;" valign="top">
+                <table style="width: 100%; border: none;">
+                  <tr><td colspan="2" class="sub-h" style="border-right: none; border-left: none;">Earnings</td></tr>
+                  <tr><td style="width: 60%; border: none;">Basic</td><td style="width: 40%; border: none;" class="right">${fmt(ps.basic)}</td></tr>
+                  <tr><td style="border: none;">HRA</td><td style="border: none;" class="right">${fmt(ps.hra)}</td></tr>
+                  <tr><td style="border: none;">Leave Travel Allowance</td><td style="border: none;" class="right">${fmt(ps.leave_travel_allowance)}</td></tr>
+                  <tr><td style="border: none;">Special Allowance</td><td style="border: none;" class="right">${fmt(ps.special_allowance)}</td></tr>
+                  <tr><td style="border: none;">Convey Allowance</td><td style="border: none;" class="right">${fmt(ps.transport)}</td></tr>
+                  <tr><td style="border: none;">Medical Allowance</td><td style="border: none;" class="right">${fmt(ps.medical_allowance)}</td></tr>
+                  <tr><td style="border: none;">Internet & Broadband<br>Allowance</td><td style="border: none;" class="right">${fmt(ps.internet_allowance)}</td></tr>
+                  <tr><td style="border: none;">Variable Pay</td><td style="border: none;" class="right">${Number(ps.variable_pay) ? fmt(ps.variable_pay) : '-'}</td></tr>
+                  <tr><td style="border: none;">Bonus</td><td style="border: none;" class="right">${Number(ps.bonus) ? fmt(ps.bonus) : '-'}</td></tr>
+                  <tr><td style="border: none; padding-bottom: 20px;"></td><td style="border: none;"></td></tr>
+                </table>
+              </td>
+              <td style="width: 50%; padding: 0;" valign="top">
+                <table style="width: 100%; border: none;">
+                  <tr><td colspan="2" class="sub-h" style="border-right: none; border-left: none;">Deductions</td></tr>
+                  <tr><td style="width: 60%; border: none;">Professional Tax</td><td style="width: 40%; border: none;" class="right">${fmt(ps.professional_tax)}</td></tr>
+                  <tr><td style="border: none;">Income Tax</td><td style="border: none;" class="right">${Number(ps.income_tax) ? fmt(ps.income_tax) : '-'}</td></tr>
+                  <tr><td style="border: none;">Provident Fund</td><td style="border: none;" class="right">${Number(ps.pf_employee) ? fmt(ps.pf_employee) : '-'}</td></tr>
+                  <tr><td style="border: none;">Other Deductions</td><td style="border: none;" class="right">${Number(ps.extra_deductions) ? fmt(ps.extra_deductions) : '-'}</td></tr>
+                  <tr><td style="border: none; padding-bottom: 20px;"></td><td style="border: none;"></td></tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+      <tr>
+        <td colspan="2" style="border-top: 1px solid #000; padding: 0;">
+          <table style="width: 100%; border: none;">
+            <tr>
+              <td class="bold" style="width: 60%; border: none; font-size: 14px;">Gross Salary</td>
+              <td class="bold right" style="width: 40%; border: none; font-size: 14px;">${fmt(ps.gross)}</td>
+            </tr>
+          </table>
+        </td>
+        <td colspan="2" style="border-top: 1px solid #000; padding: 0;">
+          <table style="width: 100%; border: none;">
+            <tr>
+              <td class="bold" style="width: 60%; border: none; font-size: 14px;">Total Deductions</td>
+              <td class="bold right" style="width: 40%; border: none; font-size: 14px;">${fmt(totalDed)}</td>
+            </tr>
+            <tr>
+              <td class="bold" style="border: none; font-size: 14px; border-top: 1px solid #000;">Net</td>
+              <td class="bold right" style="border: none; font-size: 14px; border-top: 1px solid #000;">${fmt(ps.net_pay)}</td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+      <tr>
+        <td colspan="4" class="bold" style="border-top: 2px solid #000;">Rupees ${words} only</td>
+      </tr>
+    </table>
+    <div class="footer-msg">Private and confidential :This is a system generated document and signature is not required</div>
+  </div>
+  <script>window.onload=function(){window.print();}</script>
+</body>
+</html>`;
 
-  // Use Blob URL to avoid document.write DOCTYPE rendering bug
   const blob = new Blob([html], { type: 'text/html' });
   const url = URL.createObjectURL(blob);
-  const w = window.open(url, '_blank');
-  // Revoke after a delay to allow the window to load
+  window.open(url, '_blank');
   setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
 
@@ -2604,7 +3053,7 @@ function AdminPayslips() {
   const [filterYear, setFilterYear] = useState("");
   const [form, setForm] = useState({
     employeeId: "", month: new Date().getMonth() + 1, year: new Date().getFullYear(),
-    bonus: "", specialAllowance: "", extraDeductions: ""
+    usePf: false, pfAmount: "", useTds: false, tdsAmount: "", useVp: false, vpAmount: ""
   });
   const [msg, setMsg] = useState("");
   const origin = window.location.origin;
@@ -2626,9 +3075,9 @@ function AdminPayslips() {
         employeeId: +form.employeeId,
         month: +form.month,
         year: +form.year,
-        bonus: form.bonus !== "" ? +form.bonus : 0,
-        specialAllowance: form.specialAllowance !== "" ? +form.specialAllowance : "",
-        extraDeductions: form.extraDeductions !== "" ? +form.extraDeductions : 0,
+        usePf: form.usePf, pfAmount: form.pfAmount,
+        useTds: form.useTds, tdsAmount: form.tdsAmount,
+        useVp: form.useVp, vpAmount: form.vpAmount
       });
       setMsg("✅ Payslip generated successfully!");
       await load();
@@ -2684,31 +3133,34 @@ function AdminPayslips() {
             </select>
           </div>
         </div>
-        {/* Row 2: bonus / special allowance / extra deductions */}
+        {/* Row 2: PF / TDS / Variable Pay Toggles */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginTop: 16 }}>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              Bonus (₹) <span style={{ color: C.amber, fontSize: 11 }}>added to gross</span>
-            </div>
-            <input type="number" min="0" placeholder="0" value={form.bonus}
-              onChange={e => setForm(f => ({ ...f, bonus: e.target.value }))}
-              style={{ ...inpStyle, borderColor: `${C.amber}88` }} />
+          <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: C.text }}>
+              <input type="checkbox" checked={form.usePf} onChange={e => setForm(f => ({ ...f, usePf: e.target.checked }))} style={{ cursor: "pointer", width: 16, height: 16 }} />
+              Provident Fund (PF)
+            </label>
+            <input type="number" min="0" placeholder="Auto calculate 12% Basic" value={form.pfAmount} disabled={!form.usePf}
+              onChange={e => setForm(f => ({ ...f, pfAmount: e.target.value }))}
+              style={{ ...inpStyle, opacity: form.usePf ? 1 : 0.5 }} />
           </div>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              Additional Special Allowance <span style={{ color: C.textMuted, fontSize: 11 }}>(₹) added to auto</span>
-            </div>
-            <input type="number" min="0" placeholder="0" value={form.specialAllowance}
-              onChange={e => setForm(f => ({ ...f, specialAllowance: e.target.value }))}
-              style={inpStyle} />
+          <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: C.text }}>
+              <input type="checkbox" checked={form.useTds} onChange={e => setForm(f => ({ ...f, useTds: e.target.checked }))} style={{ cursor: "pointer", width: 16, height: 16 }} />
+              Income Tax (TDS)
+            </label>
+            <input type="number" min="0" placeholder="Override default ₹ 0" value={form.tdsAmount} disabled={!form.useTds}
+              onChange={e => setForm(f => ({ ...f, tdsAmount: e.target.value }))}
+              style={{ ...inpStyle, opacity: form.useTds ? 1 : 0.5 }} />
           </div>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              Extra Deductions (₹) <span style={{ color: C.red, fontSize: 11 }}>subtracted</span>
-            </div>
-            <input type="number" min="0" placeholder="0" value={form.extraDeductions}
-              onChange={e => setForm(f => ({ ...f, extraDeductions: e.target.value }))}
-              style={{ ...inpStyle, borderColor: `${C.red}66` }} />
+          <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: C.text }}>
+              <input type="checkbox" checked={form.useVp} onChange={e => setForm(f => ({ ...f, useVp: e.target.checked }))} style={{ cursor: "pointer", width: 16, height: 16 }} />
+              Variable Pay
+            </label>
+            <input type="number" min="0" placeholder="Auto calculate 1/12th VP" value={form.vpAmount} disabled={!form.useVp}
+              onChange={e => setForm(f => ({ ...f, vpAmount: e.target.value }))}
+              style={{ ...inpStyle, opacity: form.useVp ? 1 : 0.5 }} />
           </div>
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
@@ -3042,7 +3494,7 @@ export default function App() {
       </nav>
       <main className="main-content">
         {page === "dashboard" && <Dashboard />}
-        {page === "project_management" && <ProjectManagement readOnly={isManager} />}
+        {page === "project_management" && <ProjectManagement readOnly={isManager} currentUser={currentUser} />}
         {page === "projects" && <Projects readOnly={isManager} />}
         {page === "employees" && <AdminEmployees readOnly={isManager} />}
         {page === "resources" && <Resources readOnly={isManager} />}

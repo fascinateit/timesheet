@@ -7,28 +7,47 @@ import json
 payslips_bp = Blueprint("payslips", __name__)
 
 
-def _compute(ctc, bonus=0, extra_deductions=0, special_override=None):
-    gross       = round(ctc / 12, 2)
-    basic       = round(gross * 0.40, 2)
-    hra         = round(basic * 0.50, 2)
+def _compute(ctc, variable_pay_annual=0, 
+             use_pf=False, pf_override=None, 
+             use_tds=False, tds_override=None, 
+             use_vp=False, vp_override=None):
+    fixed_ctc   = ctc - variable_pay_annual
+    gross       = round(fixed_ctc / 12, 2)
+    
+    basic       = round(gross * 0.45, 2)
+    hra         = round(basic * 0.40, 2)
+    lta         = round(basic * 0.15, 2)
+    
     transport   = 1600.00
-    # Always auto-compute the base special allowance first
-    special = max(0, round(gross - basic - hra - transport, 2))
-    # If override is provided, add it to the auto-computed base
-    if special_override is not None and float(special_override) >= 0:
-        special = round(special + float(special_override), 2)
-    bonus       = round(float(bonus or 0), 2)
-    extra_ded   = round(float(extra_deductions or 0), 2)
-    pf_emp      = round(basic * 0.12, 2)
+    medical     = 1250.00
+    internet    = 1200.00
+    
+    # special acts as the balancer
+    special     = max(0, round(gross - basic - hra - lta - transport - medical - internet, 2))
+    
+    vp_monthly  = 0.00
+    if use_vp:
+        vp_monthly = round(float(vp_override) if vp_override is not None and str(vp_override).strip() != "" else (variable_pay_annual / 12), 2)
+        
+    pf_emp      = 0.00
+    if use_pf:
+        pf_emp = round(float(pf_override) if pf_override is not None and str(pf_override).strip() != "" else (basic * 0.12), 2)
+        
+    income_tax  = 0.00
+    if use_tds:
+        income_tax = round(float(tds_override) if tds_override is not None and str(tds_override).strip() != "" else 0, 2)
+        
     prof_tax    = 200.00
-    # Gross includes all allowances and bonus; net = gross - deductions
-    gross_total = round(basic + hra + transport + special + bonus, 2)
-    net_pay     = round(gross_total - pf_emp - prof_tax - extra_ded, 2)
+    
+    gross_total = round(basic + hra + lta + special + transport + medical + internet + vp_monthly, 2)
+    net_pay     = round(gross_total - pf_emp - prof_tax - income_tax, 2)
+    
     return dict(
-        gross=gross_total, basic=basic, hra=hra, transport=transport,
-        special_allowance=special, bonus=bonus,
-        pf_employee=pf_emp, professional_tax=prof_tax,
-        extra_deductions=extra_ded, net_pay=net_pay
+        gross=gross_total, basic=basic, hra=hra, 
+        lta=lta, transport=transport, medical=medical, internet=internet,
+        special_allowance=special, variable_pay=vp_monthly,
+        pf_employee=pf_emp, professional_tax=prof_tax, income_tax=income_tax,
+        net_pay=net_pay
     )
 
 
@@ -99,10 +118,14 @@ def generate_payslip():
         return jsonify(error="Employee has no CTC configured. Set CTC first."), 400
 
     slip = _compute(
-        ctc,
-        bonus=d.get("bonus", 0),
-        extra_deductions=d.get("extraDeductions", 0),
-        special_override=d.get("specialAllowance") if d.get("specialAllowance") != "" else None,
+        ctc=ctc,
+        variable_pay_annual=float(emp.get("variable_pay_amount") or 0),
+        use_pf=d.get("usePf", False),
+        pf_override=d.get("pfAmount"),
+        use_tds=d.get("useTds", False),
+        tds_override=d.get("tdsAmount"),
+        use_vp=d.get("useVp", False),
+        vp_override=d.get("vpAmount")
     )
 
     existing = query(
@@ -112,24 +135,28 @@ def generate_payslip():
     if existing:
         execute(
             """UPDATE payslips SET gross=%s,basic=%s,hra=%s,transport=%s,
-               special_allowance=%s,bonus=%s,pf_employee=%s,professional_tax=%s,
-               extra_deductions=%s,net_pay=%s,generated_at=NOW() WHERE id=%s""",
+               leave_travel_allowance=%s,medical_allowance=%s,internet_allowance=%s,
+               special_allowance=%s,variable_pay=%s,pf_employee=%s,professional_tax=%s,
+               income_tax=%s,net_pay=%s,generated_at=NOW() WHERE id=%s""",
             (slip["gross"], slip["basic"], slip["hra"], slip["transport"],
-             slip["special_allowance"], slip["bonus"], slip["pf_employee"],
-             slip["professional_tax"], slip["extra_deductions"], slip["net_pay"],
+             slip["lta"], slip["medical"], slip["internet"],
+             slip["special_allowance"], slip["variable_pay"], slip["pf_employee"],
+             slip["professional_tax"], slip["income_tax"], slip["net_pay"],
              existing["id"])
         )
         psid = existing["id"]
     else:
         psid = execute(
             """INSERT INTO payslips
-               (employee_id,month,year,gross,basic,hra,transport,special_allowance,
-                bonus,pf_employee,professional_tax,extra_deductions,net_pay)
-               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
-            (emp_id, month, year, slip["gross"], slip["basic"], slip["hra"],
-             slip["transport"], slip["special_allowance"], slip["bonus"],
-             slip["pf_employee"], slip["professional_tax"], slip["extra_deductions"],
-             slip["net_pay"])
+               (employee_id,month,year,gross,basic,hra,transport,
+                leave_travel_allowance,medical_allowance,internet_allowance,
+                special_allowance,variable_pay,pf_employee,professional_tax,
+                income_tax,net_pay)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+            (emp_id, month, year, slip["gross"], slip["basic"], slip["hra"], slip["transport"],
+             slip["lta"], slip["medical"], slip["internet"],
+             slip["special_allowance"], slip["variable_pay"], slip["pf_employee"], 
+             slip["professional_tax"], slip["income_tax"], slip["net_pay"])
         )
 
     row = query(SLIP_SELECT + " AND ps.id=%s", (psid,), fetch="one")

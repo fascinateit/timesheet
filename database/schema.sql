@@ -161,8 +161,12 @@ ALTER TABLE user_accounts
   MODIFY COLUMN role ENUM('admin','manager','employee','intras') NOT NULL DEFAULT 'employee';
 
 ALTER TABLE employees
+  ADD COLUMN designation  VARCHAR(100) NULL AFTER name,
+  ADD COLUMN location     VARCHAR(150) NULL AFTER designation,
+  ADD COLUMN pan_number   VARCHAR(20) NULL AFTER location,
   ADD COLUMN joining_date DATE NULL AFTER avatar,
-  ADD COLUMN ctc_annual   DECIMAL(12,2) NOT NULL DEFAULT 0.00 AFTER joining_date;
+  ADD COLUMN ctc_annual   DECIMAL(12,2) NOT NULL DEFAULT 0.00 AFTER joining_date,
+  ADD COLUMN variable_pay_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00 AFTER ctc_annual;
 
 CREATE TABLE IF NOT EXISTS payslips (
     id                INT AUTO_INCREMENT PRIMARY KEY,
@@ -173,10 +177,15 @@ CREATE TABLE IF NOT EXISTS payslips (
     basic             DECIMAL(12,2) NOT NULL DEFAULT 0.00,
     hra               DECIMAL(12,2) NOT NULL DEFAULT 0.00,
     transport         DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    leave_travel_allowance DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    medical_allowance DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    internet_allowance DECIMAL(12,2) NOT NULL DEFAULT 0.00,
     special_allowance DECIMAL(12,2) NOT NULL DEFAULT 0.00,
     bonus             DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    variable_pay      DECIMAL(12,2) NOT NULL DEFAULT 0.00,
     pf_employee       DECIMAL(12,2) NOT NULL DEFAULT 0.00,
     professional_tax  DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    income_tax        DECIMAL(12,2) NOT NULL DEFAULT 0.00,
     extra_deductions  DECIMAL(12,2) NOT NULL DEFAULT 0.00,
     net_pay           DECIMAL(12,2) NOT NULL DEFAULT 0.00,
     generated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
