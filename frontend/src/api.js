@@ -89,4 +89,12 @@ export const api = {
   createDocument: (d) => req("POST", "/documents/", d),
   updateDocument: (id, d) => req("PUT", `/documents/${id}`, d),
   deleteDocument: (id) => req("DELETE", `/documents/${id}`),
+
+  // Invoices (Project Management)
+  getInvoices: () => req("GET", "/invoices/"),
+  createInvoice: (d) => req("POST", "/invoices/", d),
+  updateInvoice: (id, d) => req("PUT", `/invoices/${id}`, d),
+  updateInvoiceStatus: (id, status) => req("PUT", `/invoices/${id}/status`, { status }),
+  deleteInvoice: (id) => req("DELETE", `/invoices/${id}`),
+
 };

@@ -22,8 +22,8 @@ def list_timesheets():
     proj_id  = request.args.get("project_id")
     status   = request.args.get("status")
 
-    # Employees and managers (when querying personal) can only see their own timesheets
-    if user["role"] in ("employee", "manager"):
+    # Employees can only see their own timesheets. Managers see own + subordinates.
+    if user["role"] == "employee":
         emp_id = user["employee_id"]
 
     sql  = """
@@ -44,6 +44,9 @@ def list_timesheets():
         sql += " AND t.project_id = %s";  args.append(proj_id)
     if status:
         sql += " AND t.status = %s";      args.append(status)
+    if user["role"] == "manager" and not emp_id:
+        sql += " AND (t.employee_id = %s OR e.manager_id = %s)"
+        args.extend([user["employee_id"], user["employee_id"]])
     sql += " ORDER BY t.work_date DESC, t.id DESC"
 
     return jsonify([_fmt(r) for r in query(sql, args)]), 200
@@ -102,9 +105,13 @@ def update_timesheet(tid):
     if existing_timesheet["status"] != "pending":
         return jsonify(error="Only pending timesheets can be updated"), 400
 
-    # Employees and managers can only update their own timesheets
-    if user["role"] in ("employee", "manager") and existing_timesheet["employee_id"] != user["employee_id"]:
-        return jsonify(error="You can only update your own timesheets"), 403
+    # Access control
+    if user["role"] in ("employee", "manager"):
+        if existing_timesheet["employee_id"] != user["employee_id"]:
+            # Check if user is manager of the timesheet owner
+            emp = query("SELECT manager_id FROM employees WHERE id=%s", (existing_timesheet["employee_id"],), fetch="one")
+            if not emp or emp.get("manager_id") != user["employee_id"]:
+                return jsonify(error="You can only update your own or your subordinates' timesheets"), 403
 
     update_fields = []
     update_values = []
@@ -159,6 +166,14 @@ def update_timesheet(tid):
 @timesheets_bp.route("/<int:tid>/approve", methods=["PATCH"])
 @jwt_required()
 def approve_timesheet(tid):
+    user = json.loads(get_jwt_identity())
+    ts = query("SELECT employee_id FROM timesheets WHERE id=%s", (tid,), fetch="one")
+    if not ts: return jsonify(error="Not found"), 404
+    if user["role"] == "manager" and ts["employee_id"] != user["employee_id"]:
+        emp = query("SELECT manager_id FROM employees WHERE id=%s", (ts["employee_id"],), fetch="one")
+        if not emp or emp.get("manager_id") != user["employee_id"]:
+            return jsonify(error="Forbidden"), 403
+
     execute("UPDATE timesheets SET status='approved' WHERE id=%s", (tid,))
     return jsonify(updated=True), 200
 
@@ -166,6 +181,14 @@ def approve_timesheet(tid):
 @timesheets_bp.route("/<int:tid>/reject", methods=["PATCH"])
 @jwt_required()
 def reject_timesheet(tid):
+    user = json.loads(get_jwt_identity())
+    ts = query("SELECT employee_id FROM timesheets WHERE id=%s", (tid,), fetch="one")
+    if not ts: return jsonify(error="Not found"), 404
+    if user["role"] == "manager" and ts["employee_id"] != user["employee_id"]:
+        emp = query("SELECT manager_id FROM employees WHERE id=%s", (ts["employee_id"],), fetch="one")
+        if not emp or emp.get("manager_id") != user["employee_id"]:
+            return jsonify(error="Forbidden"), 403
+
     execute("UPDATE timesheets SET status='rejected' WHERE id=%s", (tid,))
     return jsonify(updated=True), 200
 
@@ -173,5 +196,16 @@ def reject_timesheet(tid):
 @timesheets_bp.route("/<int:tid>", methods=["DELETE"])
 @jwt_required()
 def delete_timesheet(tid):
+    user = json.loads(get_jwt_identity())
+    ts = query("SELECT employee_id FROM timesheets WHERE id=%s", (tid,), fetch="one")
+    if not ts: return jsonify(error="Not found"), 404
+    if user["role"] in ("employee", "manager") and ts["employee_id"] != user["employee_id"]:
+        if user["role"] == "manager":
+            emp = query("SELECT manager_id FROM employees WHERE id=%s", (ts["employee_id"],), fetch="one")
+            if not emp or emp.get("manager_id") != user["employee_id"]:
+                return jsonify(error="Forbidden"), 403
+        else:
+            return jsonify(error="Forbidden"), 403
+
     execute("DELETE FROM timesheets WHERE id=%s", (tid,))
     return jsonify(deleted=True), 200

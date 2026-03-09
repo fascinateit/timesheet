@@ -1,5 +1,6 @@
 // src/App.js  –  ProjectPulse (API-connected)
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { api } from "./api";
 
 // ── Design Tokens ────────────────────────────────────────────────────────────
@@ -78,6 +79,68 @@ const Inp = ({ label, value, onChange, type = "text", options, required, placeho
     )}
   </div>
 );
+
+const SearchableSelect = ({ label, value, onChange, options, placeholder = "Search...", disabled }) => {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const ref = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    window.addEventListener("mousedown", handleClickOutside);
+    return () => window.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filtered = options.filter(o => o.label.toLowerCase().includes(search.toLowerCase()));
+  const selected = options.find(o => o.value === value);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6, position: "relative" }} ref={ref}>
+      {label && <label style={{ fontSize: 12, color: C.textDim, fontWeight: 600, letterSpacing: .4 }}>{label}</label>}
+      <div
+        onClick={() => !disabled && setOpen(!open)}
+        style={{
+          background: disabled ? C.bg : C.surface, border: `1px solid ${open ? C.accent : C.border}`, opacity: disabled ? 0.7 : 1,
+          borderRadius: 8, padding: "8px 12px", color: selected ? C.text : C.textMuted,
+          fontSize: 13, cursor: disabled ? "not-allowed" : "pointer", display: "flex", justifyContent: "space-between", alignItems: "center"
+        }}
+      >
+        {selected ? selected.label : "Select..."}
+        <span style={{ fontSize: 10 }}>▼</span>
+      </div>
+      {open && (
+        <div style={{
+          position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, zIndex: 100,
+          background: C.card, border: `1px solid ${C.border}`, borderRadius: 8,
+          boxShadow: "0 4px 12px rgba(0,0,0,0.5)", overflow: "hidden", display: "flex", flexDirection: "column"
+        }}>
+          <input
+            autoFocus type="text" placeholder={placeholder} value={search} onChange={e => setSearch(e.target.value)}
+            style={{ padding: "10px 12px", border: "none", borderBottom: `1px solid ${C.border}`, background: C.surface, outline: "none", fontSize: 13, color: C.text }}
+          />
+          <div style={{ maxHeight: 200, overflowY: "auto" }}>
+            <div onClick={() => { onChange(""); setOpen(false); setSearch(""); }} style={{ padding: "8px 12px", fontSize: 13, cursor: "pointer", color: C.textMuted, background: !value ? C.surface : "transparent" }}>
+              None
+            </div>
+            {filtered.length === 0 ? (
+              <div style={{ padding: "8px 12px", fontSize: 13, color: C.textMuted }}>No matches found</div>
+            ) : (
+              filtered.map(o => (
+                <div key={o.value} onClick={() => { onChange(o.value); setOpen(false); setSearch(""); }}
+                  style={{ padding: "8px 12px", fontSize: 13, cursor: "pointer", color: C.text, background: o.value === value ? C.surface : "transparent" }}
+                  onMouseEnter={e => e.currentTarget.style.background = C.surface}
+                  onMouseLeave={e => e.currentTarget.style.background = o.value === value ? C.surface : "transparent"}
+                >
+                  {o.label}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 const Modal = ({ title, onClose, children }) => (
   <div style={{
     position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 1000,
@@ -140,6 +203,468 @@ const ErrBox = ({ msg, onRetry }) => (
 );
 
 // ════════════════════════════════════════════════════════
+// PROJECT MANAGEMENT & INVOICES
+function ProjectDashboard({ projects, invoices }) {
+  const [filterStr, setFilterStr] = useState("");
+  const [filterStatus, setFilterStatus] = useState("all");
+
+  const filtered = projects.filter(p => {
+    if (filterStatus !== "all" && p.status !== filterStatus) return false;
+    if (filterStr && !p.name.toLowerCase().includes(filterStr.toLowerCase()) && !p.code.toLowerCase().includes(filterStr.toLowerCase())) return false;
+    return true;
+  });
+
+  const totalBudget = filtered.reduce((acc, p) => p.status === 'active' ? acc + parseFloat(p.budget || 0) : acc, 0);
+  const totalBurned = filtered.reduce((acc, p) => p.status === 'active' ? acc + parseFloat(p.burned || 0) : acc, 0);
+  const { totalRaised, pendingRaised, clearedRaised } = filtered.reduce((acc, p) => {
+    const pInvoices = invoices.filter(i => i.project_id === p.id);
+    const pTotal = pInvoices.reduce((s, i) => s + parseFloat(i.amount || 0), 0);
+    const pPending = pInvoices.filter(i => i.status === "pending").reduce((s, i) => s + parseFloat(i.amount || 0), 0);
+    const pCleared = pInvoices.filter(i => i.status === "cleared").reduce((s, i) => s + parseFloat(i.amount || 0), 0);
+    return {
+      totalRaised: acc.totalRaised + pTotal,
+      pendingRaised: acc.pendingRaised + pPending,
+      clearedRaised: acc.clearedRaised + pCleared
+    };
+  }, { totalRaised: 0, pendingRaised: 0, clearedRaised: 0 });
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      {/* Global Summary Cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 16 }}>
+        <Card style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 8, background: `linear-gradient(145deg, ${C.surface}, ${C.card})`, border: `1px solid ${C.border}` }}>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span style={{ fontSize: 13, color: C.textDim, fontWeight: 700, textTransform: "uppercase" }}>Total Client Budget</span>
+            <span style={{ background: C.accent + "33", color: C.accent, padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 800 }}>{filtered.length} Projects</span>
+          </div>
+          <div style={{ fontSize: 32, fontWeight: 800, color: C.text }}>{fmt$(totalBudget)}</div>
+        </Card>
+
+        <Card style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 12, background: `linear-gradient(145deg, ${C.surface}, ${C.card})`, border: `1px solid ${C.border}` }}>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span style={{ fontSize: 13, color: C.textDim, fontWeight: 700, textTransform: "uppercase" }}>Total Amount Raised</span>
+            <span style={{ background: C.green + "33", color: C.green, padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 800 }}>Via Invoices</span>
+          </div>
+          <div style={{ fontSize: 32, fontWeight: 800, color: C.green }}>{fmt$(totalRaised)}</div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 4 }}>
+            <div style={{ background: C.bg, padding: "8px 12px", borderRadius: 6, border: `1px solid ${C.border}` }}>
+              <div style={{ fontSize: 10, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Pending</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.amber }}>{fmt$(pendingRaised)}</div>
+            </div>
+            <div style={{ background: C.bg, padding: "8px 12px", borderRadius: 6, border: `1px solid ${C.border}` }}>
+              <div style={{ fontSize: 10, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Cleared</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.green }}>{fmt$(clearedRaised)}</div>
+            </div>
+          </div>
+        </Card>
+
+        <Card style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 12, background: `linear-gradient(145deg, ${C.surface}, ${C.card})`, border: `1px solid ${C.border}` }}>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span style={{ fontSize: 13, color: C.textDim, fontWeight: 700, textTransform: "uppercase" }}>Total Burned Cost</span>
+            <span style={{ background: C.amber + "33", color: C.amber, padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 800 }}>Via Timesheets</span>
+          </div>
+          <div style={{ fontSize: 32, fontWeight: 800, color: C.amber }}>{fmt$(totalBurned)}</div>
+        </Card>
+      </div>
+      {/* Aggregate Recharts Visualization */}
+      {
+        filtered.length > 0 && (
+          <Card style={{ padding: "24px 24px", display: "flex", flexDirection: "column", gap: 16, background: C.surface, border: `1px solid ${C.border}` }}>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.text }}>Budget vs Raised Analytics</h3>
+            <div style={{ width: "100%", height: 350 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={filtered.filter(p => p.status === 'active').map(p => ({
+                    name: p.code,
+                    fullName: p.name,
+                    Budget: parseFloat(p.budget || 0),
+                    Raised: invoices.filter(i => i.project_id === p.id).reduce((s, i) => s + parseFloat(i.amount || 0), 0),
+                    Burned: parseFloat(p.burned || 0)
+                  }))}
+                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                >
+                  <XAxis dataKey="name" stroke={C.textMuted} fontSize={12} tickLine={false} axisLine={false} />
+                  <YAxis stroke={C.textMuted} fontSize={12} tickLine={false} axisLine={false} tickFormatter={v => `₹${v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v}`} />
+                  <Tooltip
+                    cursor={{ fill: C.surface, opacity: 0.8 }}
+                    contentStyle={{ backgroundColor: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text }}
+                    itemStyle={{ fontSize: 13, fontWeight: 700 }}
+                    formatter={(value, name) => [fmt$(value), name]}
+                    labelStyle={{ color: C.textDim, fontWeight: 700, marginBottom: 8, fontSize: 12 }}
+                    labelFormatter={(name, payload) => payload?.[0]?.payload?.fullName || name}
+                  />
+                  <Legend iconType="circle" wrapperStyle={{ paddingTop: 20, fontSize: 13, color: C.text }} />
+                  <Bar dataKey="Budget" fill={C.accent} radius={[4, 4, 0, 0]} barSize={25} />
+                  <Bar dataKey="Raised" fill={C.green} radius={[4, 4, 0, 0]} barSize={25} />
+                  <Bar dataKey="Burned" fill={C.amber} radius={[4, 4, 0, 0]} barSize={25} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+        )
+      }
+
+      {/* Filters */}
+      <Card style={{ padding: 16, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", background: C.surface }}>
+        <input
+          type="text"
+          placeholder="Search by project name or code..."
+          value={filterStr}
+          onChange={e => setFilterStr(e.target.value)}
+          style={{ flex: 1, minWidth: 200, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "10px 14px", fontSize: 13, outline: "none" }}
+        />
+        <select
+          value={filterStatus}
+          onChange={e => setFilterStatus(e.target.value)}
+          style={{ width: 160, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: filterStatus !== "all" ? C.text : C.textMuted, padding: "10px 14px", fontSize: 13, outline: "none", cursor: "pointer" }}
+        >
+          <option value="all">All Statuses</option>
+          <option value="active">Active</option>
+          <option value="on-hold">On Hold</option>
+          <option value="completed">Completed</option>
+          <option value="closed">Closed</option>
+        </select>
+      </Card>
+
+      {/* Project Bar Chart Grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+        {filtered.length === 0 ? (
+          <div style={{ padding: 40, textAlign: "center", color: C.textMuted, background: C.card, borderRadius: 12 }}>No projects match your filters.</div>
+        ) : (
+          filtered.map(p => {
+            const raised = invoices.filter(i => i.project_id === p.id).reduce((s, i) => s + parseFloat(i.amount || 0), 0);
+            const budget = parseFloat(p.budget || 0);
+            const burned = parseFloat(p.burned || 0);
+            const highest = Math.max(budget, raised, burned, 1); // Avoid div by zero
+            const budgetPct = (budget / highest) * 100;
+            const raisedPct = (raised / highest) * 100;
+            const burnedPct = (burned / highest) * 100;
+            const isOverBudget = raised > budget;
+
+            return (
+              <Card key={p.id} style={{ display: "flex", flexDirection: "column", gap: 14, padding: "20px 24px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <span style={{ fontSize: 16, fontWeight: 800, color: C.text }}>{p.name}</span>
+                      <StatusBadge status={p.status} />
+                    </div>
+                    <div style={{ fontSize: 12, color: C.textDim, marginTop: 4 }}>{p.code}</div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+                    <span style={{ fontSize: 11, color: C.textMuted }}>Balance Pending View</span>
+                    <span style={{ fontSize: 14, fontWeight: 800, color: isOverBudget ? C.red : C.text }}>{fmt$(budget - raised)}</span>
+                  </div>
+                </div>
+
+                {/* Dual Bar System */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
+                  {/* Row: Budget */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ width: 70, fontSize: 11, color: C.textDim, fontWeight: 700, textAlign: "right", letterSpacing: .5 }}>BUDGET</div>
+                    <div style={{ flex: 1, background: C.surface, height: 24, borderRadius: 12, overflow: "hidden", border: `1px solid ${C.border}` }}>
+                      <div style={{ width: `${budgetPct}%`, height: "100%", background: C.accent, borderRadius: 12, transition: "width .3s ease" }} />
+                    </div>
+                    <div style={{ width: 90, fontSize: 13, fontWeight: 700, color: C.accent }}>{fmt$(budget)}</div>
+                  </div>
+
+                  {/* Row: Raised */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ width: 70, fontSize: 11, color: C.textDim, fontWeight: 700, textAlign: "right", letterSpacing: .5 }}>RAISED</div>
+                    <div style={{ flex: 1, background: C.surface, height: 20, borderRadius: 10, overflow: "hidden", border: `1px solid ${C.border}` }}>
+                      <div style={{ width: `${raisedPct}%`, height: "100%", background: isOverBudget ? C.red : C.green, borderRadius: 10, transition: "width .3s ease" }} />
+                    </div>
+                    <div style={{ width: 90, fontSize: 13, fontWeight: 700, color: isOverBudget ? C.red : C.green }}>{fmt$(raised)}</div>
+                  </div>
+
+                  {/* Row: Burned */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ width: 70, fontSize: 11, color: C.textDim, fontWeight: 700, textAlign: "right", letterSpacing: .5 }}>BURNED</div>
+                    <div style={{ flex: 1, background: C.surface, height: 20, borderRadius: 10, overflow: "hidden", border: `1px solid ${C.border}` }}>
+                      <div style={{ width: `${burnedPct}%`, height: "100%", background: C.amber, borderRadius: 10, transition: "width .3s ease" }} />
+                    </div>
+                    <div style={{ width: 90, fontSize: 13, fontWeight: 700, color: C.amber }}>{fmt$(burned)}</div>
+                  </div>
+                </div>
+              </Card>
+            );
+          })
+        )}
+      </div>
+    </div >
+  );
+}
+
+function ProjectManagement({ readOnly = false }) {
+  const [tab, setTab] = useState("dashboard");
+  const [invoices, setInvoices] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+  const [modal, setModal] = useState(false);
+  const [editInvoice, setEditInvoice] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  // List Filters
+  const [filterProject, setFilterProject] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
+
+  const load = useCallback(async () => {
+    setLoading(true); setErr("");
+    try {
+      const [inv, prj] = await Promise.all([api.getInvoices(), api.getProjects()]);
+      setInvoices(inv); setProjects(prj);
+    } catch (e) { setErr(e.message); } finally { setLoading(false); }
+  });
+  useEffect(() => { load(); }, []);
+
+  async function handleToggleStatus(inv) {
+    const newStatus = inv.status === "pending" ? "cleared" : "pending";
+    try {
+      await api.updateInvoiceStatus(inv.id, newStatus);
+      await load();
+    } catch (e) { alert(e.message); }
+  }
+
+  async function handleDelete(id) {
+    if (!window.confirm("Are you sure you want to delete this invoice?")) return;
+    try {
+      await api.deleteInvoice(id);
+      await load();
+    } catch (e) { alert(e.message); }
+  }
+
+  function handleDownloadCSV(filteredInvoices) {
+    if (!filteredInvoices.length) return alert("No invoices to export.");
+    const headers = ["Project Code", "Project Name", "Task / Deliverables", "Amount Raised (INR)", "Date Raised", "Next Invoice Date", "Clearance Status"];
+    const rows = filteredInvoices.map(inv => [
+      inv.project_code,
+      `"${inv.project_name.replace(/"/g, '""')}"`,
+      `"${inv.task_details.replace(/"/g, '""')}"`,
+      inv.amount,
+      inv.raised_date,
+      inv.next_invoice_date || "",
+      inv.status.toUpperCase()
+    ]);
+    const csvStr = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+    const blob = new Blob([csvStr], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `invoices-export-${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  if (loading && tab === "invoices") return <Spinner />;
+  if (err && tab === "invoices") return <ErrBox msg={err} onRetry={load} />;
+
+  const activeProjects = projects.filter(p => p.status === "active");
+  const filteredInvoices = invoices.filter(i => {
+    if (filterProject !== "all" && i.project_id.toString() !== filterProject) return false;
+    if (filterStatus !== "all" && i.status !== filterStatus) return false;
+    return true;
+  });
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+        <div><h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>Project Management</h2>
+          <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>Monitor client budgets & track raised invoices for projects</p></div>
+        {!readOnly && tab === "invoices" && <Btn onClick={() => setModal(true)}>+ Raise Invoice</Btn>}
+      </div>
+
+      <div style={{ display: "flex", gap: 4, background: C.surface, padding: 4, borderRadius: 10, width: "fit-content" }}>
+        {["dashboard", "invoices"].map(t => (
+          <button key={t} onClick={() => setTab(t)} style={{
+            background: tab === t ? C.card : "transparent", color: tab === t ? C.text : C.textMuted,
+            border: tab === t ? `1px solid ${C.border}` : "1px solid transparent",
+            borderRadius: 8, padding: "6px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", textTransform: "capitalize"
+          }}>{t === "dashboard" ? "Dashboard" : "Client Budgets & Invoiced"}</button>
+        ))}
+      </div>
+
+      {tab === "dashboard" && <ProjectDashboard projects={projects} invoices={invoices} />}
+
+      {tab === "invoices" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+          {/* Project Budget Cards */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(320px,1fr))", gap: 16 }}>
+            {activeProjects.map(p => {
+              const projectInvoices = invoices.filter(i => i.project_id === p.id);
+              const amountRaised = projectInvoices.reduce((acc, i) => acc + parseFloat(i.amount || 0), 0);
+              const balancePending = p.budget - amountRaised;
+              const pct = ((amountRaised / p.budget) * 100).toFixed(1);
+              return (
+                <Card key={p.id} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div>
+                      <div style={{ fontSize: 11, color: C.accent, fontWeight: 700, letterSpacing: .5 }}>{p.code}</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginTop: 4 }}>{p.name}</div>
+                    </div>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    <div style={{ background: C.surface, borderRadius: 8, padding: "8px 12px" }}>
+                      <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>Client Budget</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{fmt$(p.budget)}</div>
+                    </div>
+                    <div style={{ background: C.surface, borderRadius: 8, padding: "8px 12px", border: `1px solid ${pct > 95 ? C.amber : 'transparent'}` }}>
+                      <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>Amount Raised</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: C.green }}>{fmt$(amountRaised)}</div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ fontSize: 12, color: C.textMuted }}>Pending to Raise: <span style={{ fontWeight: 600, color: C.text }}>{fmt$(balancePending)}</span></div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: pct > 85 ? C.red : C.accent }}>{pct}% utilized</div>
+                  </div>
+                  <ProgressBar value={amountRaised} max={p.budget} />
+                </Card>
+              );
+            })}
+          </div>
+
+          <Card style={{ padding: 0, overflow: "hidden" }}>
+            <div style={{ padding: "18px 24px", borderBottom: `1px solid ${C.border}`, display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: C.text }}>Raised Invoices</h3>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <select value={filterProject} onChange={e => setFilterProject(e.target.value)} style={{ padding: "6px 10px", borderRadius: 6, background: C.bg, border: `1px solid ${C.border}`, color: filterProject !== "all" ? C.text : C.textMuted, fontSize: 12, outline: "none", cursor: "pointer" }}>
+                    <option value="all">All Projects</option>
+                    {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                  <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ padding: "6px 10px", borderRadius: 6, background: C.bg, border: `1px solid ${C.border}`, color: filterStatus !== "all" ? C.text : C.textMuted, fontSize: 12, outline: "none", cursor: "pointer" }}>
+                    <option value="all">All Statuses</option>
+                    <option value="pending">Pending</option>
+                    <option value="cleared">Cleared</option>
+                  </select>
+                </div>
+              </div>
+              <Btn small variant="ghost" onClick={() => handleDownloadCSV(filteredInvoices)}>⬇ Download CSV</Btn>
+            </div>
+            {filteredInvoices.length === 0 ? (
+              <div style={{ padding: 40, textAlign: "center", color: C.textMuted, fontSize: 13 }}>No invoices match your filters.</div>
+            ) : (
+              <div className="resp-table-wrap">
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr>
+                      <Th>Project & Client</Th>
+                      <Th>Task / Deliverables</Th>
+                      <Th>Amount Raised</Th>
+                      <Th>Date Raised</Th>
+                      <Th>Next Invoice</Th>
+                      <Th>Clearance Status</Th>
+                      {!readOnly && <Th>Action</Th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredInvoices.map(inv => (
+                      <tr key={inv.id} style={{ borderBottom: `1px solid ${C.border}` }}>
+                        <Td>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{inv.project_name}</div>
+                          <div style={{ fontSize: 11, color: C.accent }}>{inv.project_code}</div>
+                        </Td>
+                        <Td>
+                          <div style={{ fontSize: 13, color: C.textMuted, maxWidth: 200, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{inv.task_details}</div>
+                        </Td>
+                        <Td>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{fmt$(inv.amount)}</div>
+                        </Td>
+                        <Td><div style={{ fontSize: 13, color: C.textMuted }}>{fmtD(inv.raised_date)}</div></Td>
+                        <Td><div style={{ fontSize: 13, color: C.textMuted }}>{inv.next_invoice_date ? fmtD(inv.next_invoice_date) : "—"}</div></Td>
+                        <Td>
+                          <Badge color={inv.status === "cleared" ? C.green : C.amber}>
+                            {inv.status}
+                          </Badge>
+                        </Td>
+                        {!readOnly && (
+                          <Td>
+                            <div style={{ display: "flex", gap: 6, float: "right" }}>
+                              <Btn small variant={inv.status === "pending" ? "success" : "ghost"}
+                                onClick={() => handleToggleStatus(inv)}>
+                                {inv.status === "pending" ? "Mark Cleared" : "Mark Pending"}
+                              </Btn>
+                              <Btn small variant="ghost" onClick={() => { setEditInvoice(inv); setModal("edit"); }}>✏</Btn>
+                              <Btn small variant="danger" onClick={() => handleDelete(inv.id)}>🗑</Btn>
+                            </div>
+                          </Td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
+
+      {modal && (
+        <Modal title={modal === "edit" ? "Edit Invoice" : "Raise New Invoice"} onClose={() => { setModal(false); setEditInvoice(null); }}>
+          <InvoiceForm
+            projects={projects}
+            initialData={modal === "edit" ? editInvoice : null}
+            saving={saving}
+            onCancel={() => { setModal(false); setEditInvoice(null); }}
+            onSave={async (form) => {
+              setSaving(true);
+              try {
+                if (modal === "edit") {
+                  await api.updateInvoice(editInvoice.id, form);
+                } else {
+                  await api.createInvoice(form);
+                }
+                setModal(false);
+                setEditInvoice(null);
+                await load();
+              } catch (e) { alert(e.message); } finally { setSaving(false); }
+            }}
+          />
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function InvoiceForm({ projects, initialData, saving, onCancel, onSave }) {
+  const parseDate = d => {
+    if (!d) return "";
+    try { return new Date(d).toISOString().slice(0, 10); } catch (e) { return ""; }
+  };
+  const [form, setForm] = useState(initialData ? {
+    project_id: initialData.project_id,
+    amount: initialData.amount,
+    task_details: initialData.task_details,
+    raised_date: parseDate(initialData.raised_date),
+    next_invoice_date: parseDate(initialData.next_invoice_date),
+    status: initialData.status
+  } : { project_id: "", amount: "", task_details: "", raised_date: new Date().toISOString().slice(0, 10), next_invoice_date: "", status: "pending" });
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <Inp label="Software Project (Client)" value={form.project_id} onChange={v => setForm(f => ({ ...f, project_id: v }))}
+        options={projects.map(p => ({ value: p.id, label: `${p.code} - ${p.name}` }))} required />
+      <Inp label="Amount to Raise (INR)" type="number" value={form.amount} onChange={v => setForm(f => ({ ...f, amount: v }))} required />
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <label style={{ fontSize: 12, color: C.textDim, fontWeight: 600 }}>Task & Deliverables Details *</label>
+        <textarea value={form.task_details} onChange={e => setForm(f => ({ ...f, task_details: e.target.value }))}
+          style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "8px 12px", fontSize: 13, minHeight: 80, outline: "none", resize: "vertical" }}
+          required placeholder="Describe the software development tasks phase completed for this invoice..."
+        />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Inp label="Date Raised" type="date" value={form.raised_date} onChange={v => setForm(f => ({ ...f, raised_date: v }))} required />
+        <Inp label="Next Invoice Reminder Date" type="date" value={form.next_invoice_date} onChange={v => setForm(f => ({ ...f, next_invoice_date: v }))} />
+      </div>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+        <Btn variant="ghost" onClick={onCancel}>Cancel</Btn>
+        <Btn onClick={() => onSave(form)} disabled={saving}>{saving ? "Submitting…" : "Raise Invoice"}</Btn>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
 // LOGIN PAGE
 // ════════════════════════════════════════════════════════
 function LoginPage({ onLogin }) {
@@ -361,7 +886,7 @@ function ProjectForm({ init, saving, onCancel, onSave }) {
         <Inp label="End Date" type="date" value={form.endDate} onChange={v => setForm(f => ({ ...f, endDate: v }))} />
       </div>
       <Inp label="Status" value={form.status} onChange={v => setForm(f => ({ ...f, status: v }))}
-        options={[{ value: "active", label: "Active" }, { value: "on-hold", label: "On Hold" }, { value: "inactive", label: "Inactive" }]} />
+        options={[{ value: "active", label: "Active" }, { value: "on-hold", label: "On Hold" }, { value: "inactive", label: "Inactive" }, { value: "completed", label: "Completed" }, { value: "closed", label: "Closed" }]} />
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
         <Btn variant="ghost" onClick={onCancel}>Cancel</Btn>
         <Btn onClick={() => onSave(form)} disabled={saving}>{saving ? "Saving…" : init.name ? "Save Changes" : "Create Project"}</Btn>
@@ -509,7 +1034,7 @@ function Resources({ readOnly = false }) {
         <Modal title={`Assign Projects — ${assignModal.name}`} onClose={() => setAssignModal(null)}>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <p style={{ margin: "0 0 8px", fontSize: 13, color: C.textMuted }}>Select projects this employee can log hours against.</p>
-            {projects.filter(p => p.status === "active").map(p => (
+            {projects.filter(p => !["closed", "completed"].includes(p.status)).map(p => (
               <label key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "6px 0" }}>
                 <input type="checkbox" checked={assignedIds.includes(p.id)}
                   onChange={e => setAssignedIds(ids => e.target.checked ? [...ids, p.id] : ids.filter(i => i !== p.id))}
@@ -531,7 +1056,7 @@ function Resources({ readOnly = false }) {
   );
 }
 
-function EmpForm({ init, groups, saving, onCancel, onSave, btnLabel }) {
+function EmpForm({ init, groups, employees, saving, onCancel, onSave, btnLabel }) {
   const [form, setForm] = useState(init);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -541,9 +1066,12 @@ function EmpForm({ init, groups, saving, onCancel, onSave, btnLabel }) {
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <Inp label="Group" value={form.groupId} onChange={v => setForm(f => ({ ...f, groupId: v }))} options={groups.map(g => ({ value: g.id, label: g.name }))} />
-        <Inp label="Joining Date" type="date" value={form.joiningDate || ""} onChange={v => setForm(f => ({ ...f, joiningDate: v }))} />
+        <SearchableSelect label="Manager" value={form.managerId} onChange={v => setForm(f => ({ ...f, managerId: v }))} options={(employees || []).map(e => ({ value: e.id, label: e.name }))} />
       </div>
-      <Inp label="Annual CTC (₹)" type="number" value={form.ctcAnnual || ""} onChange={v => setForm(f => ({ ...f, ctcAnnual: v }))} placeholder="e.g. 1200000" />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Inp label="Joining Date" type="date" value={form.joiningDate || ""} onChange={v => setForm(f => ({ ...f, joiningDate: v }))} />
+        <Inp label="Annual CTC (₹)" type="number" value={form.ctcAnnual || ""} onChange={v => setForm(f => ({ ...f, ctcAnnual: v }))} placeholder="e.g. 1200000" />
+      </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <Inp label="Date of Birth" type="date" value={form.dob || ""} onChange={v => setForm(f => ({ ...f, dob: v }))} />
         <Inp label="Mobile" value={form.mobile || ""} onChange={v => setForm(f => ({ ...f, mobile: v }))} placeholder="+1 123 456 7890" />
@@ -610,8 +1138,11 @@ function Timesheets({ currentUser, viewOnly }) {
   // addRow: {dayIso, projectId, hours}
   const [addRow, setAddRow] = useState(null);
   const [saving, setSaving] = useState(false);
-  // Admin day-click panel
   const [dayPanel, setDayPanel] = useState(null);
+
+  // Admin filter states
+  const [filterEmp, setFilterEmp] = useState("");
+  const [filterStatus, setFilterStatus] = useState("all");
 
   const load = useCallback(async () => {
     setLoading(true); setErr("");
@@ -623,7 +1154,7 @@ function Timesheets({ currentUser, viewOnly }) {
   });
   useEffect(() => { load(); }, []);
 
-  const activeProjs = projects.filter(p => p.status === "active");
+  const activeProjs = projects.filter(p => !["closed", "completed"].includes(p.status));
   const myProjs = viewOnly ? activeProjs.filter(p =>
     (p.assigned_employees || []).includes(currentUser.employee_id) ||
     (p.assigned_groups || []).includes(currentUser.group_id)
@@ -646,6 +1177,25 @@ function Timesheets({ currentUser, viewOnly }) {
 
   async function handleApprove(id) { try { await api.approveTimesheet(id); await load(); } catch (e) { alert(e.message); } }
   async function handleReject(id) { try { await api.rejectTimesheet(id); await load(); } catch (e) { alert(e.message); } }
+
+  function handleDownloadCSV(filteredRows) {
+    if (filteredRows.length === 0) return alert("No data to download.");
+    const headers = ["ID", "Employee", "Project Code", "Date", "Hours", "Task", "Status"];
+    const csvContent = "data:text/csv;charset=utf-8,"
+      + headers.join(",") + "\n"
+      + filteredRows.map(r => [
+        r.id, `"${r.employee_name}"`, `"${r.project_code}"`, r.work_date?.split("T")[0],
+        r.hours, `"${r.task || ""}"`, r.status
+      ].join(",")).join("\n");
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `timesheets_${weekOf.toISOString().split("T")[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
 
   if (loading) return <Spinner />;
   if (err) return <ErrBox msg={err} onRetry={load} />;
@@ -862,6 +1412,90 @@ function Timesheets({ currentUser, viewOnly }) {
             ))}
           </div>
         </Modal>
+      )}
+
+      {/* Admin / Manager Weekly List View */}
+      {!viewOnly && (
+        <Card>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 16 }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: C.text }}>Weekly Timesheet Requests</h3>
+              <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>List view of the selected week's entries</p>
+            </div>
+            <div style={{ display: "flex", gap: 12 }}>
+              <select value={filterEmp} onChange={e => setFilterEmp(e.target.value)}
+                style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: filterEmp ? C.text : C.textMuted, padding: "8px 12px", fontSize: 13, outline: "none", cursor: "pointer" }}>
+                <option value="">All Employees</option>
+                {Array.from(new Set(rows.map(r => r.employee_name))).map(name => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+              <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+                style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: filterStatus !== "all" ? C.text : C.textMuted, padding: "8px 12px", fontSize: 13, outline: "none", cursor: "pointer" }}>
+                <option value="all">All Statuses</option>
+                <option value="pending">Pending</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+              </select>
+              <Btn onClick={() => {
+                const start = isoDate(weekDays[0]);
+                const end = isoDate(weekDays[6]);
+                const weekRows = rows.filter(r => r.work_date?.split("T")[0] >= start && r.work_date?.split("T")[0] <= end);
+                const listFiltered = weekRows.filter(r => {
+                  if (filterEmp && r.employee_name !== filterEmp) return false;
+                  if (filterStatus !== "all" && r.status !== filterStatus) return false;
+                  return true;
+                });
+                handleDownloadCSV(listFiltered);
+              }} variant="secondary" style={{ border: `1px solid ${C.accent}`, background: "transparent", color: C.accent }}>
+                📥 Download CSV
+              </Btn>
+            </div>
+          </div>
+
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead style={{ background: C.surface }}><tr>
+                {["Employee", "Project", "Date", "Hours", "Task", "Status", "Action"].map(h => <Th key={h}>{h}</Th>)}
+              </tr></thead>
+              <tbody>
+                {(() => {
+                  const start = isoDate(weekDays[0]);
+                  const end = isoDate(weekDays[6]);
+                  const weekRows = rows.filter(r => r.work_date?.split("T")[0] >= start && r.work_date?.split("T")[0] <= end);
+                  const listFiltered = weekRows.filter(r => {
+                    if (filterEmp && r.employee_name !== filterEmp) return false;
+                    if (filterStatus !== "all" && r.status !== filterStatus) return false;
+                    return true;
+                  });
+
+                  if (listFiltered.length === 0) {
+                    return <tr><td colSpan={7} style={{ padding: 40, textAlign: "center", color: C.textMuted }}>No timesheets found for this week.</td></tr>;
+                  }
+
+                  return listFiltered.map((r, idx) => (
+                    <tr key={r.id} style={{ borderBottom: `1px solid ${C.border}22`, background: idx % 2 === 0 ? "transparent" : C.bg + "44" }}>
+                      <Td style={{ fontWeight: 600, color: C.text }}>{r.employee_name}</Td>
+                      <Td style={{ fontWeight: 700, color: C.accent }}>{r.project_code}</Td>
+                      <Td style={{ color: C.textDim, fontSize: 12 }}>{r.work_date ? fmtD(r.work_date) : "—"}</Td>
+                      <Td style={{ fontWeight: 700, color: C.text }}>{r.hours}</Td>
+                      <Td style={{ color: C.textDim, fontSize: 12 }}>{r.task || "—"}</Td>
+                      <Td><StatusBadge status={r.status} /></Td>
+                      <Td>
+                        {r.status === "pending" && (
+                          <div style={{ display: "flex", gap: 6 }}>
+                            <Btn small variant="success" onClick={() => handleApprove(r.id)}>✓ Approve</Btn>
+                            <Btn small variant="danger" onClick={() => handleReject(r.id)}>✕</Btn>
+                          </div>
+                        )}
+                      </Td>
+                    </tr>
+                  ));
+                })()}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
     </div>
   );
@@ -1088,7 +1722,7 @@ function UserAccounts() {
             <Inp label="Username" value={form.username} onChange={v => setForm(f => ({ ...f, username: v }))} required placeholder="e.g. john.doe" />
             <Inp label="Password" type="password" value={form.password} onChange={v => setForm(f => ({ ...f, password: v }))} required placeholder="Min 4 characters" />
             <Inp label="Role" value={form.role} onChange={v => setForm(f => ({ ...f, role: v }))}
-              options={[{ value: "employee", label: "Employee" }, { value: "admin", label: "Admin" }, { value: "manager", label: "Manager" }]} />
+              options={[{ value: "employee", label: "Employee" }, { value: "intras", label: "Intern" }, { value: "admin", label: "Admin" }, { value: "manager", label: "Manager" }]} />
             {formErr && <div style={{ background: C.red + "18", border: `1px solid ${C.red}44`, borderRadius: 8, padding: "10px 14px", fontSize: 12, color: C.red }}>⚠ {formErr}</div>}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
               <Btn variant="ghost" onClick={() => { setModal(false); setFormErr(""); }}>Cancel</Btn>
@@ -1103,7 +1737,7 @@ function UserAccounts() {
             <Inp label="Username" value={editForm.username || ""} onChange={v => setEditForm(f => ({ ...f, username: v }))} required />
             <Inp label="New Password (blank = keep)" type="password" value={editForm.newPass || ""} onChange={v => setEditForm(f => ({ ...f, newPass: v }))} placeholder="Enter new password…" />
             <Inp label="Role" value={editForm.role || "employee"} onChange={v => setEditForm(f => ({ ...f, role: v }))}
-              options={[{ value: "employee", label: "Employee" }, { value: "admin", label: "Admin" }, { value: "manager", label: "Manager" }]} />
+              options={[{ value: "employee", label: "Employee" }, { value: "intras", label: "Intern" }, { value: "admin", label: "Admin" }, { value: "manager", label: "Manager" }]} />
             <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
               <input type="checkbox" checked={!!editForm.active} onChange={e => setEditForm(f => ({ ...f, active: e.target.checked }))} />
               <span style={{ fontSize: 13, color: C.textDim }}>Account Active</span>
@@ -1298,12 +1932,10 @@ function MyProfile({ currentUser }) {
             <Inp label="Email" value={profile.email} disabled />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Inp label="Designation" value={profile.group_name || "—"} disabled />
-              {/* <Inp label="Role" value={currentUser.role} disabled /> */}
-              <Inp label="Joining Date" value={profile.joining_date ? fmtD(profile.joining_date) : "—"} disabled />
-
+              <Inp label="Manager" value={profile.manager_name || "—"} disabled />
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              {/* <Inp label="Joining Date" value={profile.joining_date ? fmtD(profile.joining_date) : "—"} disabled /> */}
+              <Inp label="Joining Date" value={profile.joining_date ? fmtD(profile.joining_date) : "—"} disabled />
               <Inp label="Annual CTC" value={profile.ctc_annual ? `₹${Number(profile.ctc_annual).toLocaleString("en-IN")}` : "—"} disabled />
             </div>
           </div>
@@ -1368,24 +2000,26 @@ function EmployeeHome({ currentUser }) {
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 20, fontWeight: 800, color: C.text }}>Welcome, {(currentUser.emp_name || currentUser.username).split(" ")[0]} 👋</div>
             <div style={{ fontSize: 13, color: C.textMuted, marginTop: 3 }}>Employee Portal</div>
-            <div style={{ marginTop: 8 }}><Badge color={C.green}>{currentUser.role === "manager" ? "Manager" : "Employee"}</Badge></div>
+            <div style={{ marginTop: 8 }}><Badge color={C.green}>{currentUser.role === "manager" ? "Manager" : currentUser.role === "admin" ? "Admin" : currentUser.role === "intras" ? "Intern" : "Employee"}</Badge></div>
           </div>
         </div>
       </Card>
       <div style={{ display: "flex", gap: 4, background: C.surface, padding: 4, borderRadius: 10, width: "fit-content", flexWrap: "wrap" }}>
-        {[["profile", "👤 My Profile"], ["timesheets", "⏱ My Timesheets"], ["leave", "🌴 My Leave"], ["expenses", "💳 My Expenses"], ["pay", "💰 My Pay"], ["policies", "📜 Company Policy"]].map(([t, label]) => (
-          <button key={t} onClick={() => setTab(t)} style={{
-            background: tab === t ? C.card : "transparent", color: tab === t ? C.text : C.textMuted,
-            border: tab === t ? `1px solid ${C.border}` : "1px solid transparent",
-            borderRadius: 8, padding: "8px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer"
-          }}>{label}</button>
-        ))}
+        {[["profile", "👤 My Profile"], ["timesheets", "⏱ My Timesheets"], ["leave", "🌴 My Leave"], ["expenses", "💳 My Expenses"], ["pay", "💰 My Pay"], ["policies", "📜 Company Policy"]]
+          .filter(([t]) => t !== "pay" || currentUser.role !== "intras")
+          .map(([t, label]) => (
+            <button key={t} onClick={() => setTab(t)} style={{
+              background: tab === t ? C.card : "transparent", color: tab === t ? C.text : C.textMuted,
+              border: tab === t ? `1px solid ${C.border}` : "1px solid transparent",
+              borderRadius: 8, padding: "8px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer"
+            }}>{label}</button>
+          ))}
       </div>
       {tab === "profile" && <MyProfile currentUser={currentUser} />}
       {tab === "timesheets" && <Timesheets currentUser={currentUser} viewOnly />}
       {tab === "leave" && <Leaves currentUser={currentUser} viewOnly />}
       {tab === "expenses" && <Expenses currentUser={currentUser} viewOnly />}
-      {tab === "pay" && <MyPay currentUser={currentUser} />}
+      {tab === "pay" && currentUser.role !== "intras" && <MyPay currentUser={currentUser} />}
       {tab === "policies" && <DocumentGrid type="policy" allowEdit={false} />}
     </div>
   );
@@ -1696,7 +2330,7 @@ function ExpenseForm({ init, projects, saving, onCancel, onSave, btnLabel }) {
           options={EXP_CATEGORIES.map(c => ({ value: c, label: c }))} />
       </div>
       <Inp label="Project (optional)" value={form.projectId} onChange={v => setForm(f => ({ ...f, projectId: v }))}
-        options={projects.filter(p => p.status === "active").map(p => ({ value: p.id, label: `${p.code} — ${p.name} ` }))} />
+        options={projects.filter(p => !["closed", "completed"].includes(p.status)).map(p => ({ value: p.id, label: `${p.code} — ${p.name} ` }))} />
       <Inp label="Description" value={form.description} onChange={v => setForm(f => ({ ...f, description: v }))} placeholder="Details…" />
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
         <Btn variant="ghost" onClick={onCancel}>Cancel</Btn>
@@ -1754,7 +2388,7 @@ function AdminEmployees({ readOnly = false }) {
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead style={{ background: C.surface }}><tr>
-              {["Employee", "Email", "Group", "Joining Date", "CTC", "Actions"].map(h => <Th key={h}>{h}</Th>)}
+              {["Employee", "Email", "Group", "Manager", "Joining Date", "CTC", "Actions"].map(h => <Th key={h}>{h}</Th>)}
             </tr></thead>
             <tbody>
               {employees.map((emp, idx) => {
@@ -1767,6 +2401,7 @@ function AdminEmployees({ readOnly = false }) {
                     </div></Td>
                     <Td style={{ fontSize: 12, color: C.textDim }}>{emp.email}</Td>
                     <Td>{grp ? <Badge color={grp.color}>{grp.name}</Badge> : <span style={{ color: C.textMuted, fontSize: 12 }}>—</span>}</Td>
+                    <Td style={{ fontSize: 12, color: C.textDim }}>{emp.manager_name || "—"}</Td>
                     <Td style={{ fontSize: 12, color: C.textDim }}>{emp.joining_date ? fmtD(emp.joining_date) : <span style={{ color: C.textMuted }}>—</span>}</Td>
                     <Td style={{ fontSize: 12, fontWeight: 700, color: C.green }}>{emp.ctc_annual ? `₹${Number(emp.ctc_annual).toLocaleString("en-IN")}` : <span style={{ color: C.textMuted, fontWeight: 400 }}>—</span>}</Td>
                     <Td><div style={{ display: "flex", gap: 6 }}>
@@ -1776,7 +2411,7 @@ function AdminEmployees({ readOnly = false }) {
                   </tr>
                 );
               })}
-              {employees.length === 0 && <tr><td colSpan={readOnly ? 5 : 6} style={{ padding: 40, textAlign: "center", color: C.textMuted }}>No employees found.</td></tr>}
+              {employees.length === 0 && <tr><td colSpan={readOnly ? 6 : 7} style={{ padding: 40, textAlign: "center", color: C.textMuted }}>No employees found.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -1786,8 +2421,8 @@ function AdminEmployees({ readOnly = false }) {
       {!readOnly && modal && (
         <Modal title={modal === "new" ? "New Employee" : "Edit Employee"} onClose={() => setModal(null)}>
           <EmpForm
-            init={modal === "new" ? { name: "", email: "", groupId: "", joiningDate: "", ctcAnnual: "", dob: "", address: "", mobile: "", bankAccountNo: "", bankIfsc: "", bankName: "", skillset: "" } : { name: modal.name, email: modal.email, groupId: modal.group_id || "", joiningDate: modal.joining_date || "", ctcAnnual: modal.ctc_annual || "", dob: modal.dob || "", address: modal.address || "", mobile: modal.mobile || "", bankAccountNo: modal.bank_account_no || "", bankIfsc: modal.bank_ifsc || "", bankName: modal.bank_name || "", skillset: modal.skillset || "" }}
-            groups={groups} saving={saving} onCancel={() => setModal(null)} onSave={saveEmp}
+            init={modal === "new" ? { name: "", email: "", groupId: "", managerId: "", joiningDate: "", ctcAnnual: "", dob: "", address: "", mobile: "", bankAccountNo: "", bankIfsc: "", bankName: "", skillset: "" } : { name: modal.name, email: modal.email, groupId: modal.group_id || "", managerId: modal.manager_id || "", joiningDate: modal.joining_date || "", ctcAnnual: modal.ctc_annual || "", dob: modal.dob || "", address: modal.address || "", mobile: modal.mobile || "", bankAccountNo: modal.bank_account_no || "", bankIfsc: modal.bank_ifsc || "", bankName: modal.bank_name || "", skillset: modal.skillset || "" }}
+            groups={groups} employees={employees} saving={saving} onCancel={() => setModal(null)} onSave={saveEmp}
             btnLabel={modal === "new" ? "Create Employee" : "Save Changes"}
           />
         </Modal>
@@ -2237,6 +2872,7 @@ function DocumentGrid({ type = "document", allowEdit = false }) {
 
 const ADMIN_NAV = [
   { id: "dashboard", label: "Dashboard", icon: "⬡" },
+  { id: "project_management", label: "Project Mgmt (Client)", icon: "📊" },
   { id: "projects", label: "Projects", icon: "◈" },
   { id: "employees", label: "Employees", icon: "👥" },
   { id: "resources", label: "Resources", icon: "◉" },
@@ -2382,7 +3018,8 @@ export default function App() {
           )}
           {ADMIN_NAV.filter(n =>
             !(n.id === "useraccounts" && isManager) &&
-            !(n.id === "payslips" && isManager)
+            !(n.id === "payslips" && isManager) &&
+            !(n.id === "project_management" && isManager)
           ).map(n => {
             const active = page === n.id;
             return (<button key={n.id} onClick={() => nav(n.id)} style={{
@@ -2405,6 +3042,7 @@ export default function App() {
       </nav>
       <main className="main-content">
         {page === "dashboard" && <Dashboard />}
+        {page === "project_management" && <ProjectManagement readOnly={isManager} />}
         {page === "projects" && <Projects readOnly={isManager} />}
         {page === "employees" && <AdminEmployees readOnly={isManager} />}
         {page === "resources" && <Resources readOnly={isManager} />}

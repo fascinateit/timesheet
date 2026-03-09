@@ -21,7 +21,7 @@ def list_leaves():
     emp_id = request.args.get("employee_id")
     status = request.args.get("status")
 
-    if user["role"] in ("employee", "manager"):
+    if user["role"] == "employee":
         emp_id = user["employee_id"]
 
     sql  = """
@@ -37,6 +37,9 @@ def list_leaves():
         sql += " AND l.employee_id = %s"; args.append(emp_id)
     if status:
         sql += " AND l.status = %s";      args.append(status)
+    if user["role"] == "manager" and not emp_id:
+        sql += " AND (l.employee_id = %s OR e.manager_id = %s)"
+        args.extend([user["employee_id"], user["employee_id"]])
     sql += " ORDER BY l.start_date DESC"
 
     return jsonify([_fmt(r) for r in query(sql, args)]), 200
@@ -70,6 +73,14 @@ def create_leave():
 @leaves_bp.route("/<int:lid>/approve", methods=["PATCH"])
 @jwt_required()
 def approve_leave(lid):
+    user = json.loads(get_jwt_identity())
+    lv = query("SELECT employee_id FROM leaves WHERE id=%s", (lid,), fetch="one")
+    if not lv: return jsonify(error="Not found"), 404
+    if user["role"] == "manager" and lv["employee_id"] != user["employee_id"]:
+        emp = query("SELECT manager_id FROM employees WHERE id=%s", (lv["employee_id"],), fetch="one")
+        if not emp or emp.get("manager_id") != user["employee_id"]:
+            return jsonify(error="Forbidden"), 403
+
     execute("UPDATE leaves SET status='approved' WHERE id=%s", (lid,))
     return jsonify(updated=True), 200
 
@@ -77,6 +88,14 @@ def approve_leave(lid):
 @leaves_bp.route("/<int:lid>/reject", methods=["PATCH"])
 @jwt_required()
 def reject_leave(lid):
+    user = json.loads(get_jwt_identity())
+    lv = query("SELECT employee_id FROM leaves WHERE id=%s", (lid,), fetch="one")
+    if not lv: return jsonify(error="Not found"), 404
+    if user["role"] == "manager" and lv["employee_id"] != user["employee_id"]:
+        emp = query("SELECT manager_id FROM employees WHERE id=%s", (lv["employee_id"],), fetch="one")
+        if not emp or emp.get("manager_id") != user["employee_id"]:
+            return jsonify(error="Forbidden"), 403
+
     execute("UPDATE leaves SET status='rejected' WHERE id=%s", (lid,))
     return jsonify(updated=True), 200
 
@@ -84,5 +103,16 @@ def reject_leave(lid):
 @leaves_bp.route("/<int:lid>", methods=["DELETE"])
 @jwt_required()
 def delete_leave(lid):
+    user = json.loads(get_jwt_identity())
+    lv = query("SELECT employee_id FROM leaves WHERE id=%s", (lid,), fetch="one")
+    if not lv: return jsonify(error="Not found"), 404
+    if user["role"] in ("employee", "manager") and lv["employee_id"] != user["employee_id"]:
+        if user["role"] == "manager":
+            emp = query("SELECT manager_id FROM employees WHERE id=%s", (lv["employee_id"],), fetch="one")
+            if not emp or emp.get("manager_id") != user["employee_id"]:
+                return jsonify(error="Forbidden"), 403
+        else:
+            return jsonify(error="Forbidden"), 403
+
     execute("DELETE FROM leaves WHERE id=%s", (lid,))
     return jsonify(deleted=True), 200

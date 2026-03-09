@@ -158,7 +158,7 @@ CREATE TABLE IF NOT EXISTS document_links (
 -- ============================================================
 
 ALTER TABLE user_accounts 
-  MODIFY COLUMN role ENUM('admin','manager','employee') NOT NULL DEFAULT 'employee';
+  MODIFY COLUMN role ENUM('admin','manager','employee','intras') NOT NULL DEFAULT 'employee';
 
 ALTER TABLE employees
   ADD COLUMN joining_date DATE NULL AFTER avatar,

@@ -31,10 +31,15 @@ def list_expenses():
         WHERE  1=1
     """
     args = []
-    if user["role"] in ("employee", "manager"):
+    if user["role"] == "employee":
         sql += " AND ex.employee_id = %s"; args.append(user["employee_id"])
     elif emp_id:
         sql += " AND ex.employee_id = %s"; args.append(emp_id)
+
+    if user["role"] == "manager" and not (user["role"] == "employee") and not emp_id:
+        sql += " AND (ex.employee_id = %s OR e.manager_id = %s)"
+        args.extend([user["employee_id"], user["employee_id"]])
+
     if status:
         sql += " AND ex.status = %s"; args.append(status)
     sql += " ORDER BY ex.submitted_at DESC"
@@ -93,8 +98,14 @@ def update_expense(eid):
         return jsonify(error="Expense not found"), 404
     if user["role"] in ("employee", "manager"):
         if ex["employee_id"] != user["employee_id"]:
-            return jsonify(error="Forbidden"), 403
-        if ex["status"] not in ("pending", "needs_correction"):
+            if user["role"] == "manager":
+                emp = query("SELECT manager_id FROM employees WHERE id=%s", (ex["employee_id"],), fetch="one")
+                if not emp or emp.get("manager_id") != user["employee_id"]:
+                    return jsonify(error="Forbidden"), 403
+            else:
+                return jsonify(error="Forbidden"), 403
+        if ex["status"] not in ("pending", "needs_correction") and ex["employee_id"] == user["employee_id"]:
+            # Note: Even if manager, can they edit subordinates' approved expenses? No, let's keep it simple: can edit if pending/needs_correction
             return jsonify(error="Only pending or needs-correction expenses can be edited"), 400
 
     execute(
@@ -120,6 +131,14 @@ def update_expense(eid):
 @expenses_bp.route("/<int:eid>/approve", methods=["PATCH"])
 @jwt_required()
 def approve_expense(eid):
+    user = json.loads(get_jwt_identity())
+    ex = query("SELECT employee_id FROM expenses WHERE id=%s", (eid,), fetch="one")
+    if not ex: return jsonify(error="Not found"), 404
+    if user["role"] == "manager" and ex["employee_id"] != user["employee_id"]:
+        emp = query("SELECT manager_id FROM employees WHERE id=%s", (ex["employee_id"],), fetch="one")
+        if not emp or emp.get("manager_id") != user["employee_id"]:
+            return jsonify(error="Forbidden"), 403
+
     execute("UPDATE expenses SET status='approved', admin_note=NULL WHERE id=%s", (eid,))
     return jsonify(updated=True), 200
 
@@ -127,6 +146,14 @@ def approve_expense(eid):
 @expenses_bp.route("/<int:eid>/reject", methods=["PATCH"])
 @jwt_required()
 def reject_expense(eid):
+    user = json.loads(get_jwt_identity())
+    ex = query("SELECT employee_id FROM expenses WHERE id=%s", (eid,), fetch="one")
+    if not ex: return jsonify(error="Not found"), 404
+    if user["role"] == "manager" and ex["employee_id"] != user["employee_id"]:
+        emp = query("SELECT manager_id FROM employees WHERE id=%s", (ex["employee_id"],), fetch="one")
+        if not emp or emp.get("manager_id") != user["employee_id"]:
+            return jsonify(error="Forbidden"), 403
+
     d = request.get_json(silent=True) or {}
     execute("UPDATE expenses SET status='rejected', admin_note=%s WHERE id=%s",
             (d.get("note", ""), eid))
@@ -136,6 +163,14 @@ def reject_expense(eid):
 @expenses_bp.route("/<int:eid>/sendback", methods=["PATCH"])
 @jwt_required()
 def sendback_expense(eid):
+    user = json.loads(get_jwt_identity())
+    ex = query("SELECT employee_id FROM expenses WHERE id=%s", (eid,), fetch="one")
+    if not ex: return jsonify(error="Not found"), 404
+    if user["role"] == "manager" and ex["employee_id"] != user["employee_id"]:
+        emp = query("SELECT manager_id FROM employees WHERE id=%s", (ex["employee_id"],), fetch="one")
+        if not emp or emp.get("manager_id") != user["employee_id"]:
+            return jsonify(error="Forbidden"), 403
+
     d = request.get_json(silent=True) or {}
     execute("UPDATE expenses SET status='needs_correction', admin_note=%s WHERE id=%s",
             (d.get("note", ""), eid))
@@ -150,6 +185,11 @@ def delete_expense(eid):
     if not ex:
         return jsonify(error="Expense not found"), 404
     if user["role"] in ("employee", "manager") and ex["employee_id"] != user["employee_id"]:
-        return jsonify(error="Forbidden"), 403
+        if user["role"] == "manager":
+            emp = query("SELECT manager_id FROM employees WHERE id=%s", (ex["employee_id"],), fetch="one")
+            if not emp or emp.get("manager_id") != user["employee_id"]:
+                return jsonify(error="Forbidden"), 403
+        else:
+            return jsonify(error="Forbidden"), 403
     execute("DELETE FROM expenses WHERE id=%s", (eid,))
     return jsonify(deleted=True), 200

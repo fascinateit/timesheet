@@ -6,9 +6,11 @@ from db import query, execute, get_conn
 employees_bp = Blueprint("employees", __name__)
 
 EMP_SELECT = """
-    SELECT e.*, g.name AS group_name, g.hourly_rate, g.color AS group_color
+    SELECT e.*, g.name AS group_name, g.hourly_rate, g.color AS group_color,
+           m.name AS manager_name
     FROM   employees e
     LEFT JOIN `groups` g ON g.id = e.group_id
+    LEFT JOIN employees m ON m.id = e.manager_id
 """
 
 
@@ -51,8 +53,8 @@ def create_employee():
         return jsonify(error="name and email are required"), 400
     initials = "".join(p[0].upper() for p in name.split())[:2]
     eid = execute(
-        "INSERT INTO employees (name, email, group_id, avatar, joining_date, ctc_annual, dob, address, mobile, emergency_contact, bank_account_no, bank_ifsc, bank_name, skillset) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-        (name, email, d.get("groupId") or None, initials,
+        "INSERT INTO employees (name, email, group_id, manager_id, avatar, joining_date, ctc_annual, dob, address, mobile, emergency_contact, bank_account_no, bank_ifsc, bank_name, skillset) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+        (name, email, d.get("groupId") or None, d.get("managerId") or None, initials,
          d.get("joiningDate") or None, float(d.get("ctcAnnual") or 0),
          d.get("dob") or None, d.get("address") or None,
          d.get("mobile") or None, d.get("emergencyContact") or None, 
@@ -69,8 +71,8 @@ def create_employee():
 def update_employee(eid):
     d = request.get_json(silent=True) or {}
     execute(
-        "UPDATE employees SET name=%s, email=%s, group_id=%s, joining_date=%s, ctc_annual=%s, dob=%s, address=%s, mobile=%s, emergency_contact=%s, bank_account_no=%s, bank_ifsc=%s, bank_name=%s, skillset=%s WHERE id=%s",
-        (d.get("name"), d.get("email"), d.get("groupId") or None,
+        "UPDATE employees SET name=%s, email=%s, group_id=%s, manager_id=%s, joining_date=%s, ctc_annual=%s, dob=%s, address=%s, mobile=%s, emergency_contact=%s, bank_account_no=%s, bank_ifsc=%s, bank_name=%s, skillset=%s WHERE id=%s",
+        (d.get("name"), d.get("email"), d.get("groupId") or None, d.get("managerId") or None,
          d.get("joiningDate") or None, float(d.get("ctcAnnual") or 0),
          d.get("dob") or None, d.get("address") or None,
          d.get("mobile") or None, d.get("emergencyContact") or None,

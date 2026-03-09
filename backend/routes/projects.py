@@ -20,6 +20,20 @@ def _enrich(project_id):
     )
     row["assigned_groups"]    = [r["group_id"]    for r in groups]
     row["assigned_employees"] = [r["employee_id"] for r in emps]
+    
+    # Calculate burned cost (approved timesheets only)
+    burn = query(
+        """
+        SELECT SUM(t.hours * COALESCE(g.hourly_rate,0)) AS burned
+        FROM timesheets t
+        JOIN employees e ON e.id=t.employee_id
+        LEFT JOIN `groups` g ON g.id=e.group_id
+        WHERE t.project_id=%s AND t.status='approved'
+        """,
+        (project_id,), fetch="one"
+    )
+    row["burned"] = float(burn["burned"] or 0) if burn else 0.0
+
     # Dates → str
     for k in ("start_date", "end_date", "created_at", "updated_at"):
         if row.get(k) and hasattr(row[k], "isoformat"):
