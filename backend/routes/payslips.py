@@ -14,9 +14,9 @@ def _compute(ctc, variable_pay_annual=0,
     fixed_ctc   = ctc - variable_pay_annual
     gross       = round(fixed_ctc / 12, 2)
     
-    basic       = round(gross * 0.45, 2)
-    hra         = round(basic * 0.40, 2)
-    lta         = round(basic * 0.15, 2)
+    basic       = round(gross * 0.50, 2)
+    hra         = round(basic * 0.50, 2)
+    lta         = round(basic * 0.10, 2)
     
     transport   = 1600.00
     medical     = 1250.00
@@ -54,11 +54,15 @@ def _compute(ctc, variable_pay_annual=0,
 def _fmt(row):
     if row and row.get("generated_at") and hasattr(row["generated_at"], "isoformat"):
         row["generated_at"] = row["generated_at"].isoformat()
+    if row and row.get("joining_date") and hasattr(row["joining_date"], "isoformat"):
+        row["joining_date"] = row["joining_date"].isoformat()
     return row
 
 
 SLIP_SELECT = """
     SELECT ps.*, e.name AS employee_name, e.avatar, e.email,
+           e.joining_date, e.pan_number, e.bank_name, e.bank_account_no,
+           e.designation, e.location,
            g.name AS group_name, g.color AS group_color
     FROM   payslips ps
     JOIN   employees e ON e.id = ps.employee_id

@@ -3322,6 +3322,237 @@ function DocumentGrid({ type = "document", allowEdit = false }) {
   );
 }
 
+// ════════════════════════════════════════════════════════
+// COMPANY RESUME GENERATOR
+// ════════════════════════════════════════════════════════
+function AdminCompanyResume() {
+  const [form, setForm] = useState({
+    name: "",
+    technologies: "",
+    summary: "",
+    certifications: "",
+    exposure: "",
+    industries: "",
+    clients: "",
+    experience: [{ client: "", role: "", environment: "", responsibilities: "" }]
+  });
+
+  const handleExpChange = (i, field, value) => {
+    const e = [...form.experience]; e[i][field] = value;
+    setForm({ ...form, experience: e });
+  };
+  const addExp = () => setForm({ ...form, experience: [...form.experience, { client: "", role: "", environment: "", responsibilities: "" }] });
+  const remExp = (i) => setForm({ ...form, experience: form.experience.filter((_, idx) => idx !== i) });
+
+  // split string by newline character, trim, remove leading bullets/dashes if user typed them, and return array of non-empty bullets
+  const parseBullets = (text) => text.split('\n')
+    .map(t => t.trim().replace(/^[\u2022\u25E6\u25A0\-\*]\s*/, ''))
+    .filter(t => t !== '');
+
+  const SectionHeader = ({ title }) => (
+    <h3 style={{ margin: "24px 0 12px", fontSize: "14px", color: "#000", fontFamily: "Arial, sans-serif", fontWeight: "bold", textTransform: "uppercase" }}>{title}</h3>
+  );
+
+  const BulletList = ({ items }) => (
+    <ul style={{ margin: 0, paddingLeft: "40px", fontSize: "12px", color: "#000", lineHeight: "1.6", fontFamily: "Arial, sans-serif" }}>
+      {items.map((item, i) => <li key={i} style={{ marginBottom: "6px" }}>{item}</li>)}
+    </ul>
+  );
+
+  return (
+    <div style={{ display: "flex", gap: 24, height: "calc(100vh - 64px)" }}>
+      {/* Left: Editor Panel */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 16, overflowY: "auto", paddingRight: 8 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>Generate Company Resume</h2>
+          <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>Generate official Fascinate IT vendor profiles</p>
+        </div>
+        <Card>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <Inp label="Employee Name" value={form.name} onChange={v => setForm({ ...form, name: v })} placeholder="e.g. FirstName LastName" />
+              <Inp label="Technologies (Subtitle)" value={form.technologies} onChange={v => setForm({ ...form, technologies: v })} placeholder="e.g. SAP C4C, Sales Cloud..." />
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <label style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Profile Summary (1 bullet per line)</label>
+              <textarea value={form.summary} onChange={e => setForm({ ...form, summary: e.target.value })} rows={4}
+                style={{ width: "100%", background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, resize: "vertical", fontFamily: "inherit" }} />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <label style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Certifications (1 per line)</label>
+                <textarea value={form.certifications} onChange={e => setForm({ ...form, certifications: e.target.value })} rows={3}
+                  style={{ width: "100%", background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, resize: "vertical", fontFamily: "inherit" }} />
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <label style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Global Exposure (1 per line)</label>
+                <textarea value={form.exposure} onChange={e => setForm({ ...form, exposure: e.target.value })} rows={3}
+                  style={{ width: "100%", background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, resize: "vertical", fontFamily: "inherit" }} />
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <label style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Industries (1 per line)</label>
+                <textarea value={form.industries} onChange={e => setForm({ ...form, industries: e.target.value })} rows={3}
+                  style={{ width: "100%", background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, resize: "vertical", fontFamily: "inherit" }} />
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <label style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Clients (1 per line)</label>
+                <textarea value={form.clients} onChange={e => setForm({ ...form, clients: e.target.value })} rows={3}
+                  style={{ width: "100%", background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, resize: "vertical", fontFamily: "inherit" }} />
+              </div>
+            </div>
+
+            <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Professional Experience</span>
+                <Btn small variant="ghost" onClick={addExp}>+ Add Experience</Btn>
+              </div>
+              {form.experience.map((exp, i) => (
+                <div key={i} style={{ display: "flex", flexDirection: "column", gap: 12, border: `1px solid ${C.border}66`, padding: 12, borderRadius: 8, marginBottom: 12, background: C.bg }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                    <Inp label="Client" value={exp.client} onChange={v => handleExpChange(i, "client", v)} placeholder="e.g. NIR" />
+                    <Inp label="Role" value={exp.role} onChange={v => handleExpChange(i, "role", v)} placeholder="e.g. SAP C4C Functional consultant" />
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <label style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Environment</label>
+                    <input value={exp.environment} onChange={e => handleExpChange(i, "environment", e.target.value)} placeholder="e.g. SAP C4C ISU & SAP S4 Hana"
+                      style={{ width: "100%", background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13 }} />
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <label style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Responsibilities (1 per line)</label>
+                    <textarea value={exp.responsibilities} onChange={e => handleExpChange(i, "responsibilities", e.target.value)} rows={3}
+                      style={{ width: "100%", background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, resize: "vertical", fontFamily: "inherit" }} />
+                  </div>
+                  <div style={{ textAlign: "right" }}><Btn small variant="danger" onClick={() => remExp(i)}>Remove</Btn></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Right: Live Preview Panel */}
+      <div style={{ flex: 1.2, display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", position: "sticky", top: 0, zIndex: 10 }}>
+          <Btn variant="success" onClick={() => {
+            const oldTitle = document.title;
+            document.title = form.name ? `${form.name}_Resume` : "Company_Resume";
+            window.print();
+            document.title = oldTitle;
+          }}>🖨 Download PDF / Print</Btn>
+        </div>
+
+        {/* The Capture Box */}
+        <div style={{ background: "#e2e8f0", padding: "20px", borderRadius: 12, overflowY: "auto", flex: 1, display: "flex", justifyContent: "center" }}>
+          <div id="capture-resume" style={{ background: "#fff", width: "210mm", minHeight: "297mm", padding: "0", boxShadow: "0 0 10px rgba(0,0,0,0.1)", color: "#000", fontFamily: "Arial, sans-serif" }}>
+
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  <td style={{ paddingTop: "16px", paddingBottom: "12px" }}>
+                    {/* Payslip Logo - Top Left */}
+                    <div style={{ textAlign: "left", marginLeft: "40px" }}>
+                      <img src={`${window.location.origin}/paysliplogo.png`} alt="Fascinate IT Logo" style={{ height: "35px", objectFit: "contain" }} />
+                    </div>
+                  </td>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style={{ padding: "0 40px 40px" }}>
+                    {/* Header */}
+                    <div style={{ marginBottom: "20px" }}>
+                      {form.name && <h1 style={{ margin: 0, fontSize: "16px", color: "#000", fontWeight: "bold", borderLeft: "3px solid #000", paddingLeft: "8px" }}>{form.name}</h1>}
+                      {form.technologies && <p style={{ margin: "4px 0 0 11px", fontSize: "12px", color: "#1e40af", fontWeight: "bold", textDecoration: "underline" }}>{form.technologies}</p>}
+                    </div>
+
+                    <hr style={{ border: "none", borderTop: "2px solid #000", margin: "10px 0 20px" }} />
+
+                    {/* Summary */}
+                    {form.summary && (
+                      <div style={{ marginBottom: "16px", pageBreakInside: "avoid" }}>
+                        <SectionHeader title="PROFILE SUMMARY:" />
+                        <BulletList items={parseBullets(form.summary)} />
+                      </div>
+                    )}
+
+                    {/* Certifications */}
+                    {form.certifications && (
+                      <div style={{ marginBottom: "16px", pageBreakInside: "avoid" }}>
+                        <SectionHeader title="CERTIFICATIONS:" />
+                        <BulletList items={parseBullets(form.certifications)} />
+                      </div>
+                    )}
+
+                    {/* Global Exposure */}
+                    {form.exposure && (
+                      <div style={{ marginBottom: "16px", pageBreakInside: "avoid" }}>
+                        <SectionHeader title="GLOBAL EXPOSURE:" />
+                        <BulletList items={parseBullets(form.exposure)} />
+                      </div>
+                    )}
+
+                    {/* Industries */}
+                    {form.industries && (
+                      <div style={{ marginBottom: "16px", pageBreakInside: "avoid" }}>
+                        <SectionHeader title="INDUSTRIES:" />
+                        <BulletList items={parseBullets(form.industries)} />
+                      </div>
+                    )}
+
+                    {/* Clients */}
+                    {form.clients && (
+                      <div style={{ marginBottom: "16px", pageBreakInside: "avoid" }}>
+                        <SectionHeader title="CLIENTS:" />
+                        <BulletList items={parseBullets(form.clients)} />
+                      </div>
+                    )}
+
+                    {/* Experience */}
+                    {form.experience.some(e => e.client || e.role || e.environment || e.responsibilities) && (
+                      <div style={{ marginBottom: "16px" }}>
+                        <SectionHeader title="PROFESSIONAL EXPERIENCE:" />
+                        {form.experience.map((exp, i) => (exp.client || exp.role || exp.environment || exp.responsibilities) ? (
+                          <div key={i} style={{ marginBottom: "16px", fontSize: "12px", color: "#000", fontFamily: "Arial, sans-serif", pageBreakInside: "avoid" }}>
+                            {exp.client && <div style={{ marginBottom: "2px" }}><strong>Client:</strong> <span style={{ color: "#1e40af" }}>{exp.client}</span></div>}
+                            {exp.role && <div style={{ marginBottom: "2px" }}><strong>Role:</strong> <span style={{ color: "#1e40af" }}>{exp.role}</span></div>}
+                            {exp.environment && <div style={{ marginBottom: "8px" }}><strong>Environment:</strong> <span style={{ color: "#1e40af" }}>{exp.environment}</span></div>}
+                            {exp.responsibilities && (
+                              <div>
+                                <div style={{ fontWeight: "bold", marginBottom: "4px" }}>Responsibilities/Deliverables:</div>
+                                <BulletList items={parseBullets(exp.responsibilities)} />
+                              </div>
+                            )}
+                          </div>
+                        ) : null)}
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              </tbody>
+              <tfoot style={{ display: "table-footer-group" }}>
+                <tr>
+                  <td style={{ height: "40px" }}></td>
+                </tr>
+              </tfoot>
+            </table>
+
+            {/* CSS Print Footer for Page Numbers */}
+            <div className="print-footer" style={{ position: "fixed", bottom: 0, left: 0, right: 0, textAlign: "center", fontSize: "10px", color: "#666", paddingBottom: "10mm", background: "#fff" }}>
+              <span className="pageNumber"></span>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const ADMIN_NAV = [
   { id: "dashboard", label: "Dashboard", icon: "⬡" },
   { id: "project_management", label: "Project Mgmt (Client)", icon: "📊" },
@@ -3335,6 +3566,7 @@ const ADMIN_NAV = [
   { id: "reports", label: "Reports", icon: "◫" },
   { id: "useraccounts", label: "User Accounts", icon: "🔑" },
   { id: "documents", label: "Documents", icon: "📄" },
+  { id: "resumes", label: "Generate Company Resume", icon: "📑" },
   { id: "policies", label: "Company Policy", icon: "📜" },
 ];
 
@@ -3360,7 +3592,15 @@ const STYLE = [
   ".resp-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }",
   ".mobile-top-bar { display: none; height: 52px; align-items: center; padding: 0 16px; position: sticky; top: 0; z-index: 100; }",
   "@media (max-width: 1023px) { .app-nav { width: 200px; } .emp-nav { width: 180px; } .main-content { padding: 24px 20px; max-width: calc(100vw - 200px); } .emp-main { padding: 24px 20px; } }",
-  "@media (max-width: 767px) { .hamburger-btn { display: block; } .mobile-top-bar { display: flex; } .app-nav { position: fixed; top: 0; left: 0; height: 100vh; width: 240px !important; transform: translateX(-100%); box-shadow: 4px 0 24px rgba(0,0,0,0.5); } .app-nav.nav-open { transform: translateX(0); } .main-content { padding: 70px 14px 24px; max-width: 100vw; width: 100%; } .emp-main { padding: 70px 14px 24px; } }"
+  "@media (max-width: 767px) { .hamburger-btn { display: block; } .mobile-top-bar { display: flex; } .app-nav { position: fixed; top: 0; left: 0; height: 100vh; width: 240px !important; transform: translateX(-100%); box-shadow: 4px 0 24px rgba(0,0,0,0.5); } .app-nav.nav-open { transform: translateX(0); } .main-content { padding: 70px 14px 24px; max-width: 100vw; width: 100%; } .emp-main { padding: 70px 14px 24px; } }",
+  "@media print { ",
+  "  body * { visibility: hidden; }",
+  "  #capture-resume, #capture-resume * { visibility: visible; }",
+  "  #capture-resume { position: absolute; left: 0; top: 0; width: 100%; height: auto !important; margin: 0; padding: 0 !important; box-shadow: none !important; }",
+  "  @page { margin: 0; }",
+  "  .print-footer { display: block !important; }",
+  "  .print-footer .pageNumber::after { content: counter(page); }",
+  "}"
 ].join("\n");
 
 
@@ -3412,10 +3652,21 @@ export default function App() {
         <div style={{ padding: "14px 10px", flex: 1 }}>
           <button onClick={() => nav("employee-home")} style={{
             width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "9px 12px",
-            borderRadius: 8, border: "none", cursor: "pointer", textAlign: "left",
-            background: C.accentGlow, color: C.accent, fontWeight: 700, fontSize: 13,
-            borderLeft: `2px solid ${C.accent}`
+            borderRadius: 8, border: "none", cursor: "pointer", textAlign: "left", marginBottom: 2,
+            background: (page === "employee-home" || page === "dashboard") ? C.accentGlow : "transparent",
+            color: (page === "employee-home" || page === "dashboard") ? C.accent : C.textMuted,
+            fontWeight: (page === "employee-home" || page === "dashboard") ? 700 : 500, fontSize: 13,
+            borderLeft: (page === "employee-home" || page === "dashboard") ? `2px solid ${C.accent}` : "2px solid transparent"
           }}>🏠 My Portal</button>
+
+          <button onClick={() => nav("resumes")} style={{
+            width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "9px 12px",
+            borderRadius: 8, border: "none", cursor: "pointer", textAlign: "left",
+            background: page === "resumes" ? C.accentGlow : "transparent",
+            color: page === "resumes" ? C.accent : C.textMuted,
+            fontWeight: page === "resumes" ? 700 : 500, fontSize: 13,
+            borderLeft: page === "resumes" ? `2px solid ${C.accent}` : "2px solid transparent"
+          }}>📑 Generate Company Resume</button>
         </div>
         <div style={{ padding: "14px 16px", borderTop: `1px solid ${C.border}` }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 12 }}>
@@ -3427,7 +3678,8 @@ export default function App() {
         </div>
       </nav>
       <main className="emp-main">
-        <EmployeeHome currentUser={currentUser} />
+        {(page === "employee-home" || page === "dashboard") && <EmployeeHome currentUser={currentUser} />}
+        {page === "resumes" && <AdminCompanyResume />}
       </main>
     </div>
   );
@@ -3506,6 +3758,7 @@ export default function App() {
         {page === "useraccounts" && <UserAccounts />}
         {page === "documents" && <DocumentGrid type="document" allowEdit={isAdmin} />}
         {page === "policies" && <DocumentGrid type="policy" allowEdit={currentUser.role === "admin"} />}
+        {page === "resumes" && <AdminCompanyResume />}
         {page === "mywork" && <EmployeeHome currentUser={currentUser} />}
       </main>
     </div>
