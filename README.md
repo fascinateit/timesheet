@@ -437,6 +437,52 @@ sudo systemctl start certbot.timer
 
 ---
 
+### Phase 11 — Create Scheduler Service File
+
+```bash
+# Point a domain to your EC2 IP first (via DNS A record), then:
+sudo nano /opt/projectpulse/deploy/scheduler.service
+
+[Unit]
+Description=ProjectPulse Scheduler Service
+After=network.target projectpulse.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/projectpulse
+ExecStart=/opt/projectpulse/venv/bin/python run_scheduler.py
+Restart=always
+RestartSec=10
+StandardOutput=append:/opt/projectpulse/scheduler.log
+StandardError=append:/opt/projectpulse/scheduler.log
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/opt/projectpulse/.env
+
+[Install]
+WantedBy=multi-user.target
+
+# Auto-renew
+# Copy service file
+sudo cp /opt/projectpulse/deploy/scheduler.service /etc/systemd/system/
+
+# Reload systemd, enable and start
+sudo systemctl daemon-reload
+sudo systemctl enable scheduler
+sudo systemctl start scheduler
+
+# Check status
+sudo systemctl status scheduler
+
+# Live logs via journalctl
+sudo journalctl -u scheduler -f
+
+# Or tail the log file directly
+tail -f /opt/projectpulse/scheduler.log
+```
+
+---
+
 ### Redeployment (updating the app)
 
 ```bash
@@ -458,6 +504,49 @@ sudo nginx -t && sudo systemctl reload nginx
 ```
 
 ---
+
+### Phase 12 — Configure Daily Report Email
+
+Edit `backend/.env` on EC2:
+
+```bash
+# Daily report email (Microsoft Graph / Office 365)
+MAIL_TENANT_ID=ec822022-88bd-47c3-bb56-fa921ec6656e
+MAIL_CLIENT_ID=ee67cd24-43fd-4a1c-98f6-82710b2a4d32
+MAIL_CLIENT_SECRET=your_client_secret_here
+MAIL_USERNAME=sandeepkumar.md@fascinateit.com
+MAIL_RECIPIENTS=sandeepkumar.md@fascinateit.com,naveen.kumar@fascinateit.com,madhu.bk@fascinateit.com
+REPORT_HOUR=6
+REPORT_MINUTE=0
+```
+
+Restart backend:
+
+```bash
+# Restart both
+sudo systemctl restart projectpulse && sudo systemctl restart scheduler
+
+# Stop both
+sudo systemctl stop projectpulse && sudo systemctl stop scheduler
+
+# Status of both at once
+sudo systemctl status projectpulse scheduler
+```
+
+---
+
+### Your Final EC2 Setup
+```
+/etc/systemd/system/
+├── projectpulse.service   ← Flask API (already running ✅)
+└── scheduler.service      ← New scheduler service
+
+/opt/projectpulse/deploy/
+├── projectpulse.service   ← source copy
+└── scheduler.service      ← new source copy
+```
+
+--- 
 
 ## 6. Environment Variables Reference
 
