@@ -105,4 +105,16 @@ export const api = {
   updateCompanyExpenseStatus: (id, status) => req("PUT", `/company-expenses/${id}/status`, { status }),
   deleteCompanyExpense: (id) => req("DELETE", `/company-expenses/${id}`),
 
+  // Clients
+  getClients: () => req("GET", "/clients/"),
+  createClient: (d) => req("POST", "/clients/", d),
+  updateClient: (id, d) => req("PUT", `/clients/${id}`, d),
+  deleteClient: (id) => req("DELETE", `/clients/${id}`),
+
+  // Subscriptions
+  getSubscriptions: () => req("GET", "/subscriptions/"),
+  createSubscription: (d) => req("POST", "/subscriptions/", d),
+  updateSubscription: (id, d) => req("PUT", `/subscriptions/${id}`, d),
+  deleteSubscription: (id) => req("DELETE", `/subscriptions/${id}`),
+
 };

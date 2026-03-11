@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS employees (
     id         INT AUTO_INCREMENT PRIMARY KEY,
     name       VARCHAR(150)  NOT NULL,
     email      VARCHAR(200)  NOT NULL UNIQUE,
+    custom_employee_id VARCHAR(50) NULL,
     group_id   INT           NULL,
     avatar     VARCHAR(10)   NOT NULL DEFAULT '??',
     emergency_contact VARCHAR(20) NULL,
@@ -49,7 +50,19 @@ CREATE TABLE IF NOT EXISTS user_accounts (
 ) ENGINE=InnoDB;
 
 -- ────────────────────────────────────────────────────────────
--- 4. PROJECTS
+-- 4. CLIENTS
+-- ────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS clients (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    client_name VARCHAR(255) NOT NULL,
+    address     TEXT NULL,
+    pay_day     INT NULL,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- ────────────────────────────────────────────────────────────
+-- 5. PROJECTS
 -- ────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS projects (
     id         INT AUTO_INCREMENT PRIMARY KEY,
@@ -193,7 +206,26 @@ CREATE TABLE IF NOT EXISTS payslips (
     CONSTRAINT fk_ps_emp FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- Groups
+CREATE TABLE IF NOT EXISTS invoices (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    client_id INT NULL,
+    invoice_number VARCHAR(100) NULL,
+    project_id INT NULL,
+    amount DECIMAL(15,2) NOT NULL,
+    task_details TEXT NOT NULL,
+    remarks TEXT NULL,
+    hours DECIMAL(10,2) NULL,
+    rate DECIMAL(10,2) NULL,
+    tax_rate DECIMAL(5,2) NOT NULL DEFAULT 18.00,
+    subtotal DECIMAL(15,2) NULL,
+    status ENUM('pending', 'cleared') NOT NULL DEFAULT 'pending',
+    raised_date DATE NOT NULL,
+    next_invoice_date DATE NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_inv_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL,
+    CONSTRAINT fk_inv_client FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
 INSERT INTO `groups` (name, hourly_rate, color) VALUES
 ('Senior Developers', 120.00, '#3B82F6'),
 ('Project Managers',   95.00, '#8B5CF6'),

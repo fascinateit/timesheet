@@ -23,35 +23,38 @@ def create_app():
     JWTManager(app)
 
     # ── Blueprints ────────────────────────────────────────────────────────
-    from routes.auth       import auth_bp
-    from routes.groups     import groups_bp
-    from routes.employees  import employees_bp
-    from routes.projects   import projects_bp
+    from routes.auth import auth_bp
+    from routes.employees import employees_bp
+    from routes.groups import groups_bp
+    from routes.projects import projects_bp
     from routes.timesheets import timesheets_bp
-    from routes.leaves     import leaves_bp
-    from routes.accounts   import accounts_bp
-    from routes.reports    import reports_bp
-    from routes.expenses   import expenses_bp
-    from routes.payslips   import payslips_bp
-    from routes.documents  import documents_bp
-
-    app.register_blueprint(auth_bp,       url_prefix="/api/auth")
-    app.register_blueprint(groups_bp,     url_prefix="/api/groups")
-    app.register_blueprint(employees_bp,  url_prefix="/api/employees")
-    app.register_blueprint(projects_bp,   url_prefix="/api/projects")
-    app.register_blueprint(timesheets_bp, url_prefix="/api/timesheets")
-    app.register_blueprint(leaves_bp,     url_prefix="/api/leaves")
-    app.register_blueprint(accounts_bp,   url_prefix="/api/accounts")
-    app.register_blueprint(reports_bp,    url_prefix="/api/reports")
-    app.register_blueprint(expenses_bp,   url_prefix="/api/expenses")
-    app.register_blueprint(payslips_bp,   url_prefix="/api/payslips")
-    app.register_blueprint(documents_bp,  url_prefix="/api/documents")
-    
-    from routes.invoices import invoices_bp
+    from routes.reports import reports_bp
+    from routes.leaves import leaves_bp
+    from routes.expenses import expenses_bp
+    from routes.payslips import payslips_bp
     from routes.company_expenses import company_expenses_bp
-    app.register_blueprint(invoices_bp,   url_prefix="/api/invoices")
-    app.register_blueprint(company_expenses_bp, url_prefix="/api/company-expenses")
+    from routes.invoices import invoices_bp
+    from routes.documents import documents_bp
+    from routes.clients import clients_bp
+    from routes.accounts import accounts_bp
+    from routes.subscriptions import subscriptions_bp
 
+    app.register_blueprint(auth_bp, url_prefix='/api/auth')
+    app.register_blueprint(employees_bp, url_prefix='/api/employees')
+    app.register_blueprint(groups_bp, url_prefix='/api/groups')
+    app.register_blueprint(projects_bp, url_prefix='/api/projects')
+    app.register_blueprint(timesheets_bp, url_prefix='/api/timesheets')
+    app.register_blueprint(reports_bp, url_prefix='/api/reports')
+    app.register_blueprint(leaves_bp, url_prefix='/api/leaves')
+    app.register_blueprint(expenses_bp, url_prefix='/api/expenses')
+    app.register_blueprint(payslips_bp, url_prefix='/api/payslips')
+    app.register_blueprint(company_expenses_bp, url_prefix='/api/company-expenses')
+    app.register_blueprint(invoices_bp, url_prefix='/api/invoices')
+    app.register_blueprint(documents_bp, url_prefix='/api/documents')
+    app.register_blueprint(clients_bp, url_prefix='/api/clients')
+    app.register_blueprint(accounts_bp, url_prefix='/api/accounts')
+    app.register_blueprint(subscriptions_bp, url_prefix='/api/subscriptions')
+    
     @app.route("/api/health")
     def health():
         return {"status": "ok", "service": "ProjectPulse API"}

@@ -1,0 +1,12 @@
+USE projectpulse;
+
+CREATE TABLE IF NOT EXISTS subscriptions (
+  id          INT AUTO_INCREMENT PRIMARY KEY,
+  app_name    VARCHAR(255) NOT NULL,
+  start_date  DATE         NOT NULL,
+  expire_date DATE         NOT NULL,
+  amount      DECIMAL(12,2) NOT NULL DEFAULT 0,
+  link        VARCHAR(2048) NOT NULL,
+  created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);

@@ -132,6 +132,8 @@ def generate_payslip():
         vp_override=d.get("vpAmount")
     )
 
+    gratuity_increment = round(slip["basic"] * 0.0481, 2)
+
     existing = query(
         "SELECT id FROM payslips WHERE employee_id=%s AND month=%s AND year=%s",
         (emp_id, month, year), fetch="one"
@@ -159,8 +161,13 @@ def generate_payslip():
                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
             (emp_id, month, year, slip["gross"], slip["basic"], slip["hra"], slip["transport"],
              slip["lta"], slip["medical"], slip["internet"],
-             slip["special_allowance"], slip["variable_pay"], slip["pf_employee"], 
+             slip["special_allowance"], slip["variable_pay"], slip["pf_employee"],
              slip["professional_tax"], slip["income_tax"], slip["net_pay"])
+        )
+        # Accumulate gratuity (4.81% of Basic) only when a new payslip month is created
+        execute(
+            "UPDATE employees SET gratuity = gratuity + %s WHERE id=%s",
+            (gratuity_increment, emp_id)
         )
 
     row = query(SLIP_SELECT + " AND ps.id=%s", (psid,), fetch="one")

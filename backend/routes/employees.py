@@ -52,15 +52,16 @@ def create_employee():
     if not name or not email:
         return jsonify(error="name and email are required"), 400
     initials = "".join(p[0].upper() for p in name.split())[:2]
+    custom_employee_id = (d.get("customEmployeeId") or "").strip()
     eid = execute(
-        "INSERT INTO employees (name, designation, location, pan_number, email, group_id, manager_id, avatar, joining_date, ctc_annual, variable_pay_amount, dob, address, mobile, emergency_contact, bank_account_no, bank_ifsc, bank_name, skillset) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+        "INSERT INTO employees (name, designation, location, pan_number, email, group_id, manager_id, avatar, joining_date, ctc_annual, variable_pay_amount, dob, address, mobile, emergency_contact, bank_account_no, bank_ifsc, bank_name, skillset, custom_employee_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
         (name, d.get("designation") or None, d.get("location") or None, d.get("panNumber") or None, email, d.get("groupId") or None, d.get("managerId") or None, initials,
          d.get("joiningDate") or None, float(d.get("ctcAnnual") or 0), float(d.get("variablePay") or 0),
          d.get("dob") or None, d.get("address") or None,
          d.get("mobile") or None, d.get("emergencyContact") or None, 
          d.get("bankAccountNo") or None,
          d.get("bankIfsc") or None, d.get("bankName") or None,
-         d.get("skillset") or None),
+         d.get("skillset") or None, custom_employee_id or None),
     )
     row = query(EMP_SELECT + " WHERE e.id=%s", (eid,), fetch="one")
     return jsonify(_fmt(row)), 201
@@ -71,7 +72,7 @@ def create_employee():
 def update_employee(eid):
     d = request.get_json(silent=True) or {}
     execute(
-        "UPDATE employees SET name=%s, designation=%s, location=%s, pan_number=%s, email=%s, group_id=%s, manager_id=%s, joining_date=%s, ctc_annual=%s, variable_pay_amount=%s, dob=%s, address=%s, mobile=%s, emergency_contact=%s, bank_account_no=%s, bank_ifsc=%s, bank_name=%s, skillset=%s WHERE id=%s",
+        "UPDATE employees SET name=%s, designation=%s, location=%s, pan_number=%s, email=%s, group_id=%s, manager_id=%s, joining_date=%s, ctc_annual=%s, variable_pay_amount=%s, dob=%s, address=%s, mobile=%s, emergency_contact=%s, bank_account_no=%s, bank_ifsc=%s, bank_name=%s, skillset=%s, custom_employee_id=%s WHERE id=%s",
         (d.get("name"), d.get("designation") or None, d.get("location") or None, d.get("panNumber") or None,
          d.get("email"), d.get("groupId") or None, d.get("managerId") or None,
          d.get("joiningDate") or None, float(d.get("ctcAnnual") or 0), float(d.get("variablePay") or 0),
@@ -79,7 +80,7 @@ def update_employee(eid):
          d.get("mobile") or None, d.get("emergencyContact") or None,
          d.get("bankAccountNo") or None,
          d.get("bankIfsc") or None, d.get("bankName") or None,
-         d.get("skillset") or None, eid),
+         d.get("skillset") or None, (d.get("customEmployeeId") or "").strip() or None, eid),
     )
     row = query(EMP_SELECT + " WHERE e.id=%s", (eid,), fetch="one")
     return jsonify(_fmt(row)), 200

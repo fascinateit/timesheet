@@ -1,0 +1,1 @@
+ALTER TABLE invoices MODIFY COLUMN task_details TEXT NOT NULL;

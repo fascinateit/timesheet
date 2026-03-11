@@ -141,14 +141,14 @@ const SearchableSelect = ({ label, value, onChange, options, placeholder = "Sear
     </div>
   );
 };
-const Modal = ({ title, onClose, children }) => (
+const Modal = ({ title, onClose, children, maxWidth = 520 }) => (
   <div style={{
     position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 1000,
     display: "flex", alignItems: "center", justifyContent: "center", padding: 20
   }} onClick={onClose}>
     <div style={{
       background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 28,
-      width: "100%", maxWidth: 520, maxHeight: "88vh", overflowY: "auto"
+      width: "100%", maxWidth, maxHeight: "88vh", overflowY: "auto"
     }} onClick={e => e.stopPropagation()}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: C.text }}>{title}</h3>
@@ -201,6 +201,111 @@ const ErrBox = ({ msg, onRetry }) => (
     {onRetry && <Btn small variant="danger" onClick={onRetry}>Retry</Btn>}
   </div>
 );
+
+// ════════════════════════════════════════════════════════
+// CLIENT MANAGEMENT
+// ════════════════════════════════════════════════════════
+function AdminClients() {
+  const [clients, setClients] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+  const [modal, setModal] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true); setErr("");
+    try { setClients(await api.getClients()); }
+    catch (e) { setErr(e.message); }
+    finally { setLoading(false); }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const save = async (form) => {
+    setSaving(true);
+    try {
+      if (modal === "new") await api.createClient(form);
+      else await api.updateClient(modal.id, form);
+      setModal(null); load();
+    } catch (e) { alert("Error: " + e.message); }
+    finally { setSaving(false); }
+  };
+
+  const del = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this client?")) return;
+    try { await api.deleteClient(id); load(); }
+    catch (e) { alert("Error: " + e.message); }
+  };
+
+  if (loading) return <Spinner />;
+  if (err) return <ErrBox msg={err} onRetry={load} />;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: C.text }}>Client Management</h2>
+          <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>Manage clients for invoicing and projects.</p>
+        </div>
+        <Btn onClick={() => setModal("new")}>+ Add Client</Btn>
+      </div>
+
+      <Card style={{ padding: 0, overflow: "hidden" }}>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead style={{ background: C.surface }}><tr>
+              <Th>Client Name</Th><Th>Address</Th><Th>GST Number</Th><Th>Pay Day</Th><Th>Created</Th>
+            </tr></thead>
+            <tbody>
+              {clients.map((c, idx) => (
+                <tr key={c.id} style={{ borderBottom: `1px solid ${C.border}22`, background: idx % 2 === 0 ? "transparent" : C.bg + "44" }}>
+                  <Td style={{ fontWeight: 700, color: C.text }}>{c.client_name}</Td>
+                  <Td style={{ color: C.textMuted, maxWidth: 200, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.address || "—"}</Td>
+                  <Td style={{ color: C.textMuted }}>{c.gst_number || "—"}</Td>
+                  <Td>{c.pay_day ? `Day ${c.pay_day}` : "—"}</Td>
+                  <Td>{fmtD(c.created_at)}</Td>
+                  <Td>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <Btn small variant="ghost" onClick={() => setModal(c)}>✏</Btn>
+                      <Btn small variant="danger" onClick={() => del(c.id)}>🗑</Btn>
+                    </div>
+                  </Td>
+                </tr>
+              ))}
+              {clients.length === 0 && <tr><td colSpan={5} style={{ padding: 40, textAlign: "center", color: C.textMuted }}>No clients found.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {modal && (
+        <Modal title={modal === "new" ? "Add Client" : "Edit Client"} onClose={() => setModal(null)}>
+          <ClientForm init={modal === "new" ? { client_name: "", address: "", pay_day: "", gst_number: "" } : modal} saving={saving} onCancel={() => setModal(null)} onSave={save} />
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function ClientForm({ init, saving, onCancel, onSave }) {
+  const [form, setForm] = useState({ client_name: init.client_name || "", address: init.address || "", pay_day: init.pay_day || "", gst_number: init.gst_number || "" });
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <Inp label="Client Name" value={form.client_name} onChange={v => setForm(f => ({ ...f, client_name: v }))} required />
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <label style={{ fontSize: 12, color: C.textDim, fontWeight: 600 }}>Billing Address</label>
+        <textarea value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
+          style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "8px 12px", fontSize: 13, minHeight: 80, outline: "none", resize: "vertical" }}
+          placeholder="Client billing address..." />
+      </div>
+      <Inp label="GST Number" value={form.gst_number || ""} onChange={v => setForm(f => ({ ...f, gst_number: v }))} placeholder="e.g. 29AAFCF9723K1Z3" />
+      <Inp label="Expected Pay Day (1-31)" type="number" value={form.pay_day || ""} onChange={v => setForm(f => ({ ...f, pay_day: v }))} placeholder="e.g. 28" />
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+        <Btn variant="ghost" onClick={onCancel}>Cancel</Btn>
+        <Btn onClick={() => onSave(form)} disabled={saving}>{saving ? "Saving…" : "Save Client"}</Btn>
+      </div>
+    </div>
+  );
+}
 
 // ════════════════════════════════════════════════════════
 // PROJECT MANAGEMENT & INVOICES
@@ -400,10 +505,12 @@ function ProjectManagement({ readOnly = false, currentUser }) {
   const [tab, setTab] = useState("dashboard");
   const [invoices, setInvoices] = useState([]);
   const [projects, setProjects] = useState([]);
+  const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [modal, setModal] = useState(false);
   const [editInvoice, setEditInvoice] = useState(null);
+  const [viewInvoice, setViewInvoice] = useState(null);
   const [saving, setSaving] = useState(false);
 
   // List Filters
@@ -413,8 +520,8 @@ function ProjectManagement({ readOnly = false, currentUser }) {
   const load = useCallback(async () => {
     setLoading(true); setErr("");
     try {
-      const [inv, prj] = await Promise.all([api.getInvoices(), api.getProjects()]);
-      setInvoices(inv); setProjects(prj);
+      const [inv, prj, cls] = await Promise.all([api.getInvoices(), api.getProjects(), api.getClients()]);
+      setInvoices(inv); setProjects(prj); setClients(cls);
     } catch (e) { setErr(e.message); } finally { setLoading(false); }
   });
   useEffect(() => { load(); }, []);
@@ -435,13 +542,21 @@ function ProjectManagement({ readOnly = false, currentUser }) {
     } catch (e) { alert(e.message); }
   }
 
+  const parseTaskNames = (rawStr) => {
+    try {
+      const parsed = JSON.parse(rawStr);
+      if (Array.isArray(parsed)) return parsed.map(p => p.description).join(", ");
+    } catch {}
+    return rawStr || "—";
+  };
+
   function handleDownloadCSV(filteredInvoices) {
     if (!filteredInvoices.length) return alert("No invoices to export.");
     const headers = ["Project Code", "Project Name", "Task / Deliverables", "Amount Raised (INR)", "Date Raised", "Next Invoice Date", "Clearance Status"];
     const rows = filteredInvoices.map(inv => [
       inv.project_code,
       `"${inv.project_name.replace(/"/g, '""')}"`,
-      `"${inv.task_details.replace(/"/g, '""')}"`,
+      `"${parseTaskNames(inv.task_details).replace(/"/g, '""')}"`,
       inv.amount,
       inv.raised_date,
       inv.next_invoice_date || "",
@@ -563,11 +678,12 @@ function ProjectManagement({ readOnly = false, currentUser }) {
                     {filteredInvoices.map(inv => (
                       <tr key={inv.id} style={{ borderBottom: `1px solid ${C.border}` }}>
                         <Td>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{inv.project_name}</div>
-                          <div style={{ fontSize: 11, color: C.accent }}>{inv.project_code}</div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{inv.invoice_number}</div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: C.accent }}>{inv.client_name || inv.project_name}</div>
+                          <div style={{ fontSize: 11, color: C.textMuted }}>{inv.project_code}</div>
                         </Td>
                         <Td>
-                          <div style={{ fontSize: 13, color: C.textMuted, maxWidth: 200, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{inv.task_details}</div>
+                          <div style={{ fontSize: 13, color: C.textMuted, maxWidth: 200, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={parseTaskNames(inv.task_details)}>{parseTaskNames(inv.task_details)}</div>
                         </Td>
                         <Td>
                           <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{fmt$(inv.amount)}</div>
@@ -581,7 +697,8 @@ function ProjectManagement({ readOnly = false, currentUser }) {
                         </Td>
                         {!readOnly && (
                           <Td>
-                            <div style={{ display: "flex", gap: 6, float: "right" }}>
+                            <div style={{ display: "flex", gap: 8 }}>
+                              <Btn small variant="ghost" onClick={() => setViewInvoice(inv)}>👁</Btn>
                               <Btn small variant={inv.status === "pending" ? "success" : "ghost"}
                                 onClick={() => handleToggleStatus(inv)}>
                                 {inv.status === "pending" ? "Mark Cleared" : "Mark Pending"}
@@ -605,6 +722,7 @@ function ProjectManagement({ readOnly = false, currentUser }) {
         <Modal title={modal === "edit" ? "Edit Invoice" : "Raise New Invoice"} onClose={() => { setModal(false); setEditInvoice(null); }}>
           <InvoiceForm
             projects={projects}
+            clients={clients}
             initialData={modal === "edit" ? editInvoice : null}
             saving={saving}
             onCancel={() => { setModal(false); setEditInvoice(null); }}
@@ -627,6 +745,33 @@ function ProjectManagement({ readOnly = false, currentUser }) {
 
       {tab === "company_expenses" && (
         <CompanyExpenses modal={modal} setModal={setModal} currentUser={currentUser} projects={projects} />
+      )}
+
+      {viewInvoice && (
+        <Modal title="Invoice Preview" onClose={() => setViewInvoice(null)} maxWidth="100%">
+          <div style={{ maxHeight: "75vh", overflowY: "auto", position: "relative" }}>
+            <InvoicePrintPreview invoice={viewInvoice} />
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 16 }}>
+            <Btn variant="ghost" onClick={() => setViewInvoice(null)}>Close</Btn>
+            <Btn onClick={() => {
+              const printContent = document.getElementById("invoice-print-area").outerHTML;
+              const originalContent = document.body.innerHTML;
+              const oldTitle = document.title;
+              const safeClient = (viewInvoice?.client_name || "Client").replace(/[^a-zA-Z0-9]/g, "_");
+              const safeInv = (viewInvoice?.invoice_number || "Invoice").replace(/[^a-zA-Z0-9]/g, "_");
+              const today = new Date().toISOString().split('T')[0];
+              document.title = `${safeClient}_${safeInv}_${today}`;
+              document.body.innerHTML = `<style>${STYLE}</style><div style="padding: 40px; box-sizing: border-box; width: 100%; min-height: 100vh;">` + printContent + `</div>`;
+              setTimeout(() => {
+                window.print();
+                document.title = oldTitle;
+                document.body.innerHTML = originalContent;
+                window.location.reload();
+              }, 150);
+            }}>🖨 Print Invoice</Btn>
+          </div>
+        </Modal>
       )}
     </div>
   );
@@ -953,38 +1098,279 @@ function CompanyExpenses({ modal, setModal, currentUser, projects }) {
   );
 }
 
-function InvoiceForm({ projects, initialData, saving, onCancel, onSave }) {
-  const parseDate = d => {
+function InvoiceForm({ projects, clients, initialData, saving, onCancel, onSave }) {
+  const parseItems = (details, h, r) => {
+    if (!details) return [{ description: "", hours: "", rate: "" }];
+    try {
+      const parsed = JSON.parse(details);
+      if (Array.isArray(parsed)) return parsed;
+    } catch (e) { }
+    return [{ description: details, hours: h || "", rate: r || "" }];
+  };
+  const parseDate = (d) => {
     if (!d) return "";
-    try { return new Date(d).toISOString().slice(0, 10); } catch (e) { return ""; }
+    try { return new Date(d).toISOString().slice(0, 10); } catch { return ""; }
   };
   const [form, setForm] = useState(initialData ? {
-    project_id: initialData.project_id,
+    client_id: initialData.client_id || "",
+    invoice_number: initialData.invoice_number || "",
+    project_id: initialData.project_id || "",
     amount: initialData.amount,
-    task_details: initialData.task_details,
+    items: parseItems(initialData.task_details, initialData.hours, initialData.rate),
+    remarks: initialData.remarks || "",
+    tax_rate: initialData.tax_rate || "18.00",
+    subtotal: initialData.subtotal || "",
     raised_date: parseDate(initialData.raised_date),
     next_invoice_date: parseDate(initialData.next_invoice_date),
     status: initialData.status
-  } : { project_id: "", amount: "", task_details: "", raised_date: new Date().toISOString().slice(0, 10), next_invoice_date: "", status: "pending" });
+  } : { client_id: "", invoice_number: "", project_id: "", amount: "", items: [{ description: "", hours: "", rate: "" }], remarks: "", tax_rate: "18.00", subtotal: "", raised_date: new Date().toISOString().slice(0, 10), next_invoice_date: "", status: "pending" });
+
+  // Auto-calculate logic
+  useEffect(() => {
+    let sub = 0;
+    form.items.forEach(item => {
+      const h = parseFloat(item.hours) || 0;
+      const r = parseFloat(item.rate) || 0;
+      sub += (h * r);
+    });
+    const t = parseFloat(form.tax_rate) || 0;
+    const taxAmt = sub * (t / 100);
+    const tot = sub + taxAmt;
+    setForm(f => ({ ...f, subtotal: sub.toFixed(2), amount: tot.toFixed(2) }));
+  }, [form.items, form.tax_rate]);
+
+  useEffect(() => {
+    if (form.client_id && form.raised_date) {
+      const client = clients.find(c => String(c.id) === String(form.client_id));
+      if (client && client.pay_day) {
+        const raised = new Date(form.raised_date);
+        raised.setDate(raised.getDate() + parseInt(client.pay_day));
+        const newDate = raised.toISOString().slice(0, 10);
+        if (form.next_invoice_date !== newDate) setForm(f => ({ ...f, next_invoice_date: newDate }));
+      }
+    }
+  }, [form.client_id, form.raised_date, clients]); // eslint-disable-line
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <Inp label="Software Project (Client)" value={form.project_id} onChange={v => setForm(f => ({ ...f, project_id: v }))}
-        options={projects.map(p => ({ value: p.id, label: `${p.code} - ${p.name}` }))} required />
-      <Inp label="Amount to Raise (INR)" type="number" value={form.amount} onChange={v => setForm(f => ({ ...f, amount: v }))} required />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <SearchableSelect label="Client *" value={form.client_id} onChange={v => setForm(f => ({ ...f, client_id: v }))}
+          options={clients.map(c => ({ value: c.id, label: c.client_name }))} />
+        <Inp label="Invoice Number *" value={form.invoice_number} onChange={v => setForm(f => ({ ...f, invoice_number: v }))} placeholder="e.g. FI/010/2025-26" required />
+      </div>
+
+      <Inp label="Related Project (Optional)" value={form.project_id} onChange={v => setForm(f => ({ ...f, project_id: v }))}
+        options={projects.map(p => ({ value: p.id, label: `${p.code} - ${p.name}` }))} />
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <h4 style={{ margin: 0, fontSize: 13, color: C.textMuted, fontWeight: 700, textTransform: "uppercase" }}>Invoice Items</h4>
+        <Btn type="button" variant="outline" onClick={() => setForm(f => ({ ...f, items: [...f.items, { description: "", hours: "", rate: "" }] }))} style={{ fontSize: 12, padding: "4px 8px" }}>+ Add Item</Btn>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {form.items.map((item, i) => (
+          <div key={i} style={{ display: "flex", gap: 12, alignItems: "flex-start", background: C.surface, padding: 12, borderRadius: 8, border: `1px solid ${C.border}` }}>
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+              <label style={{ fontSize: 11, color: C.textDim, fontWeight: 600 }}>Description *</label>
+              <textarea value={item.description} onChange={e => { const n = [...form.items]; n[i].description = e.target.value; setForm(f => ({ ...f, items: n })); }}
+                style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, padding: "8px", fontSize: 13, minHeight: 60, outline: "none", resize: "vertical" }} required placeholder="Description of work..." />
+            </div>
+            <div style={{ width: 80 }}>
+              <Inp label="Hours" type="number" step="0.5" value={item.hours} onChange={v => { const n = [...form.items]; n[i].hours = v; setForm(f => ({ ...f, items: n })); }} />
+            </div>
+            <div style={{ width: 100 }}>
+              <Inp label="Rate (₹)" type="number" step="1" value={item.rate} onChange={v => { const n = [...form.items]; n[i].rate = v; setForm(f => ({ ...f, items: n })); }} />
+            </div>
+            {form.items.length > 1 && (
+              <button type="button" onClick={() => setForm(f => ({ ...f, items: form.items.filter((_, idx) => idx !== i) }))}
+                style={{ background: "none", border: "none", color: C.red, cursor: "pointer", padding: "26px 8px 8px", fontSize: 18 }}>×</button>
+            )}
+          </div>
+        ))}
+      </div>
+
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <label style={{ fontSize: 12, color: C.textDim, fontWeight: 600 }}>Task & Deliverables Details *</label>
-        <textarea value={form.task_details} onChange={e => setForm(f => ({ ...f, task_details: e.target.value }))}
-          style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "8px 12px", fontSize: 13, minHeight: 80, outline: "none", resize: "vertical" }}
-          required placeholder="Describe the software development tasks phase completed for this invoice..."
+        <label style={{ fontSize: 12, color: C.textDim, fontWeight: 600 }}>Remarks / Instructions (Optional)</label>
+        <textarea value={form.remarks} onChange={e => setForm(f => ({ ...f, remarks: e.target.value }))}
+          style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "8px 12px", fontSize: 13, minHeight: 60, outline: "none", resize: "vertical" }}
+          placeholder="Will be printed on the invoice. E.g. Please release payment to..."
         />
       </div>
+
+      <div>
+        <div style={{ width: 200, display: "inline-block" }}>
+          <Inp label="Tax Rate %" type="number" step="0.1" value={form.tax_rate} onChange={v => setForm(f => ({ ...f, tax_rate: v }))} />
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 12, alignItems: "center", justifyContent: "flex-end" }}>
+        <div style={{ fontSize: 12, color: C.textMuted }}>Subtotal: <b>₹{form.subtotal || "0.00"}</b></div>
+      </div>
+
+      <Inp label="Total Amount (INR) *" type="number" step="0.01" value={form.amount} onChange={v => setForm(f => ({ ...f, amount: v }))} required />
+
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <Inp label="Date Raised" type="date" value={form.raised_date} onChange={v => setForm(f => ({ ...f, raised_date: v }))} required />
-        <Inp label="Next Invoice Reminder Date" type="date" value={form.next_invoice_date} onChange={v => setForm(f => ({ ...f, next_invoice_date: v }))} />
+        <Inp label="Date Raised *" type="date" value={form.raised_date} onChange={v => setForm(f => ({ ...f, raised_date: v }))} required />
+        <Inp label="Payment Due Date" type="date" value={form.next_invoice_date} onChange={v => setForm(f => ({ ...f, next_invoice_date: v }))} />
       </div>
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
         <Btn variant="ghost" onClick={onCancel}>Cancel</Btn>
-        <Btn onClick={() => onSave(form)} disabled={saving}>{saving ? "Submitting…" : "Raise Invoice"}</Btn>
+        <Btn onClick={() => onSave({ ...form, task_details: JSON.stringify(form.items), hours: 0, rate: 0 })} disabled={saving || !form.client_id}>{saving ? "Submitting…" : "Save Invoice"}</Btn>
+      </div>
+    </div>
+  );
+}
+
+function InvoicePrintPreview({ invoice }) {
+  const origin = window.location.origin;
+  const amt = parseFloat(invoice.amount || 0);
+  const sub = parseFloat(invoice.subtotal || 0) || amt;
+  const taxRate = parseFloat(invoice.tax_rate || 18);
+  const tax = amt - sub;
+
+  const parseItemsPreview = (details, h, r) => {
+    try {
+      const parsed = JSON.parse(details);
+      if (Array.isArray(parsed)) return parsed;
+    } catch (e) { }
+    return [{ description: details || "", hours: h, rate: r }];
+  };
+  const items = parseItemsPreview(invoice.task_details, invoice.hours, invoice.rate);
+
+  return (
+    <div id="invoice-print-area" style={{ background: "#fff", color: "#000", fontFamily: "Arial, sans-serif", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact", width: "100%", padding: "40px 30px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 30 }}>
+        <div style={{ width: "45%" }}>
+          <img src={`${origin}/paysliplogo.png`} alt="Fascinate IT Logo" style={{ height: 60, objectFit: "contain", marginBottom: 12 }} />
+          <div style={{ width: "80%", height: 4, background: C.accent, marginBottom: 12, borderRadius: 2, WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }} />
+        </div>
+        <div style={{ width: "45%", textAlign: "right" }}>
+          <h1 style={{ color: "#8E44AD", margin: "0 0 10px 0", fontSize: 36, fontWeight: "bold" }}>INVOICE</h1>
+          <div style={{ width: "100%", height: 8, background: "#8E44AD", marginBottom: 4, WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }} />
+          <div style={{ width: "100%", height: 3, background: "#3498DB", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }} />
+        </div>
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 40 }}>
+        <div style={{ width: "50%" }}>
+          <h3 style={{ color: "#8E44AD", fontSize: 14, marginBottom: 8 }}>FASCINATE IT INDIA PRIVATE LIMITED</h3>
+          <p style={{ margin: "0 0 4px", fontSize: 13, color: "#555" }}>#20/7, HanuRadha Nilaya, 2nd Main, Near<br />Kateramma Temple, Kattigenahalli, Yelahanka<br />Bengaluru, Karnataka, India - 560064</p>
+          <p style={{ margin: "0 0 16px", fontSize: 13, color: "#8E44AD" }}>GSTIN: 29AAFCF9723K1Z3</p>
+
+          <h4 style={{ color: "#8E44AD", fontSize: 13, marginBottom: 4 }}>BILL TO</h4>
+          <div style={{ borderTop: "2px solid #8E44AD", width: "100%", marginBottom: 8 }} />
+          <h3 style={{ color: "#3498DB", fontSize: 14, margin: "0 0 4px", textTransform: "uppercase" }}>{invoice.client_name || "CLIENT NAME"}</h3>
+          <p style={{ margin: "0 0 4px", fontSize: 13, color: "#000", whiteSpace: "pre-wrap" }}>{invoice.client_address || ""}</p>
+        </div>
+        <div style={{ width: "35%", textAlign: "center" }}>
+          <div>
+            <h4 style={{ color: "#8E44AD", fontSize: 12, margin: "0 0 4px" }}>DATE</h4>
+            <div style={{ borderTop: "2px solid #8E44AD", marginBottom: 8 }} />
+            <p style={{ margin: "0 0 20px", fontSize: 13 }}>{fmtD(invoice.raised_date)}</p>
+          </div>
+          <div>
+            <h4 style={{ color: "#8E44AD", fontSize: 12, margin: "0 0 4px" }}>INVOICE NO.</h4>
+            <div style={{ borderTop: "2px solid #8E44AD", marginBottom: 8 }} />
+            <p style={{ margin: "0 0 20px", fontSize: 13 }}>{invoice.invoice_number}</p>
+          </div>
+          <div>
+            <h4 style={{ color: "#8E44AD", fontSize: 12, margin: "0 0 4px" }}>DATE PAYMENT DUE</h4>
+            <div style={{ borderTop: "2px solid #8E44AD", marginBottom: 8 }} />
+            <p style={{ margin: 0, fontSize: 13 }}>{invoice.next_invoice_date ? fmtD(invoice.next_invoice_date) : "Upon receipt"}</p>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 20 }}>
+        <h4 style={{ color: "#8E44AD", fontSize: 12, textAlign: "center", marginBottom: 4 }}>PROJECT DETAILS</h4>
+        <div style={{ background: "#E8D5F5", padding: "12px 16px", fontSize: 13, WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }}>
+          Provide brief overview of or any pertinent information regarding the project, if applicable.
+        </div>
+      </div>
+
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 30 }}>
+        <thead>
+          <tr>
+            <th style={{ color: "#8E44AD", fontSize: 11, padding: 8, borderBottom: "2px solid #ddd", textAlign: "left" }}>DATE</th>
+            <th style={{ color: "#8E44AD", fontSize: 11, padding: 8, borderBottom: "2px solid #ddd", textAlign: "left" }}>DESCRIPTION OF WORK</th>
+            <th style={{ color: "#8E44AD", fontSize: 11, padding: 8, borderBottom: "2px solid #ddd", textAlign: "center" }}>HOURS</th>
+            <th style={{ color: "#8E44AD", fontSize: 11, padding: 8, borderBottom: "2px solid #ddd", textAlign: "right" }}>RATE</th>
+            <th style={{ color: "#8E44AD", fontSize: 11, padding: 8, borderBottom: "2px solid #ddd", textAlign: "right" }}>TOTAL</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item, i) => {
+            const rowSub = (parseFloat(item.hours) || 0) * (parseFloat(item.rate) || 0);
+            return (
+              <tr key={i}>
+                <td style={{ padding: "8px", borderBottom: "1px solid #ddd", fontSize: 13 }}>{i === 0 ? fmtD(invoice.raised_date) : ""}</td>
+                <td style={{ padding: "8px", borderBottom: "1px solid #ddd", fontSize: 13, whiteSpace: "pre-wrap" }}>{item.description}</td>
+                <td style={{ padding: "8px", borderBottom: "1px solid #ddd", fontSize: 13, textAlign: "center" }}>{item.hours || "—"}</td>
+                <td style={{ padding: "8px", borderBottom: "1px solid #ddd", fontSize: 13, textAlign: "right" }}>{item.rate ? `₹ ${Number(item.rate).toLocaleString("en-IN")}` : "—"}</td>
+                <td style={{ padding: "8px", borderBottom: "1px solid #ddd", fontSize: 13, textAlign: "right", background: "#E8D5F5", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }}>₹ {rowSub ? rowSub.toLocaleString("en-IN") : "—"}</td>
+              </tr>
+            )
+          })}
+          {invoice.remarks ? (
+            <>
+              <tr>
+                <td colSpan="2" style={{ padding: "8px", fontSize: 13, color: "#8E44AD", fontWeight: "bold", textAlign: "center", borderBottom: "1px solid #ddd", borderTop: "1px solid #ddd" }}>REMARKS/INSTRUCTIONS</td>
+                <td colSpan="2" style={{ padding: "8px", fontSize: 11, color: "#8E44AD", fontWeight: "bold", textAlign: "right", background: "#E8D5F5", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }}>SUBTOTAL</td>
+                <td style={{ padding: "8px", fontSize: 13, textAlign: "right", background: "#E8D5F5", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }}>₹ {sub.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+              </tr>
+              <tr>
+                <td colSpan="2" rowSpan="2" style={{ border: "1px solid #ddd", padding: "8px", fontSize: 12, color: "#555", verticalAlign: "top", whiteSpace: "pre-wrap" }}>{invoice.remarks}</td>
+                <td colSpan="2" style={{ padding: "8px", fontSize: 11, color: "#8E44AD", fontWeight: "bold", textAlign: "right", background: "#E8D5F5", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }}>TAX RATE <span style={{ background: "#fff", display: "inline-block", padding: "2px 6px", border: "1px solid #ccc", marginLeft: 8 }}>{taxRate}%</span></td>
+                <td style={{ padding: "8px", fontSize: 13, textAlign: "right", background: "#E8D5F5", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }}>₹ {tax.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+              </tr>
+              <tr>
+                <td colSpan="2" style={{ padding: "12px 8px", fontSize: 16, color: "#000", fontWeight: "bold", textAlign: "right", background: "#A569BD", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }}>TOTAL</td>
+                <td style={{ padding: "12px 8px", fontSize: 18, color: "#000", fontWeight: "bold", textAlign: "right", background: "#A569BD", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }}>₹ {amt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+              </tr>
+            </>
+          ) : (
+            <>
+              <tr>
+                <td colSpan="2" rowSpan="3" style={{ border: "none" }}></td>
+                <td colSpan="2" style={{ padding: "8px", fontSize: 11, color: "#8E44AD", fontWeight: "bold", textAlign: "right", background: "#E8D5F5", borderTop: "1px solid #ddd", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }}>SUBTOTAL</td>
+                <td style={{ padding: "8px", fontSize: 13, textAlign: "right", background: "#E8D5F5", borderTop: "1px solid #ddd", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }}>₹ {sub.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+              </tr>
+              <tr>
+                <td colSpan="2" style={{ padding: "8px", fontSize: 11, color: "#8E44AD", fontWeight: "bold", textAlign: "right", background: "#E8D5F5", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }}>TAX RATE <span style={{ background: "#fff", display: "inline-block", padding: "2px 6px", border: "1px solid #ccc", marginLeft: 8 }}>{taxRate}%</span></td>
+                <td style={{ padding: "8px", fontSize: 13, textAlign: "right", background: "#E8D5F5", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }}>₹ {tax.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+              </tr>
+              <tr>
+                <td colSpan="2" style={{ padding: "12px 8px", fontSize: 16, color: "#000", fontWeight: "bold", textAlign: "right", background: "#A569BD", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }}>TOTAL</td>
+                <td style={{ padding: "12px 8px", fontSize: 18, color: "#000", fontWeight: "bold", textAlign: "right", background: "#A569BD", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }}>₹ {amt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+              </tr>
+            </>
+          )}
+        </tbody>
+      </table>
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: 20 }}>
+        <div style={{ width: "40%", fontSize: 12, color: "#333", lineHeight: 1.6 }}>
+          <b>Account Holder Name :</b> FASCINATE IT INDIA PRIVATE LIMITED<br />
+          <b>Bank :</b> ICICI BANK<br />
+          <b>Bank Account :</b> 041105005609<br />
+          <b>IFSC Code :</b> ICIC0000411
+        </div>
+        <div style={{ textAlign: "center" }}>
+          <h2 style={{ color: "#8E44AD", fontSize: 28, margin: 0, fontWeight: "bold", letterSpacing: 1 }}>THANK YOU</h2>
+        </div>
+      </div>
+
+      <div style={{ borderTop: "2px solid #8E44AD", marginTop: 40, paddingTop: 16, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <h4 style={{ color: "#8E44AD", fontSize: 13, margin: "0 0 8px" }}>FASCINATE IT INDIA PRIVATE LIMITED</h4>
+          <p style={{ margin: 0, fontSize: 12, color: "#8E44AD" }}><b>CIN - U62099KA2024PTC189877</b></p>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <p style={{ margin: "0 0 4px", fontSize: 12, color: "#3498DB" }}>✉ yourbuddy@fascinateit.com</p>
+          <p style={{ margin: "0 0 16px", fontSize: 12, color: "#8E44AD" }}>☎ +91 9110638567</p>
+          <p style={{ margin: "0 0 4px", fontSize: 13, color: "#8E44AD", fontWeight: "bold" }}>PAN: AAFCF9723K</p>
+          <p style={{ margin: 0, fontSize: 13, color: "#8E44AD", fontWeight: "bold" }}>GST-29AAFCF9723K1Z3</p>
+        </div>
       </div>
     </div>
   );
@@ -1377,6 +1763,7 @@ function EmpForm({ init, groups, employees, saving, onCancel, onSave, btnLabel }
         <Inp label="Full Name" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} required />
         <Inp label="Email" value={form.email} onChange={v => setForm(f => ({ ...f, email: v }))} required type="email" />
       </div>
+      <Inp label="Employee ID" value={form.customEmployeeId || ""} onChange={v => setForm(f => ({ ...f, customEmployeeId: v }))} placeholder="e.g. EMP-001" />
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <Inp label="Group" value={form.groupId} onChange={v => setForm(f => ({ ...f, groupId: v }))} options={groups.map(g => ({ value: g.id, label: g.name }))} />
         <SearchableSelect label="Manager" value={form.managerId} onChange={v => setForm(f => ({ ...f, managerId: v }))} options={(employees || []).map(e => ({ value: e.id, label: e.name }))} />
@@ -2251,6 +2638,7 @@ function MyProfile({ currentUser }) {
           <h4 style={{ margin: "0 0 16px", fontSize: 14, color: C.text, fontWeight: 800 }}>Organizational Details <span style={{ fontSize: 11, fontWeight: 500, color: C.textMuted, marginLeft: 8 }}>(Read-Only)</span></h4>
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <Inp label="Full Name" value={profile.name} disabled />
+            <Inp label="Employee ID" value={profile.custom_employee_id || "—"} disabled />
             <Inp label="Email" value={profile.email} disabled />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Inp label="Role / Group" value={profile.group_name || "—"} disabled />
@@ -2707,7 +3095,8 @@ function ExpenseForm({ init, projects, employees, saving, onCancel, onSave, btnL
 // ════════════════════════════════════════════════════════
 // ADMIN EMPLOYEES TAB
 // ════════════════════════════════════════════════════════
-function AdminEmployees({ readOnly = false }) {
+function AdminEmployees({ readOnly = false, currentUser }) {
+  const isAdminOnly = currentUser?.role === "admin";
   const [employees, setEmployees] = useState([]);
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -2752,13 +3141,14 @@ function AdminEmployees({ readOnly = false }) {
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead style={{ background: C.surface }}><tr>
-              {["Employee", "Email", "Group", "Manager", "Joining Date", "CTC", "Actions"].map(h => <Th key={h}>{h}</Th>)}
+              {["Emp ID", "Employee", "Email", "Group", "Manager", "Joining Date", "CTC", ...(isAdminOnly ? ["Gratuity"] : []), "Actions"].map(h => <Th key={h}>{h}</Th>)}
             </tr></thead>
             <tbody>
               {employees.map((emp, idx) => {
                 const grp = groups.find(g => g.id === emp.group_id);
                 return (
                   <tr key={emp.id} style={{ borderBottom: `1px solid ${C.border} 22`, background: idx % 2 === 0 ? "transparent" : C.bg + "44" }}>
+                    <Td style={{ fontSize: 13, fontWeight: 700, color: C.textDim }}>{emp.custom_employee_id || "—"}</Td>
                     <Td><div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <Avatar initials={emp.avatar} color={emp.group_color || C.accent} size={32} />
                       <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{emp.name}</span>
@@ -2768,6 +3158,7 @@ function AdminEmployees({ readOnly = false }) {
                     <Td style={{ fontSize: 12, color: C.textDim }}>{emp.manager_name || "—"}</Td>
                     <Td style={{ fontSize: 12, color: C.textDim }}>{emp.joining_date ? fmtD(emp.joining_date) : <span style={{ color: C.textMuted }}>—</span>}</Td>
                     <Td style={{ fontSize: 12, fontWeight: 700, color: C.green }}>{emp.ctc_annual ? `₹${Number(emp.ctc_annual).toLocaleString("en-IN")}` : <span style={{ color: C.textMuted, fontWeight: 400 }}>—</span>}</Td>
+                    {isAdminOnly && <Td style={{ fontSize: 12, fontWeight: 700, color: C.purple }}>{emp.gratuity ? `₹${Number(emp.gratuity).toLocaleString("en-IN")}` : <span style={{ color: C.textMuted, fontWeight: 400 }}>₹0</span>}</Td>}
                     <Td><div style={{ display: "flex", gap: 6 }}>
                       <Btn small variant="secondary" onClick={() => setViewModal(emp)}>👁 View</Btn>
                       {!readOnly && <Btn small variant="ghost" onClick={() => setModal(emp)}>✏ Edit</Btn>}
@@ -2775,7 +3166,7 @@ function AdminEmployees({ readOnly = false }) {
                   </tr>
                 );
               })}
-              {employees.length === 0 && <tr><td colSpan={readOnly ? 6 : 7} style={{ padding: 40, textAlign: "center", color: C.textMuted }}>No employees found.</td></tr>}
+              {employees.length === 0 && <tr><td colSpan={(readOnly ? 7 : 8) + (isAdminOnly ? 1 : 0)} style={{ padding: 40, textAlign: "center", color: C.textMuted }}>No employees found.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -2785,7 +3176,7 @@ function AdminEmployees({ readOnly = false }) {
       {!readOnly && modal && (
         <Modal title={modal === "new" ? "New Employee" : "Edit Employee"} onClose={() => setModal(null)}>
           <EmpForm
-            init={modal === "new" ? { name: "", email: "", groupId: "", managerId: "", joiningDate: "", ctcAnnual: "", variablePay: "", designation: "", location: "", panNumber: "", dob: "", address: "", mobile: "", bankAccountNo: "", bankIfsc: "", bankName: "", skillset: "" } : { name: modal.name, email: modal.email, groupId: modal.group_id || "", managerId: modal.manager_id || "", joiningDate: modal.joining_date || "", ctcAnnual: modal.ctc_annual || "", variablePay: modal.variable_pay_amount || "", designation: modal.designation || "", location: modal.location || "", panNumber: modal.pan_number || "", dob: modal.dob || "", address: modal.address || "", mobile: modal.mobile || "", bankAccountNo: modal.bank_account_no || "", bankIfsc: modal.bank_ifsc || "", bankName: modal.bank_name || "", skillset: modal.skillset || "" }}
+            init={modal === "new" ? { name: "", email: "", customEmployeeId: "", groupId: "", managerId: "", joiningDate: "", ctcAnnual: "", variablePay: "", designation: "", location: "", panNumber: "", dob: "", address: "", mobile: "", bankAccountNo: "", bankIfsc: "", bankName: "", skillset: "" } : { name: modal.name, email: modal.email, customEmployeeId: modal.custom_employee_id || "", groupId: modal.group_id || "", managerId: modal.manager_id || "", joiningDate: modal.joining_date || "", ctcAnnual: modal.ctc_annual || "", variablePay: modal.variable_pay_amount || "", designation: modal.designation || "", location: modal.location || "", panNumber: modal.pan_number || "", dob: modal.dob || "", address: modal.address || "", mobile: modal.mobile || "", bankAccountNo: modal.bank_account_no || "", bankIfsc: modal.bank_ifsc || "", bankName: modal.bank_name || "", skillset: modal.skillset || "" }}
             groups={groups} employees={employees} saving={saving} onCancel={() => setModal(null)} onSave={saveEmp}
             btnLabel={modal === "new" ? "Create Employee" : "Save Changes"}
           />
@@ -2800,7 +3191,7 @@ function AdminEmployees({ readOnly = false }) {
               <Avatar initials={viewModal.avatar} color={viewModal.group_color || C.accent} size={64} />
               <div>
                 <div style={{ fontSize: 22, fontWeight: 800, color: C.text }}>{viewModal.name}</div>
-                <div style={{ fontSize: 13, color: C.textMuted }}>{viewModal.email}</div>
+                <div style={{ fontSize: 13, color: C.textMuted }}>{viewModal.email} {viewModal.custom_employee_id ? `| ${viewModal.custom_employee_id}` : ""}</div>
                 <div style={{ marginTop: 6, display: "flex", gap: 8, alignItems: "center" }}>
                   {viewModal.group_name ? <Badge color={viewModal.group_color}>{viewModal.group_name}</Badge> : null}
                   {viewModal.designation && <span style={{ fontSize: 12, color: C.text, fontWeight: 600 }}>• {viewModal.designation}</span>}
@@ -2851,6 +3242,14 @@ function AdminEmployees({ readOnly = false }) {
                   <div style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Variable Pay</div>
                   <div style={{ fontSize: 14, color: C.amber, fontWeight: 700 }}>{viewModal.variable_pay_amount ? `₹${Number(viewModal.variable_pay_amount).toLocaleString("en-IN")}` : "—"}</div>
                 </div>
+                {isAdminOnly && (
+                  <div style={{ gridColumn: "span 2", background: C.purple + "11", border: `1px solid ${C.purple}33`, borderRadius: 8, padding: "10px 14px" }}>
+                    <div style={{ fontSize: 11, color: C.purple, textTransform: "uppercase", fontWeight: 700, letterSpacing: .5 }}>Accumulated Gratuity (4.81% of Basic / month)</div>
+                    <div style={{ fontSize: 18, color: C.purple, fontWeight: 800, marginTop: 4 }}>
+                      {viewModal.gratuity ? `₹${Number(viewModal.gratuity).toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "₹0.00"}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -3334,14 +3733,15 @@ function AdminCompanyResume() {
     exposure: "",
     industries: "",
     clients: "",
-    experience: [{ client: "", role: "", environment: "", responsibilities: "" }]
+    experience: [{ client: "", role: "", startDate: "", endDate: "", environment: "", responsibilities: "" }],
+    showLogo: true
   });
 
   const handleExpChange = (i, field, value) => {
     const e = [...form.experience]; e[i][field] = value;
     setForm({ ...form, experience: e });
   };
-  const addExp = () => setForm({ ...form, experience: [...form.experience, { client: "", role: "", environment: "", responsibilities: "" }] });
+  const addExp = () => setForm({ ...form, experience: [...form.experience, { client: "", role: "", startDate: "", endDate: "", environment: "", responsibilities: "" }] });
   const remExp = (i) => setForm({ ...form, experience: form.experience.filter((_, idx) => idx !== i) });
 
   // split string by newline character, trim, remove leading bullets/dashes if user typed them, and return array of non-empty bullets
@@ -3369,6 +3769,11 @@ function AdminCompanyResume() {
         </div>
         <Card>
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input type="checkbox" id="show-logo-cb" checked={form.showLogo} onChange={e => setForm({ ...form, showLogo: e.target.checked })} style={{ cursor: "pointer", width: 16, height: 16, accentColor: C.accent }} />
+              <label htmlFor="show-logo-cb" style={{ fontSize: 13, color: C.text, fontWeight: 600, cursor: "pointer" }}>Display Company Logo on Resume</label>
+            </div>
+
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Inp label="Employee Name" value={form.name} onChange={v => setForm({ ...form, name: v })} placeholder="e.g. FirstName LastName" />
               <Inp label="Technologies (Subtitle)" value={form.technologies} onChange={v => setForm({ ...form, technologies: v })} placeholder="e.g. SAP C4C, Sales Cloud..." />
@@ -3416,6 +3821,8 @@ function AdminCompanyResume() {
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                     <Inp label="Client" value={exp.client} onChange={v => handleExpChange(i, "client", v)} placeholder="e.g. NIR" />
                     <Inp label="Role" value={exp.role} onChange={v => handleExpChange(i, "role", v)} placeholder="e.g. SAP C4C Functional consultant" />
+                    <Inp label="Start Date" value={exp.startDate} onChange={v => handleExpChange(i, "startDate", v)} placeholder="e.g. Jan 2020" />
+                    <Inp label="End Date" value={exp.endDate} onChange={v => handleExpChange(i, "endDate", v)} placeholder="e.g. Dec 2022 or Present" />
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     <label style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Environment</label>
@@ -3455,9 +3862,11 @@ function AdminCompanyResume() {
                 <tr>
                   <td style={{ paddingTop: "16px", paddingBottom: "12px" }}>
                     {/* Payslip Logo - Top Left */}
-                    <div style={{ textAlign: "left", marginLeft: "40px" }}>
-                      <img src={`${window.location.origin}/paysliplogo.png`} alt="Fascinate IT Logo" style={{ height: "35px", objectFit: "contain" }} />
-                    </div>
+                    {form.showLogo && (
+                      <div style={{ textAlign: "left", marginLeft: "40px" }}>
+                        <img src={`${window.location.origin}/paysliplogo.png`} alt="Fascinate IT Logo" style={{ height: "35px", objectFit: "contain" }} />
+                      </div>
+                    )}
                   </td>
                 </tr>
               </thead>
@@ -3513,13 +3922,18 @@ function AdminCompanyResume() {
                     )}
 
                     {/* Experience */}
-                    {form.experience.some(e => e.client || e.role || e.environment || e.responsibilities) && (
+                    {form.experience.some(e => e.client || e.role || e.startDate || e.endDate || e.environment || e.responsibilities) && (
                       <div style={{ marginBottom: "16px" }}>
                         <SectionHeader title="PROFESSIONAL EXPERIENCE:" />
-                        {form.experience.map((exp, i) => (exp.client || exp.role || exp.environment || exp.responsibilities) ? (
+                        {form.experience.map((exp, i) => (exp.client || exp.role || exp.startDate || exp.endDate || exp.environment || exp.responsibilities) ? (
                           <div key={i} style={{ marginBottom: "16px", fontSize: "12px", color: "#000", fontFamily: "Arial, sans-serif", pageBreakInside: "avoid" }}>
                             {exp.client && <div style={{ marginBottom: "2px" }}><strong>Client:</strong> <span style={{ color: "#1e40af" }}>{exp.client}</span></div>}
                             {exp.role && <div style={{ marginBottom: "2px" }}><strong>Role:</strong> <span style={{ color: "#1e40af" }}>{exp.role}</span></div>}
+                            {(exp.startDate || exp.endDate) && (
+                              <div style={{ marginBottom: "2px" }}>
+                                <strong>Duration:</strong> <span style={{ color: "#1e40af" }}>{exp.startDate || "—"} to {exp.endDate || "Present"}</span>
+                              </div>
+                            )}
                             {exp.environment && <div style={{ marginBottom: "8px" }}><strong>Environment:</strong> <span style={{ color: "#1e40af" }}>{exp.environment}</span></div>}
                             {exp.responsibilities && (
                               <div>
@@ -3553,8 +3967,156 @@ function AdminCompanyResume() {
   );
 }
 
+// ════════════════════════════════════════════════════════
+// SUBSCRIPTION MANAGEMENT
+// ════════════════════════════════════════════════════════
+const EXPIRY_THRESHOLD_DAYS = 10;
+
+function daysUntilExpiry(expireDateStr) {
+  const now = new Date(); now.setHours(0, 0, 0, 0);
+  const exp = new Date(expireDateStr); exp.setHours(0, 0, 0, 0);
+  return Math.ceil((exp - now) / (1000 * 60 * 60 * 24));
+}
+
+function SubscriptionManagement() {
+  const [subs, setSubs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+  const [modal, setModal] = useState(false); // false | "new" | sub-object
+  const [saving, setSaving] = useState(false);
+
+  const empty = { app_name: "", start_date: "", expire_date: "", amount: "", link: "" };
+  const [form, setForm] = useState(empty);
+
+  const load = useCallback(async () => {
+    setLoading(true); setErr("");
+    try { setSubs(await api.getSubscriptions()); }
+    catch (e) { setErr(e.message); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  function openNew() { setForm(empty); setModal("new"); }
+  function openEdit(s) {
+    setForm({
+      app_name: s.app_name, start_date: s.start_date, expire_date: s.expire_date,
+      amount: s.amount, link: s.link
+    });
+    setModal(s);
+  }
+
+  async function handleSave() {
+    if (!form.app_name || !form.start_date || !form.expire_date || !form.link)
+      return alert("App name, start date, expire date and link are required.");
+    setSaving(true);
+    try {
+      const payload = { ...form, amount: parseFloat(form.amount) || 0 };
+      if (modal === "new") await api.createSubscription(payload);
+      else await api.updateSubscription(modal.id, payload);
+      setModal(false); await load();
+    } catch (e) { alert(e.message); }
+    finally { setSaving(false); }
+  }
+
+  async function handleDelete(id) {
+    if (!window.confirm("Delete this subscription?")) return;
+    try { await api.deleteSubscription(id); await load(); }
+    catch (e) { alert(e.message); }
+  }
+
+  if (loading) return <Spinner />;
+  if (err) return <ErrBox msg={err} onRetry={load} />;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>Subscription Management</h2>
+          <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>
+            Track app subscriptions — highlighted in red if expiring within {EXPIRY_THRESHOLD_DAYS} days
+          </p>
+        </div>
+        <Btn onClick={openNew}>+ Add Subscription</Btn>
+      </div>
+
+      <Card style={{ padding: 0, overflow: "hidden" }}>
+        <div className="resp-table-wrap">
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ background: C.surface, borderBottom: `1px solid ${C.border}` }}>
+                {["App Name", "Start Date", "Expire Date", "Amount (INR)", "Days Left", "Link", "Actions"].map(h => (
+                  <th key={h} style={{ padding: "12px 16px", fontSize: 11, fontWeight: 700, color: C.textMuted, letterSpacing: .5, textAlign: "left", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {subs.length === 0 && (
+                <tr><td colSpan={7} style={{ padding: 32, textAlign: "center", color: C.textMuted, fontSize: 13 }}>No subscriptions yet. Click "+ Add Subscription" to get started.</td></tr>
+              )}
+              {subs.map(s => {
+                const days = daysUntilExpiry(s.expire_date);
+                const expiring = days <= EXPIRY_THRESHOLD_DAYS;
+                const expired = days < 0;
+                const rowBg = expired ? C.red + "14" : expiring ? C.red + "0D" : "transparent";
+                const expiryColor = expired ? C.red : expiring ? C.red : C.text;
+                return (
+                  <tr key={s.id} style={{ borderBottom: `1px solid ${C.border}`, background: rowBg, transition: "background .15s" }}>
+                    <td style={{ padding: "13px 16px", fontSize: 13, fontWeight: 600, color: C.text }}>
+                      {expiring && <span style={{ color: C.red, marginRight: 6, fontSize: 14 }}>⚠</span>}
+                      {s.app_name}
+                    </td>
+                    <td style={{ padding: "13px 16px", fontSize: 13, color: C.textDim }}>{fmtD(s.start_date)}</td>
+                    <td style={{ padding: "13px 16px", fontSize: 13, color: expiryColor, fontWeight: expiring ? 700 : 400 }}>{fmtD(s.expire_date)}</td>
+                    <td style={{ padding: "13px 16px", fontSize: 13, color: C.text }}>{fmt$(s.amount)}</td>
+                    <td style={{ padding: "13px 16px", fontSize: 13, fontWeight: 700, color: expiryColor }}>
+                      {expired ? "Expired" : `${days}d`}
+                    </td>
+                    <td style={{ padding: "13px 16px", fontSize: 13 }}>
+                      <a href={s.link} target="_blank" rel="noopener noreferrer" style={{ color: C.accent, textDecoration: "none", fontWeight: 600 }}
+                        onMouseEnter={e => e.target.style.textDecoration = "underline"}
+                        onMouseLeave={e => e.target.style.textDecoration = "none"}>
+                        Open ↗
+                      </a>
+                    </td>
+                    <td style={{ padding: "13px 16px" }}>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <Btn small variant="ghost" onClick={() => openEdit(s)}>✏ Edit</Btn>
+                        <Btn small variant="danger" onClick={() => handleDelete(s.id)}>🗑</Btn>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {modal && (
+        <Modal title={modal === "new" ? "Add Subscription" : "Edit Subscription"} onClose={() => setModal(false)}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <Inp label="App Name" value={form.app_name} onChange={v => setForm(f => ({ ...f, app_name: v }))} required placeholder="e.g. GitHub, Jira, AWS" />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <Inp label="Start Date" type="date" value={form.start_date} onChange={v => setForm(f => ({ ...f, start_date: v }))} required />
+              <Inp label="Expire Date" type="date" value={form.expire_date} onChange={v => setForm(f => ({ ...f, expire_date: v }))} required />
+            </div>
+            <Inp label="Amount (INR)" type="number" value={form.amount} onChange={v => setForm(f => ({ ...f, amount: v }))} placeholder="0" />
+            <Inp label="Link / URL" value={form.link} onChange={v => setForm(f => ({ ...f, link: v }))} required placeholder="https://..." />
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 4 }}>
+              <Btn variant="ghost" onClick={() => setModal(false)}>Cancel</Btn>
+              <Btn onClick={handleSave} disabled={saving}>{saving ? "Saving…" : modal === "new" ? "Add" : "Save Changes"}</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
 const ADMIN_NAV = [
   { id: "dashboard", label: "Dashboard", icon: "⬡" },
+  { id: "clients", label: "Clients", icon: "🏢" },
   { id: "project_management", label: "Project Mgmt (Client)", icon: "📊" },
   { id: "projects", label: "Projects", icon: "◈" },
   { id: "employees", label: "Employees", icon: "👥" },
@@ -3568,6 +4130,7 @@ const ADMIN_NAV = [
   { id: "documents", label: "Documents", icon: "📄" },
   { id: "resumes", label: "Generate Company Resume", icon: "📑" },
   { id: "policies", label: "Company Policy", icon: "📜" },
+  { id: "subscriptions", label: "Subscription Management", icon: "🔔" },
 ];
 
 // ════════════════════════════════════════════════════════
@@ -3595,8 +4158,9 @@ const STYLE = [
   "@media (max-width: 767px) { .hamburger-btn { display: block; } .mobile-top-bar { display: flex; } .app-nav { position: fixed; top: 0; left: 0; height: 100vh; width: 240px !important; transform: translateX(-100%); box-shadow: 4px 0 24px rgba(0,0,0,0.5); } .app-nav.nav-open { transform: translateX(0); } .main-content { padding: 70px 14px 24px; max-width: 100vw; width: 100%; } .emp-main { padding: 70px 14px 24px; } }",
   "@media print { ",
   "  body * { visibility: hidden; }",
-  "  #capture-resume, #capture-resume * { visibility: visible; }",
-  "  #capture-resume { position: absolute; left: 0; top: 0; width: 100%; height: auto !important; margin: 0; padding: 0 !important; box-shadow: none !important; }",
+  "  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }",
+  "  #capture-resume, #capture-resume *, #invoice-print-area, #invoice-print-area * { visibility: visible; }",
+  "  #capture-resume, #invoice-print-area { position: relative !important; width: 100%; height: auto !important; margin: 0; padding: 0 !important; box-shadow: none !important; }",
   "  @page { margin: 0; }",
   "  .print-footer { display: block !important; }",
   "  .print-footer .pageNumber::after { content: counter(page); }",
@@ -3746,9 +4310,10 @@ export default function App() {
       </nav>
       <main className="main-content">
         {page === "dashboard" && <Dashboard />}
+        {page === "clients" && <AdminClients />}
         {page === "project_management" && <ProjectManagement readOnly={isManager} currentUser={currentUser} />}
         {page === "projects" && <Projects readOnly={isManager} />}
-        {page === "employees" && <AdminEmployees readOnly={isManager} />}
+        {page === "employees" && <AdminEmployees readOnly={isManager} currentUser={currentUser} />}
         {page === "resources" && <Resources readOnly={isManager} />}
         {page === "timesheets" && <Timesheets currentUser={currentUser} viewOnly={false} />}
         {page === "leaves" && <Leaves currentUser={currentUser} viewOnly={false} />}
@@ -3759,6 +4324,7 @@ export default function App() {
         {page === "documents" && <DocumentGrid type="document" allowEdit={isAdmin} />}
         {page === "policies" && <DocumentGrid type="policy" allowEdit={currentUser.role === "admin"} />}
         {page === "resumes" && <AdminCompanyResume />}
+        {page === "subscriptions" && <SubscriptionManagement />}
         {page === "mywork" && <EmployeeHome currentUser={currentUser} />}
       </main>
     </div>
