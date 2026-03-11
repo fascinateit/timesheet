@@ -117,4 +117,27 @@ export const api = {
   updateSubscription: (id, d) => req("PUT", `/subscriptions/${id}`, d),
   deleteSubscription: (id) => req("DELETE", `/subscriptions/${id}`),
 
+  // Onboarding
+  getOnboardingRecords: () => req("GET", "/onboarding/"),
+  getOnboardingRecord: (id) => req("GET", `/onboarding/${id}`),
+  createOnboardingRecord: (d) => req("POST", "/onboarding/", d),
+  updateOnboardingRecord: (id, d) => req("PUT", `/onboarding/${id}`, d),
+  deleteOnboardingRecord: (id) => req("DELETE", `/onboarding/${id}`),
+  deleteOnboardingDocument: (rid, did) => req("DELETE", `/onboarding/${rid}/documents/${did}`),
+  getSpStatus: () => req("GET", "/onboarding/sp-status"),
+
+  uploadOnboardingDocument: async (rid, docType, file) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("doc_type", docType);
+    const res = await fetch(`${BASE}/onboarding/${rid}/documents`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token()}` },
+      body: fd,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    return data;
+  },
+
 };

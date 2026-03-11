@@ -4114,6 +4114,432 @@ function SubscriptionManagement() {
   );
 }
 
+// ════════════════════════════════════════════════════════
+// ONBOARD EMPLOYEE
+// ════════════════════════════════════════════════════════
+const ONBOARD_DOC_TYPES = [
+  { key: "photo",          label: "Employee Photo",               required: true },
+  { key: "aadhar",         label: "Aadhar Card",                  required: true },
+  { key: "pan",            label: "PAN Card",                     required: true },
+  { key: "address_proof",  label: "Address Proof (Passport / DL)", required: true },
+  { key: "education",      label: "Educational Certificates",     required: true },
+  { key: "relieving",      label: "Relieving / Experience Letter", required: false },
+  { key: "bank",           label: "Bank Proof (Cheque / Passbook)", required: true },
+  { key: "offer_letter",   label: "Signed Offer Letter",          required: true },
+  { key: "bgv_form",       label: "Background Verification Form", required: false },
+  { key: "other",          label: "Other Document",               required: false },
+];
+
+const ONBOARD_STATUS_COLORS = {
+  pending:     C.amber,
+  in_progress: C.accent,
+  completed:   C.green,
+};
+
+function OnboardEmployee() {
+  const [records, setRecords]   = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [err, setErr]           = useState("");
+  const [spConfigured, setSpConfigured] = useState(null);
+
+  // view = null | "list" | "form" | "detail"
+  const [view, setView]         = useState("list");
+  const [selected, setSelected] = useState(null);   // onboarding record
+  const [detail, setDetail]     = useState(null);   // full record with docs
+
+  // form state
+  const emptyForm = { employee_id: "", joining_date: "", status: "pending",
+    laptop_issued: false, id_card_issued: false, email_created: false,
+    system_access: false, induction_done: false, notes: "" };
+  const [form, setForm]         = useState(emptyForm);
+  const [saving, setSaving]     = useState(false);
+
+  // upload state per doc_type
+  const [uploads, setUploads]   = useState({});   // { doc_type: File | null }
+  const [uploading, setUploading] = useState({}); // { doc_type: bool }
+
+  const load = useCallback(async () => {
+    setLoading(true); setErr("");
+    try {
+      const [recs, emps] = await Promise.all([api.getOnboardingRecords(), api.getEmployees()]);
+      setRecords(recs); setEmployees(emps);
+      try { const s = await api.getSpStatus(); setSpConfigured(s.configured); } catch {}
+    } catch (e) { setErr(e.message); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function loadDetail(rid) {
+    try {
+      const r = await api.getOnboardingRecord(rid);
+      setDetail(r);
+    } catch (e) { alert(e.message); }
+  }
+
+  function openNew() {
+    setForm(emptyForm); setSelected(null); setView("form");
+  }
+  function openEdit(rec) {
+    setForm({
+      employee_id: rec.employee_id, joining_date: rec.joining_date || "",
+      status: rec.status, laptop_issued: !!rec.laptop_issued,
+      id_card_issued: !!rec.id_card_issued, email_created: !!rec.email_created,
+      system_access: !!rec.system_access, induction_done: !!rec.induction_done,
+      notes: rec.notes || ""
+    });
+    setSelected(rec); setView("form");
+  }
+  async function openDetail(rec) {
+    setDetail(null); setSelected(rec); setView("detail");
+    await loadDetail(rec.id);
+  }
+
+  async function handleSave() {
+    if (!form.employee_id) return alert("Please select an employee.");
+    setSaving(true);
+    try {
+      if (selected) await api.updateOnboardingRecord(selected.id, form);
+      else          await api.createOnboardingRecord(form);
+      await load(); setView("list");
+    } catch (e) { alert(e.message); }
+    finally { setSaving(false); }
+  }
+
+  async function handleDelete(id) {
+    if (!window.confirm("Delete this onboarding record and all its documents?")) return;
+    try { await api.deleteOnboardingRecord(id); await load(); }
+    catch (e) { alert(e.message); }
+  }
+
+  async function handleUpload(docType) {
+    const file = uploads[docType];
+    if (!file || !detail) return;
+    setUploading(u => ({ ...u, [docType]: true }));
+    try {
+      await api.uploadOnboardingDocument(detail.id, docType, file);
+      setUploads(u => ({ ...u, [docType]: null }));
+      await loadDetail(detail.id);
+    } catch (e) { alert(e.message); }
+    finally { setUploading(u => ({ ...u, [docType]: false })); }
+  }
+
+  async function handleDeleteDoc(did) {
+    if (!window.confirm("Remove this document?")) return;
+    try {
+      await api.deleteOnboardingDocument(detail.id, did);
+      await loadDetail(detail.id);
+    } catch (e) { alert(e.message); }
+  }
+
+  function empOptions() {
+    return employees.map(e => ({
+      value: String(e.id),
+      label: `${e.name}${e.custom_employee_id ? ` (${e.custom_employee_id})` : ""}`
+    }));
+  }
+
+  const completedDocs = (docs) => new Set((docs || []).map(d => d.doc_type));
+  const progress = (docs) => {
+    const required = ONBOARD_DOC_TYPES.filter(t => t.required);
+    const done = required.filter(t => completedDocs(docs).has(t.key)).length;
+    return Math.round((done / required.length) * 100);
+  };
+
+  // ── SharePoint warning banner ──
+  const SpWarning = () => spConfigured === false ? (
+    <div style={{ background: C.amber + "18", border: `1px solid ${C.amber}44`, borderRadius: 10, padding: "10px 16px", fontSize: 12, color: C.amber, marginBottom: 16 }}>
+      ⚠ SharePoint is not configured. Documents will be recorded but <strong>not uploaded to SharePoint</strong>.
+      Add <code style={{ background: C.bg, padding: "1px 5px", borderRadius: 4 }}>SP_*</code> env vars to the backend to enable cloud storage.
+    </div>
+  ) : null;
+
+  if (loading) return <Spinner />;
+  if (err) return <ErrBox msg={err} onRetry={load} />;
+
+  // ── DETAIL view ──────────────────────────────────────────────────────────
+  if (view === "detail") {
+    const emp = employees.find(e => detail && e.id === detail.employee_id);
+    const docs = detail?.documents || [];
+    const done = completedDocs(docs);
+    const pct  = detail ? progress(docs) : 0;
+
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <Btn variant="ghost" small onClick={() => { setView("list"); setDetail(null); }}>← Back</Btn>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: C.text }}>
+            Onboarding — {detail?.employee_name || "…"}
+          </h2>
+          {detail && <Badge color={ONBOARD_STATUS_COLORS[detail.status]}>{detail.status.replace("_", " ")}</Badge>}
+        </div>
+
+        <SpWarning />
+
+        {!detail ? <Spinner /> : (
+          <>
+            {/* Info cards */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 12 }}>
+              {[
+                { label: "Employee ID", val: detail.custom_employee_id || "—" },
+                { label: "Email",       val: detail.email || "—" },
+                { label: "Joining Date", val: detail.joining_date ? fmtD(detail.joining_date) : "—" },
+              ].map(i => (
+                <Card key={i.label} style={{ padding: "12px 16px" }}>
+                  <div style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>{i.label}</div>
+                  <div style={{ fontSize: 14, color: C.text, fontWeight: 600, marginTop: 4 }}>{i.val}</div>
+                </Card>
+              ))}
+            </div>
+
+            {/* IT / HR checklist */}
+            <Card>
+              <h4 style={{ margin: "0 0 14px", fontSize: 13, fontWeight: 700, color: C.text }}>IT & HR Checklist</h4>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 10 }}>
+                {[
+                  ["Laptop Issued",    "laptop_issued"],
+                  ["ID Card Issued",   "id_card_issued"],
+                  ["Email Created",    "email_created"],
+                  ["System Access",    "system_access"],
+                  ["Induction Done",   "induction_done"],
+                ].map(([lbl, key]) => (
+                  <div key={key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 16 }}>{detail[key] ? "✅" : "⬜"}</span>
+                    <span style={{ fontSize: 13, color: detail[key] ? C.green : C.textMuted }}>{lbl}</span>
+                  </div>
+                ))}
+              </div>
+              {detail.notes && (
+                <div style={{ marginTop: 14, padding: "10px 14px", background: C.bg, borderRadius: 8, fontSize: 13, color: C.textDim }}>
+                  <span style={{ fontWeight: 700, color: C.textMuted }}>Notes: </span>{detail.notes}
+                </div>
+              )}
+            </Card>
+
+            {/* Document progress */}
+            <Card>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                <h4 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: C.text }}>Document Upload</h4>
+                <span style={{ fontSize: 13, fontWeight: 700, color: pct === 100 ? C.green : C.accent }}>{pct}% complete</span>
+              </div>
+              <div style={{ height: 6, background: C.border, borderRadius: 10, marginBottom: 20 }}>
+                <div style={{ width: `${pct}%`, height: "100%", background: pct === 100 ? C.green : C.accent, borderRadius: 10, transition: "width .4s" }} />
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {ONBOARD_DOC_TYPES.map(dt => {
+                  const uploaded = docs.filter(d => d.doc_type === dt.key);
+                  const isUploading = uploading[dt.key];
+                  return (
+                    <div key={dt.key} style={{
+                      background: C.surface, borderRadius: 8, padding: "12px 16px",
+                      border: `1px solid ${done.has(dt.key) ? C.green + "44" : C.border}`,
+                    }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ fontSize: 16 }}>{done.has(dt.key) ? "✅" : "📄"}</span>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{dt.label}</span>
+                          {dt.required && <Badge color={C.red}>Required</Badge>}
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                            <input type="file" style={{ display: "none" }}
+                              onChange={e => setUploads(u => ({ ...u, [dt.key]: e.target.files[0] || null }))}
+                            />
+                            <span style={{
+                              background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6,
+                              padding: "5px 12px", fontSize: 12, color: C.textDim, cursor: "pointer"
+                            }}>
+                              {uploads[dt.key] ? uploads[dt.key].name : "Choose file"}
+                            </span>
+                          </label>
+                          <Btn small onClick={() => handleUpload(dt.key)}
+                            disabled={!uploads[dt.key] || isUploading}>
+                            {isUploading ? "Uploading…" : "Upload"}
+                          </Btn>
+                        </div>
+                      </div>
+
+                      {/* Uploaded files for this doc type */}
+                      {uploaded.length > 0 && (
+                        <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
+                          {uploaded.map(d => (
+                            <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", background: C.card, borderRadius: 6 }}>
+                              <span style={{ fontSize: 13, flex: 1, color: C.textDim, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                📎 {d.filename}
+                              </span>
+                              {d.sharepoint_url ? (
+                                <a href={d.sharepoint_url} target="_blank" rel="noopener noreferrer"
+                                  style={{ fontSize: 12, color: C.accent, fontWeight: 600, textDecoration: "none", whiteSpace: "nowrap" }}>
+                                  Open ↗
+                                </a>
+                              ) : (
+                                <span style={{ fontSize: 11, color: C.textMuted }}>Local only</span>
+                              )}
+                              <Btn small variant="danger" onClick={() => handleDeleteDoc(d.id)}>🗑</Btn>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+
+            <div style={{ display: "flex", gap: 10 }}>
+              <Btn variant="ghost" onClick={() => openEdit(selected)}>✏ Edit Details</Btn>
+              <Btn variant="ghost" onClick={() => { setView("list"); setDetail(null); }}>← Back to List</Btn>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  // ── FORM view ────────────────────────────────────────────────────────────
+  if (view === "form") {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 24, maxWidth: 680 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <Btn variant="ghost" small onClick={() => setView("list")}>← Back</Btn>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: C.text }}>
+            {selected ? "Edit Onboarding" : "New Onboarding"}
+          </h2>
+        </div>
+
+        <Card>
+          <h4 style={{ margin: "0 0 16px", fontSize: 13, fontWeight: 700, color: C.text }}>Employee Details</h4>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <SearchableSelect
+              label="Employee *"
+              value={String(form.employee_id || "")}
+              onChange={v => setForm(f => ({ ...f, employee_id: v }))}
+              options={empOptions()}
+              placeholder="Search employee…"
+              disabled={!!selected}
+            />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <Inp label="Joining Date" type="date" value={form.joining_date}
+                onChange={v => setForm(f => ({ ...f, joining_date: v }))} />
+              <Inp label="Status" value={form.status}
+                onChange={v => setForm(f => ({ ...f, status: v }))}
+                options={[
+                  { value: "pending", label: "Pending" },
+                  { value: "in_progress", label: "In Progress" },
+                  { value: "completed", label: "Completed" },
+                ]} />
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <h4 style={{ margin: "0 0 14px", fontSize: 13, fontWeight: 700, color: C.text }}>IT & HR Checklist</h4>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            {[
+              ["Laptop Issued",   "laptop_issued"],
+              ["ID Card Issued",  "id_card_issued"],
+              ["Email Created",   "email_created"],
+              ["System Access",   "system_access"],
+              ["Induction Done",  "induction_done"],
+            ].map(([lbl, key]) => (
+              <label key={key} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "10px 12px", background: C.surface, borderRadius: 8 }}>
+                <input type="checkbox" checked={!!form[key]}
+                  onChange={e => setForm(f => ({ ...f, [key]: e.target.checked }))}
+                  style={{ width: 16, height: 16, accentColor: C.accent, cursor: "pointer" }} />
+                <span style={{ fontSize: 13, color: C.text }}>{lbl}</span>
+              </label>
+            ))}
+          </div>
+        </Card>
+
+        <Card>
+          <Inp label="Notes / Remarks" value={form.notes}
+            onChange={v => setForm(f => ({ ...f, notes: v }))} placeholder="Any additional onboarding notes…" />
+        </Card>
+
+        <div style={{ display: "flex", gap: 10 }}>
+          <Btn onClick={handleSave} disabled={saving}>{saving ? "Saving…" : selected ? "Save Changes" : "Create & Start Onboarding"}</Btn>
+          <Btn variant="ghost" onClick={() => setView("list")}>Cancel</Btn>
+        </div>
+      </div>
+    );
+  }
+
+  // ── LIST view ────────────────────────────────────────────────────────────
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>Onboard Employee</h2>
+          <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>
+            Manage employee onboarding — track documents, IT setup & HR checklist
+          </p>
+        </div>
+        <Btn onClick={openNew}>+ New Onboarding</Btn>
+      </div>
+
+      <SpWarning />
+
+      {records.length === 0 ? (
+        <Card style={{ textAlign: "center", padding: 48 }}>
+          <div style={{ fontSize: 32, marginBottom: 10 }}>🧑‍💼</div>
+          <div style={{ fontSize: 15, color: C.textMuted }}>No onboarding records yet.</div>
+          <Btn style={{ marginTop: 16 }} onClick={openNew}>+ Start First Onboarding</Btn>
+        </Card>
+      ) : (
+        <Card style={{ padding: 0, overflow: "hidden" }}>
+          <div className="resp-table-wrap">
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ background: C.surface, borderBottom: `1px solid ${C.border}` }}>
+                  {["Employee", "Emp ID", "Joining Date", "Status", "Docs", "Checklist", "Actions"].map(h => (
+                    <th key={h} style={{ padding: "12px 16px", fontSize: 11, fontWeight: 700, color: C.textMuted, letterSpacing: .5, textAlign: "left", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {records.map(rec => {
+                  const checklistDone = [rec.laptop_issued, rec.id_card_issued, rec.email_created, rec.system_access, rec.induction_done].filter(Boolean).length;
+                  const statusColor = ONBOARD_STATUS_COLORS[rec.status] || C.textMuted;
+                  return (
+                    <tr key={rec.id} style={{ borderBottom: `1px solid ${C.border}` }}>
+                      <td style={{ padding: "13px 16px" }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{rec.employee_name}</div>
+                        <div style={{ fontSize: 11, color: C.textMuted }}>{rec.email}</div>
+                      </td>
+                      <td style={{ padding: "13px 16px", fontSize: 12, color: C.textDim }}>{rec.custom_employee_id || "—"}</td>
+                      <td style={{ padding: "13px 16px", fontSize: 13, color: C.textDim }}>{rec.joining_date ? fmtD(rec.joining_date) : "—"}</td>
+                      <td style={{ padding: "13px 16px" }}><Badge color={statusColor}>{rec.status.replace("_", " ")}</Badge></td>
+                      <td style={{ padding: "13px 16px", fontSize: 13, color: C.textDim }}>{rec.document_count} uploaded</td>
+                      <td style={{ padding: "13px 16px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <div style={{ width: 60, height: 5, background: C.border, borderRadius: 10 }}>
+                            <div style={{ width: `${(checklistDone / 5) * 100}%`, height: "100%", background: checklistDone === 5 ? C.green : C.accent, borderRadius: 10 }} />
+                          </div>
+                          <span style={{ fontSize: 11, color: C.textMuted }}>{checklistDone}/5</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: "13px 16px" }}>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <Btn small variant="ghost" onClick={() => openDetail(rec)}>📂 View Docs</Btn>
+                          <Btn small variant="ghost" onClick={() => openEdit(rec)}>✏</Btn>
+                          <Btn small variant="danger" onClick={() => handleDelete(rec.id)}>🗑</Btn>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 const ADMIN_NAV = [
   { id: "dashboard", label: "Dashboard", icon: "⬡" },
   { id: "clients", label: "Clients", icon: "🏢" },
@@ -4131,6 +4557,7 @@ const ADMIN_NAV = [
   { id: "resumes", label: "Generate Company Resume", icon: "📑" },
   { id: "policies", label: "Company Policy", icon: "📜" },
   { id: "subscriptions", label: "Subscription Management", icon: "🔔" },
+  { id: "onboard", label: "Onboard Employee", icon: "🧑‍💼" },
 ];
 
 // ════════════════════════════════════════════════════════
@@ -4325,6 +4752,7 @@ export default function App() {
         {page === "policies" && <DocumentGrid type="policy" allowEdit={currentUser.role === "admin"} />}
         {page === "resumes" && <AdminCompanyResume />}
         {page === "subscriptions" && <SubscriptionManagement />}
+        {page === "onboard" && <OnboardEmployee />}
         {page === "mywork" && <EmployeeHome currentUser={currentUser} />}
       </main>
     </div>
