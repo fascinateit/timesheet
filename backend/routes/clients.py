@@ -18,11 +18,13 @@ def create_client():
         return jsonify({"error": "Missing client_name"}), 400
     
     sql = """
-        INSERT INTO clients (client_name, address, pay_day, gst_number)
-        VALUES (%s, %s, %s, %s)
+        INSERT INTO clients (client_name, email, phone_number, address, pay_day, gst_number)
+        VALUES (%s, %s, %s, %s, %s, %s)
     """
     params = (
         data["client_name"],
+        data.get("email") or None,
+        data.get("phone_number") or None,
         data.get("address"),
         data.get("pay_day"),
         data.get("gst_number")
@@ -39,11 +41,13 @@ def update_client(client_id):
         
     sql = """
         UPDATE clients
-        SET client_name = %s, address = %s, pay_day = %s, gst_number = %s
+        SET client_name = %s, email = %s, phone_number = %s, address = %s, pay_day = %s, gst_number = %s
         WHERE id = %s
     """
     params = (
         data["client_name"],
+        data.get("email") or None,
+        data.get("phone_number") or None,
         data.get("address"),
         data.get("pay_day"),
         data.get("gst_number"),

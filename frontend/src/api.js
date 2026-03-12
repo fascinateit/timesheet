@@ -95,7 +95,7 @@ export const api = {
   getInvoices: () => req("GET", "/invoices/"),
   createInvoice: (d) => req("POST", "/invoices/", d),
   updateInvoice: (id, d) => req("PUT", `/invoices/${id}`, d),
-  updateInvoiceStatus: (id, status) => req("PUT", `/invoices/${id}/status`, { status }),
+  updateInvoiceStatus: (id, status, payment_received_date) => req("PUT", `/invoices/${id}/status`, { status, payment_received_date }),
   deleteInvoice: (id) => req("DELETE", `/invoices/${id}`),
 
   // Company Expenses

@@ -24,7 +24,7 @@ def _enrich(project_id):
     # Calculate burned cost (approved timesheets only)
     burn = query(
         """
-        SELECT SUM(t.hours * COALESCE(g.hourly_rate,0)) AS burned
+        SELECT SUM(t.hours * COALESCE(e.hourly_rate, g.hourly_rate, 0)) AS burned
         FROM timesheets t
         JOIN employees e ON e.id=t.employee_id
         LEFT JOIN `groups` g ON g.id=e.group_id

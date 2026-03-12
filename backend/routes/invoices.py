@@ -29,7 +29,7 @@ def create_invoice():
         INSERT INTO invoices (
             client_id, invoice_number, project_id, amount, task_details, remarks,
             hours, rate, tax_rate, subtotal,
-            raised_date, next_invoice_date, status
+            raised_date, payment_due_date, status
         )
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
@@ -45,7 +45,7 @@ def create_invoice():
         data.get("tax_rate", 18.00),
         data.get("subtotal") or None,
         data["raised_date"],
-        data.get("next_invoice_date") or None,
+        data.get("payment_due_date") or None,
         data.get("status", "pending")
     )
     res = execute(sql, params)
@@ -55,11 +55,22 @@ def create_invoice():
 @jwt_required()
 def update_invoice_status(invoice_id):
     data = request.json
-    if "status" not in data or data["status"] not in ["pending", "cleared"]:
+    new_status = data.get("status")
+    if new_status not in ["pending", "cleared"]:
         return jsonify({"error": "Invalid status"}), 400
-    
-    sql = "UPDATE invoices SET status = %s WHERE id = %s"
-    execute(sql, (data["status"], invoice_id))
+
+    if new_status == "cleared":
+        payment_received_date = data.get("payment_received_date") or None
+        execute(
+            "UPDATE invoices SET status = %s, payment_received_date = %s WHERE id = %s",
+            (new_status, payment_received_date, invoice_id)
+        )
+    else:
+        # Reverting to pending – clear payment date
+        execute(
+            "UPDATE invoices SET status = %s, payment_received_date = NULL WHERE id = %s",
+            (new_status, invoice_id)
+        )
     return jsonify({"message": "Invoice status updated"})
 
 @invoices_bp.route("/<int:invoice_id>", methods=["PUT"])
@@ -74,7 +85,7 @@ def update_invoice(invoice_id):
         UPDATE invoices
         SET client_id = %s, invoice_number = %s, project_id = %s, amount = %s, task_details = %s, remarks = %s,
             hours = %s, rate = %s, tax_rate = %s, subtotal = %s,
-            raised_date = %s, next_invoice_date = %s, status = %s
+            raised_date = %s, payment_due_date = %s, status = %s
         WHERE id = %s
     """
     params = (
@@ -89,7 +100,7 @@ def update_invoice(invoice_id):
         data.get("tax_rate", 18.00),
         data.get("subtotal") or None,
         data["raised_date"],
-        data.get("next_invoice_date") or None,
+        data.get("payment_due_date") or None,
         data.get("status", "pending"),
         invoice_id
     )

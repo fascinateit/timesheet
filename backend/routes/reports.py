@@ -21,14 +21,14 @@ def project_report(pid):
     by_employee = query(
         """
         SELECT e.id, e.name, e.avatar, e.group_id,
-               g.name AS group_name, g.hourly_rate, g.color AS group_color,
-               SUM(t.hours)                              AS total_hours,
-               SUM(t.hours * COALESCE(g.hourly_rate,0)) AS total_cost
+               g.name AS group_name, COALESCE(e.hourly_rate, g.hourly_rate, 0) AS hourly_rate, g.color AS group_color,
+               SUM(t.hours)                                                        AS total_hours,
+               SUM(t.hours * COALESCE(e.hourly_rate, g.hourly_rate, 0))           AS total_cost
         FROM   timesheets t
         JOIN   employees e ON e.id = t.employee_id
         LEFT JOIN `groups` g ON g.id = e.group_id
         WHERE  t.project_id = %s AND t.status = 'approved'
-        GROUP  BY e.id, e.name, e.avatar, e.group_id, g.name, g.hourly_rate, g.color
+        GROUP  BY e.id, e.name, e.avatar, e.group_id, g.name, e.hourly_rate, g.hourly_rate, g.color
         ORDER  BY total_cost DESC
         """,
         (pid,),
@@ -65,7 +65,7 @@ def dashboard():
     burn_rows = query(
         """
         SELECT t.project_id,
-               SUM(t.hours * COALESCE(g.hourly_rate,0)) AS burned
+               SUM(t.hours * COALESCE(e.hourly_rate, g.hourly_rate, 0)) AS burned
         FROM   timesheets t
         JOIN   employees e ON e.id=t.employee_id
         LEFT JOIN `groups` g ON g.id=e.group_id

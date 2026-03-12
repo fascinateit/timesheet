@@ -6,7 +6,10 @@ from db import query, execute, get_conn
 employees_bp = Blueprint("employees", __name__)
 
 EMP_SELECT = """
-    SELECT e.*, g.name AS group_name, g.hourly_rate, g.color AS group_color,
+    SELECT e.*,
+           g.name AS group_name, g.hourly_rate AS group_hourly_rate,
+           COALESCE(e.hourly_rate, g.hourly_rate, 0) AS effective_hourly_rate,
+           g.color AS group_color,
            m.name AS manager_name
     FROM   employees e
     LEFT JOIN `groups` g ON g.id = e.group_id
@@ -53,12 +56,13 @@ def create_employee():
         return jsonify(error="name and email are required"), 400
     initials = "".join(p[0].upper() for p in name.split())[:2]
     custom_employee_id = (d.get("customEmployeeId") or "").strip()
+    hr = d.get("hourlyRate")
     eid = execute(
-        "INSERT INTO employees (name, designation, location, pan_number, email, group_id, manager_id, avatar, joining_date, ctc_annual, variable_pay_amount, dob, address, mobile, emergency_contact, bank_account_no, bank_ifsc, bank_name, skillset, custom_employee_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-        (name, d.get("designation") or None, d.get("location") or None, d.get("panNumber") or None, email, d.get("groupId") or None, d.get("managerId") or None, initials,
+        "INSERT INTO employees (name, designation, location, pan_number, email, group_id, hourly_rate, manager_id, avatar, joining_date, ctc_annual, variable_pay_amount, dob, address, mobile, emergency_contact, bank_account_no, bank_ifsc, bank_name, skillset, custom_employee_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+        (name, d.get("designation") or None, d.get("location") or None, d.get("panNumber") or None, email, d.get("groupId") or None, float(hr) if hr else None, d.get("managerId") or None, initials,
          d.get("joiningDate") or None, float(d.get("ctcAnnual") or 0), float(d.get("variablePay") or 0),
          d.get("dob") or None, d.get("address") or None,
-         d.get("mobile") or None, d.get("emergencyContact") or None, 
+         d.get("mobile") or None, d.get("emergencyContact") or None,
          d.get("bankAccountNo") or None,
          d.get("bankIfsc") or None, d.get("bankName") or None,
          d.get("skillset") or None, custom_employee_id or None),
@@ -71,10 +75,11 @@ def create_employee():
 @jwt_required()
 def update_employee(eid):
     d = request.get_json(silent=True) or {}
+    hr = d.get("hourlyRate")
     execute(
-        "UPDATE employees SET name=%s, designation=%s, location=%s, pan_number=%s, email=%s, group_id=%s, manager_id=%s, joining_date=%s, ctc_annual=%s, variable_pay_amount=%s, dob=%s, address=%s, mobile=%s, emergency_contact=%s, bank_account_no=%s, bank_ifsc=%s, bank_name=%s, skillset=%s, custom_employee_id=%s WHERE id=%s",
+        "UPDATE employees SET name=%s, designation=%s, location=%s, pan_number=%s, email=%s, group_id=%s, hourly_rate=%s, manager_id=%s, joining_date=%s, ctc_annual=%s, variable_pay_amount=%s, dob=%s, address=%s, mobile=%s, emergency_contact=%s, bank_account_no=%s, bank_ifsc=%s, bank_name=%s, skillset=%s, custom_employee_id=%s WHERE id=%s",
         (d.get("name"), d.get("designation") or None, d.get("location") or None, d.get("panNumber") or None,
-         d.get("email"), d.get("groupId") or None, d.get("managerId") or None,
+         d.get("email"), d.get("groupId") or None, float(hr) if hr else None, d.get("managerId") or None,
          d.get("joiningDate") or None, float(d.get("ctcAnnual") or 0), float(d.get("variablePay") or 0),
          d.get("dob") or None, d.get("address") or None,
          d.get("mobile") or None, d.get("emergencyContact") or None,

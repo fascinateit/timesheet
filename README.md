@@ -533,7 +533,32 @@ sudo systemctl stop projectpulse && sudo systemctl stop scheduler
 sudo systemctl status projectpulse scheduler
 ```
 
+crontab -e
+
+0 6 * * * /opt/projectpulse/venv/bin/python /opt/projectpulse/backend/daily_report.py >> /opt/projectpulse/logs/report.log 2>&1
+
+crontab -l
+```
+
 ---
+
+### Cron Time Breakdown
+```
+0 2 * * *
+│ │ │ │ │
+│ │ │ │ └── Day of week (every day)
+│ │ │ └──── Month (every month)
+│ │ └────── Day of month (every day)
+│ └──────── Hour (2 AM UTC = 7:30 AM IST)
+└────────── Minute (0)
+---
+
+IST Time       UTC Hour
+06:00 IST      0 0 * * * (12:30 AM UTC)
+06:30 IST      0 1 * * * (1:00 AM UTC)
+07:00 IST      30 1 * * * (1:30 AM UTC)
+08:00 IST      30 2 * * * (2:30 AM UTC)
+
 
 ### Your Final EC2 Setup
 ```

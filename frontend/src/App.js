@@ -253,16 +253,20 @@ function AdminClients() {
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead style={{ background: C.surface }}><tr>
-              <Th>Client Name</Th><Th>Address</Th><Th>GST Number</Th><Th>Pay Day</Th><Th>Created</Th>
+              <Th>Client Name</Th><Th>Email</Th><Th>Phone</Th><Th>GST Number</Th><Th>Pay Day</Th><Th>Actions</Th>
             </tr></thead>
             <tbody>
               {clients.map((c, idx) => (
                 <tr key={c.id} style={{ borderBottom: `1px solid ${C.border}22`, background: idx % 2 === 0 ? "transparent" : C.bg + "44" }}>
                   <Td style={{ fontWeight: 700, color: C.text }}>{c.client_name}</Td>
-                  <Td style={{ color: C.textMuted, maxWidth: 200, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.address || "—"}</Td>
-                  <Td style={{ color: C.textMuted }}>{c.gst_number || "—"}</Td>
-                  <Td>{c.pay_day ? `Day ${c.pay_day}` : "—"}</Td>
-                  <Td>{fmtD(c.created_at)}</Td>
+                  <Td style={{ color: C.textMuted, fontSize: 12 }}>
+                    {c.email ? <a href={`mailto:${c.email}`} style={{ color: C.accent, textDecoration: "none" }}>{c.email}</a> : "—"}
+                  </Td>
+                  <Td style={{ color: C.textMuted, fontSize: 12 }}>
+                    {c.phone_number ? <a href={`tel:${c.phone_number}`} style={{ color: C.text, textDecoration: "none" }}>{c.phone_number}</a> : "—"}
+                  </Td>
+                  <Td style={{ color: C.textMuted, fontSize: 12 }}>{c.gst_number || "—"}</Td>
+                  <Td style={{ fontSize: 12 }}>{c.pay_day ? `Day ${c.pay_day}` : "—"}</Td>
                   <Td>
                     <div style={{ display: "flex", gap: 8 }}>
                       <Btn small variant="ghost" onClick={() => setModal(c)}>✏</Btn>
@@ -271,7 +275,7 @@ function AdminClients() {
                   </Td>
                 </tr>
               ))}
-              {clients.length === 0 && <tr><td colSpan={5} style={{ padding: 40, textAlign: "center", color: C.textMuted }}>No clients found.</td></tr>}
+              {clients.length === 0 && <tr><td colSpan={6} style={{ padding: 40, textAlign: "center", color: C.textMuted }}>No clients found.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -279,7 +283,7 @@ function AdminClients() {
 
       {modal && (
         <Modal title={modal === "new" ? "Add Client" : "Edit Client"} onClose={() => setModal(null)}>
-          <ClientForm init={modal === "new" ? { client_name: "", address: "", pay_day: "", gst_number: "" } : modal} saving={saving} onCancel={() => setModal(null)} onSave={save} />
+          <ClientForm init={modal === "new" ? { client_name: "", email: "", phone_number: "", address: "", pay_day: "", gst_number: "" } : modal} saving={saving} onCancel={() => setModal(null)} onSave={save} />
         </Modal>
       )}
     </div>
@@ -287,10 +291,18 @@ function AdminClients() {
 }
 
 function ClientForm({ init, saving, onCancel, onSave }) {
-  const [form, setForm] = useState({ client_name: init.client_name || "", address: init.address || "", pay_day: init.pay_day || "", gst_number: init.gst_number || "" });
+  const [form, setForm] = useState({
+    client_name: init.client_name || "", email: init.email || "",
+    phone_number: init.phone_number || "", address: init.address || "",
+    pay_day: init.pay_day || "", gst_number: init.gst_number || ""
+  });
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <Inp label="Client Name" value={form.client_name} onChange={v => setForm(f => ({ ...f, client_name: v }))} required />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Inp label="Email" type="email" value={form.email} onChange={v => setForm(f => ({ ...f, email: v }))} placeholder="contact@client.com" />
+        <Inp label="Phone Number" value={form.phone_number} onChange={v => setForm(f => ({ ...f, phone_number: v }))} placeholder="+91 98765 43210" />
+      </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <label style={{ fontSize: 12, color: C.textDim, fontWeight: 600 }}>Billing Address</label>
         <textarea value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
@@ -512,6 +524,8 @@ function ProjectManagement({ readOnly = false, currentUser }) {
   const [editInvoice, setEditInvoice] = useState(null);
   const [viewInvoice, setViewInvoice] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [clearModal, setClearModal] = useState(null);  // null | invoice object
+  const [paymentDate, setPaymentDate] = useState("");
 
   // List Filters
   const [filterProject, setFilterProject] = useState("all");
@@ -527,9 +541,24 @@ function ProjectManagement({ readOnly = false, currentUser }) {
   useEffect(() => { load(); }, []);
 
   async function handleToggleStatus(inv) {
-    const newStatus = inv.status === "pending" ? "cleared" : "pending";
+    if (inv.status === "pending") {
+      // Show modal to collect payment received date
+      setPaymentDate(new Date().toISOString().slice(0, 10));
+      setClearModal(inv);
+    } else {
+      // Revert to pending immediately
+      try {
+        await api.updateInvoiceStatus(inv.id, "pending");
+        await load();
+      } catch (e) { alert(e.message); }
+    }
+  }
+
+  async function handleConfirmCleared() {
+    if (!clearModal) return;
     try {
-      await api.updateInvoiceStatus(inv.id, newStatus);
+      await api.updateInvoiceStatus(clearModal.id, "cleared", paymentDate || null);
+      setClearModal(null); setPaymentDate("");
       await load();
     } catch (e) { alert(e.message); }
   }
@@ -552,14 +581,15 @@ function ProjectManagement({ readOnly = false, currentUser }) {
 
   function handleDownloadCSV(filteredInvoices) {
     if (!filteredInvoices.length) return alert("No invoices to export.");
-    const headers = ["Project Code", "Project Name", "Task / Deliverables", "Amount Raised (INR)", "Date Raised", "Next Invoice Date", "Clearance Status"];
+    const headers = ["Project Code", "Project Name", "Task / Deliverables", "Amount Raised (INR)", "Date Raised", "Payment Due Date", "Payment Received Date", "Clearance Status"];
     const rows = filteredInvoices.map(inv => [
       inv.project_code,
       `"${inv.project_name.replace(/"/g, '""')}"`,
       `"${parseTaskNames(inv.task_details).replace(/"/g, '""')}"`,
       inv.amount,
       inv.raised_date,
-      inv.next_invoice_date || "",
+      inv.payment_due_date || "",
+      inv.payment_received_date || "",
       inv.status.toUpperCase()
     ]);
     const csvStr = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
@@ -669,7 +699,8 @@ function ProjectManagement({ readOnly = false, currentUser }) {
                       <Th>Task / Deliverables</Th>
                       <Th>Amount Raised</Th>
                       <Th>Date Raised</Th>
-                      <Th>Next Invoice</Th>
+                      <Th>Payment Due Date</Th>
+                      <Th>Payment Received</Th>
                       <Th>Clearance Status</Th>
                       {!readOnly && <Th>Action</Th>}
                     </tr>
@@ -689,7 +720,12 @@ function ProjectManagement({ readOnly = false, currentUser }) {
                           <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{fmt$(inv.amount)}</div>
                         </Td>
                         <Td><div style={{ fontSize: 13, color: C.textMuted }}>{fmtD(inv.raised_date)}</div></Td>
-                        <Td><div style={{ fontSize: 13, color: C.textMuted }}>{inv.next_invoice_date ? fmtD(inv.next_invoice_date) : "—"}</div></Td>
+                        <Td><div style={{ fontSize: 13, color: C.textMuted }}>{inv.payment_due_date ? fmtD(inv.payment_due_date) : "—"}</div></Td>
+                        <Td>
+                          {inv.payment_received_date
+                            ? <div style={{ fontSize: 13, fontWeight: 600, color: C.green }}>{fmtD(inv.payment_received_date)}</div>
+                            : <span style={{ fontSize: 12, color: C.textMuted }}>—</span>}
+                        </Td>
                         <Td>
                           <Badge color={inv.status === "cleared" ? C.green : C.amber}>
                             {inv.status}
@@ -716,6 +752,32 @@ function ProjectManagement({ readOnly = false, currentUser }) {
             )}
           </Card>
         </div>
+      )}
+
+      {clearModal && (
+        <Modal title="Mark Invoice as Cleared" onClose={() => setClearModal(null)}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+            <div style={{ background: C.surface, borderRadius: 10, padding: "14px 16px" }}>
+              <div style={{ fontSize: 12, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>Invoice</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{clearModal.invoice_number || clearModal.client_name || clearModal.project_name}</div>
+              <div style={{ fontSize: 13, color: C.green, fontWeight: 700, marginTop: 4 }}>{fmt$(clearModal.amount)}</div>
+            </div>
+            <Inp
+              label="Payment Received Date"
+              type="date"
+              value={paymentDate}
+              onChange={v => setPaymentDate(v)}
+              required
+            />
+            <p style={{ margin: 0, fontSize: 12, color: C.textMuted }}>
+              Enter the date the payment was actually received. This will be recorded against the invoice.
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <Btn variant="ghost" onClick={() => setClearModal(null)}>Cancel</Btn>
+              <Btn variant="success" onClick={handleConfirmCleared}>✓ Confirm Cleared</Btn>
+            </div>
+          </div>
+        </Modal>
       )}
 
       {modal && (
@@ -871,7 +933,7 @@ function CompanyExpenses({ modal, setModal, currentUser, projects }) {
 
   if (loading) return <Spinner />;
 
-  const totalExpenses = expenses.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
+  const totalExpenses = expenses.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0) + (parseFloat(curr.gst_amount) || 0), 0);
 
   // Apply chart window offset
   const last6Months = [];
@@ -890,10 +952,10 @@ function CompanyExpenses({ modal, setModal, currentUser, projects }) {
     if (filterStatus !== "all" && e.status !== filterStatus) return false;
     return true;
   });
-  const filteredTotal = filteredList.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
+  const filteredTotal = filteredList.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0) + (parseFloat(curr.gst_amount) || 0), 0);
 
   const chartData = last6Months.map(m => {
-    const amt = expenses.filter(e => e.expense_date?.startsWith(m)).reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
+    const amt = expenses.filter(e => e.expense_date?.startsWith(m)).reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0) + (parseFloat(curr.gst_amount) || 0), 0);
     return { name: new Date(m + "-01T12:00:00").toLocaleDateString('en-US', { month: 'short', year: 'numeric' }), amount: amt };
   });
 
@@ -967,9 +1029,10 @@ function CompanyExpenses({ modal, setModal, currentUser, projects }) {
                   <Th>Expense Date</Th>
                   <Th>Purpose</Th>
                   <Th>Amount</Th>
+                  <Th>GST Amount</Th>
+                  <Th>Total Amount</Th>
                   <Th>Paid By</Th>
                   <Th>ITR / Tax Type</Th>
-                  <Th>GST Amount</Th>
                   <Th>Status</Th>
                   <Th>Action</Th>
                 </tr>
@@ -983,12 +1046,13 @@ function CompanyExpenses({ modal, setModal, currentUser, projects }) {
                       <Td><div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{fmtDmy}</div></Td>
                       <Td><div style={{ fontSize: 13, color: C.textMuted }}>{exp.purpose}</div></Td>
                       <Td><div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{fmt$(exp.amount)}</div></Td>
+                      <Td><div style={{ fontSize: 13, color: C.textMuted }}>{fmt$(exp.gst_amount || 0)}</div></Td>
+                      <Td><div style={{ fontSize: 13, fontWeight: 700, color: C.green }}>{fmt$((parseFloat(exp.amount) || 0) + (parseFloat(exp.gst_amount) || 0))}</div></Td>
                       <Td><div style={{ fontSize: 13, color: C.textMuted }}>{exp.paid_by}</div></Td>
                       <Td>
                         <div style={{ fontSize: 13, color: C.text }}>{exp.itr_type || "—"}</div>
                         <div style={{ fontSize: 11, color: C.accent }}>{exp.tax_type || "—"}</div>
                       </Td>
-                      <Td><div style={{ fontSize: 13, color: C.textMuted }}>{fmt$(exp.gst_amount || 0)}</div></Td>
                       <Td>
                         <Badge color={exp.status === "cleared" ? C.green : exp.status === "sent to auditing" ? C.purple : C.amber}>
                           {exp.status}
@@ -1121,9 +1185,9 @@ function InvoiceForm({ projects, clients, initialData, saving, onCancel, onSave 
     tax_rate: initialData.tax_rate || "18.00",
     subtotal: initialData.subtotal || "",
     raised_date: parseDate(initialData.raised_date),
-    next_invoice_date: parseDate(initialData.next_invoice_date),
+    payment_due_date: parseDate(initialData.payment_due_date),
     status: initialData.status
-  } : { client_id: "", invoice_number: "", project_id: "", amount: "", items: [{ description: "", hours: "", rate: "" }], remarks: "", tax_rate: "18.00", subtotal: "", raised_date: new Date().toISOString().slice(0, 10), next_invoice_date: "", status: "pending" });
+  } : { client_id: "", invoice_number: "", project_id: "", amount: "", items: [{ description: "", hours: "", rate: "" }], remarks: "", tax_rate: "18.00", subtotal: "", raised_date: new Date().toISOString().slice(0, 10), payment_due_date: "", status: "pending" });
 
   // Auto-calculate logic
   useEffect(() => {
@@ -1146,7 +1210,7 @@ function InvoiceForm({ projects, clients, initialData, saving, onCancel, onSave 
         const raised = new Date(form.raised_date);
         raised.setDate(raised.getDate() + parseInt(client.pay_day));
         const newDate = raised.toISOString().slice(0, 10);
-        if (form.next_invoice_date !== newDate) setForm(f => ({ ...f, next_invoice_date: newDate }));
+        if (form.payment_due_date !== newDate) setForm(f => ({ ...f, payment_due_date: newDate }));
       }
     }
   }, [form.client_id, form.raised_date, clients]); // eslint-disable-line
@@ -1211,7 +1275,7 @@ function InvoiceForm({ projects, clients, initialData, saving, onCancel, onSave 
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <Inp label="Date Raised *" type="date" value={form.raised_date} onChange={v => setForm(f => ({ ...f, raised_date: v }))} required />
-        <Inp label="Payment Due Date" type="date" value={form.next_invoice_date} onChange={v => setForm(f => ({ ...f, next_invoice_date: v }))} />
+        <Inp label="Payment Due Date" type="date" value={form.payment_due_date} onChange={v => setForm(f => ({ ...f, payment_due_date: v }))} />
       </div>
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
         <Btn variant="ghost" onClick={onCancel}>Cancel</Btn>
@@ -1276,7 +1340,7 @@ function InvoicePrintPreview({ invoice }) {
           <div>
             <h4 style={{ color: "#8E44AD", fontSize: 12, margin: "0 0 4px" }}>DATE PAYMENT DUE</h4>
             <div style={{ borderTop: "2px solid #8E44AD", marginBottom: 8 }} />
-            <p style={{ margin: 0, fontSize: 13 }}>{invoice.next_invoice_date ? fmtD(invoice.next_invoice_date) : "Upon receipt"}</p>
+            <p style={{ margin: 0, fontSize: 13 }}>{invoice.payment_due_date ? fmtD(invoice.payment_due_date) : "Upon receipt"}</p>
           </div>
         </div>
       </div>
@@ -1456,8 +1520,18 @@ function LoginPage({ onLogin }) {
 // DASHBOARD
 // ════════════════════════════════════════════════════════
 function Dashboard() {
-  const [data, setData] = useState(null); const [loading, setLoading] = useState(true); const [err, setErr] = useState("");
-  const load = useCallback(async () => { setLoading(true); setErr(""); try { setData(await api.getDashboard()); } catch (e) { setErr(e.message); } finally { setLoading(false); } });
+  const [data, setData] = useState(null);
+  const [clients, setClients] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+  const load = useCallback(async () => {
+    setLoading(true); setErr("");
+    try {
+      const [d, cls] = await Promise.all([api.getDashboard(), api.getClients()]);
+      setData(d); setClients(cls);
+    } catch (e) { setErr(e.message); }
+    finally { setLoading(false); }
+  });
   useEffect(() => { load(); }, []);
   if (loading) return <Spinner />;
   if (err) return <ErrBox msg={err} onRetry={load} />;
@@ -1497,6 +1571,48 @@ function Dashboard() {
             <ProgressBar value={p.burned || 0} max={p.budget} />
           </div>);
         })}
+      </Card>
+
+      {/* Clients quick-view */}
+      <Card style={{ padding: 0, overflow: "hidden" }}>
+        <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}` }}>
+          <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: C.text }}>
+            🏢 Clients <span style={{ fontSize: 12, color: C.textMuted, fontWeight: 400, marginLeft: 6 }}>{clients.length} total</span>
+          </h3>
+        </div>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead style={{ background: C.surface }}>
+              <tr>
+                {["Client Name", "Email", "Phone", "GST Number", "Pay Day"].map(h => (
+                  <th key={h} style={{ padding: "10px 16px", fontSize: 11, fontWeight: 700, color: C.textMuted, letterSpacing: .5, textAlign: "left", textTransform: "uppercase", whiteSpace: "nowrap", borderBottom: `1px solid ${C.border}` }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {clients.length === 0 && (
+                <tr><td colSpan={5} style={{ padding: 32, textAlign: "center", color: C.textMuted, fontSize: 13 }}>No clients yet.</td></tr>
+              )}
+              {clients.map((c, idx) => (
+                <tr key={c.id} style={{ borderBottom: `1px solid ${C.border}22`, background: idx % 2 === 0 ? "transparent" : C.bg + "44" }}>
+                  <td style={{ padding: "11px 16px", fontWeight: 700, color: C.text, fontSize: 13 }}>{c.client_name}</td>
+                  <td style={{ padding: "11px 16px", fontSize: 12 }}>
+                    {c.email
+                      ? <a href={`mailto:${c.email}`} style={{ color: C.accent, textDecoration: "none" }}>{c.email}</a>
+                      : <span style={{ color: C.textMuted }}>—</span>}
+                  </td>
+                  <td style={{ padding: "11px 16px", fontSize: 12 }}>
+                    {c.phone_number
+                      ? <a href={`tel:${c.phone_number}`} style={{ color: C.text, textDecoration: "none" }}>{c.phone_number}</a>
+                      : <span style={{ color: C.textMuted }}>—</span>}
+                  </td>
+                  <td style={{ padding: "11px 16px", fontSize: 12, color: C.textMuted }}>{c.gst_number || "—"}</td>
+                  <td style={{ padding: "11px 16px", fontSize: 12, color: C.textMuted }}>{c.pay_day ? `Day ${c.pay_day}` : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Card>
     </div>
   );
@@ -1626,8 +1742,9 @@ function Resources({ readOnly = false }) {
     if (!form.name || !form.email) return;
     setSaving(true);
     try {
-      if (isNewEmp) await api.createEmployee({ ...form, groupId: form.groupId ? +form.groupId : null });
-      else await api.updateEmployee(modal.id, { ...form, groupId: form.groupId ? +form.groupId : null });
+      const payload = { ...form, groupId: form.groupId ? +form.groupId : null, hourlyRate: form.hourlyRate !== "" ? +form.hourlyRate : null };
+      if (isNewEmp) await api.createEmployee(payload);
+      else await api.updateEmployee(modal.id, payload);
       setModal(null); await load();
     } catch (e) { alert(e.message); } finally { setSaving(false); }
   }
@@ -1683,11 +1800,11 @@ function Resources({ readOnly = false }) {
                 {emp.joining_date && <div style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>Joined {emp.joining_date}</div>}
                 {emp.group_name && <div style={{ marginTop: 6 }}><Badge color={emp.group_color || C.accent}>{emp.group_name}</Badge></div>}
                 <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
-                  {!readOnly && <Btn small variant="ghost" onClick={() => setModal({ type: "emp", id: emp.id, name: emp.name, email: emp.email, groupId: emp.group_id || "", joiningDate: emp.joining_date || "", ctcAnnual: emp.ctc_annual || "" })}>✏ Edit</Btn>}
+                  {!readOnly && <Btn small variant="ghost" onClick={() => setModal({ type: "emp", id: emp.id, name: emp.name, email: emp.email, groupId: emp.group_id || "", joiningDate: emp.joining_date || "", ctcAnnual: emp.ctc_annual || "", hourlyRate: emp.hourly_rate != null ? emp.hourly_rate : "" })}>✏ Edit</Btn>}
                   {!readOnly && <Btn small variant="ghost" onClick={() => openAssign(emp)}>🗂 Projects</Btn>}
                 </div>
               </div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: C.green }}>₹{emp.hourly_rate || 0}/hr</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.green }}>₹{emp.effective_hourly_rate || emp.hourly_rate || 0}/hr{emp.hourly_rate != null && <span style={{ fontSize: 10, color: C.accent, marginLeft: 4 }}>custom</span>}</div>
             </Card>
           ))}
         </div>
@@ -1717,7 +1834,7 @@ function Resources({ readOnly = false }) {
       )}
       {!readOnly && (isNewEmp || isEditEmp) && (
         <Modal title={isNewEmp ? "Add Employee" : "Edit Employee"} onClose={() => setModal(null)}>
-          <EmpForm init={{ name: modal.name || "", email: modal.email || "", groupId: modal.groupId || "", joiningDate: modal.joiningDate || "", ctcAnnual: modal.ctcAnnual || "" }}
+          <EmpForm init={{ name: modal.name || "", email: modal.email || "", groupId: modal.groupId || "", joiningDate: modal.joiningDate || "", ctcAnnual: modal.ctcAnnual || "", hourlyRate: modal.hourlyRate ?? "" }}
             groups={groups} saving={saving} onCancel={() => setModal(null)} onSave={saveEmp}
             btnLabel={isNewEmp ? "Add Employee" : "Save Changes"} />
         </Modal>
@@ -1768,6 +1885,7 @@ function EmpForm({ init, groups, employees, saving, onCancel, onSave, btnLabel }
         <Inp label="Group" value={form.groupId} onChange={v => setForm(f => ({ ...f, groupId: v }))} options={groups.map(g => ({ value: g.id, label: g.name }))} />
         <SearchableSelect label="Manager" value={form.managerId} onChange={v => setForm(f => ({ ...f, managerId: v }))} options={(employees || []).map(e => ({ value: e.id, label: e.name }))} />
       </div>
+      <Inp label="Hourly Rate (₹/hr)" type="number" value={form.hourlyRate ?? ""} onChange={v => setForm(f => ({ ...f, hourlyRate: v }))} placeholder="Leave blank to use group rate" />
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <Inp label="Annual CTC (₹)" type="number" value={form.ctcAnnual || ""} onChange={v => setForm(f => ({ ...f, ctcAnnual: v }))} placeholder="e.g. 1200000" />
         <Inp label="Variable Pay (₹)" type="number" value={form.variablePay || ""} onChange={v => setForm(f => ({ ...f, variablePay: v }))} placeholder="e.g. 200000" />
@@ -2240,7 +2358,7 @@ function Leaves({ currentUser, viewOnly }) {
   }
 
   const summary = { total: rows.length, pending: rows.filter(l => l.status === "pending").length, approved: rows.filter(l => l.status === "approved").length };
-  const cols = [...(!viewOnly ? ["Employee"] : []), "Type", "From", "To", "Reason", "Status", ...(!viewOnly ? ["Action"] : [])];
+  const cols = [...(!viewOnly ? ["Employee"] : []), "Type", "From", "To", "Days", "Reason", "Status", ...(!viewOnly ? ["Action"] : [])];
 
   if (loading) return <Spinner />;
   if (err) return <ErrBox msg={err} onRetry={load} />;
@@ -2276,6 +2394,7 @@ function Leaves({ currentUser, viewOnly }) {
                   <Td><Badge color={l.leave_type === "Annual" ? C.accent : C.red}>{l.leave_type}</Badge></Td>
                   <Td style={{ fontSize: 12, color: C.textDim }}>{fmtD(l.start_date)}</Td>
                   <Td style={{ fontSize: 12, color: C.textDim }}>{fmtD(l.end_date)}</Td>
+                  <Td style={{ fontSize: 13, fontWeight: 700, color: C.accent }}>{(() => { const s = new Date(l.start_date); const e = new Date(l.end_date); const d = Math.round((e - s) / 86400000) + 1; return d > 0 ? `${d}d` : "—"; })()}</Td>
                   <Td style={{ fontSize: 12, color: C.textDim, maxWidth: 180 }}>{l.reason}</Td>
                   <Td><StatusBadge status={l.status} /></Td>
                   {!viewOnly && <Td>{l.status === "pending" && (

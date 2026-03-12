@@ -29,8 +29,8 @@ def list_timesheets():
     sql  = """
         SELECT t.*, e.name AS employee_name, e.avatar, e.group_id,
                p.code AS project_code, p.name AS project_name,
-               g.hourly_rate, g.color AS group_color,
-               (t.hours * COALESCE(g.hourly_rate,0)) AS cost
+               COALESCE(e.hourly_rate, g.hourly_rate, 0) AS hourly_rate, g.color AS group_color,
+               (t.hours * COALESCE(e.hourly_rate, g.hourly_rate, 0)) AS cost
         FROM   timesheets t
         JOIN   employees  e ON e.id = t.employee_id
         JOIN   projects   p ON p.id = t.project_id
@@ -79,8 +79,8 @@ def create_timesheet():
         """
         SELECT t.*, e.name AS employee_name, e.avatar, e.group_id,
                p.code AS project_code, p.name AS project_name,
-               g.hourly_rate, g.color AS group_color,
-               (t.hours * COALESCE(g.hourly_rate,0)) AS cost
+               COALESCE(e.hourly_rate, g.hourly_rate, 0) AS hourly_rate, g.color AS group_color,
+               (t.hours * COALESCE(e.hourly_rate, g.hourly_rate, 0)) AS cost
         FROM   timesheets t
         JOIN   employees e ON e.id=t.employee_id
         JOIN   projects  p ON p.id=t.project_id
@@ -150,8 +150,8 @@ def update_timesheet(tid):
         """
         SELECT t.*, e.name AS employee_name, e.avatar, e.group_id,
                p.code AS project_code, p.name AS project_name,
-               g.hourly_rate, g.color AS group_color,
-               (t.hours * COALESCE(g.hourly_rate,0)) AS cost
+               COALESCE(e.hourly_rate, g.hourly_rate, 0) AS hourly_rate, g.color AS group_color,
+               (t.hours * COALESCE(e.hourly_rate, g.hourly_rate, 0)) AS cost
         FROM   timesheets t
         JOIN   employees e ON e.id=t.employee_id
         JOIN   projects  p ON p.id=t.project_id
