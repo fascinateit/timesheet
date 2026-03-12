@@ -2944,6 +2944,8 @@ function MyPay({ currentUser }) {
                   ["Transport Allowance", selected.transport],
                   ["Medical Allowance", selected.medical_allowance],
                   ["Internet & Broadband Allowance", selected.internet_allowance],
+                  ["Professional Development Allowance", selected.professional_dev_allowance],
+                  ["Insurance", selected.insurance_allowance],
                   ["Variable Pay", selected.variable_pay],
                   ["Bonus", selected.bonus]
                 ].map(([k, v]) => Number(v) > 0 ? (
@@ -3391,6 +3393,253 @@ function AdminEmployees({ readOnly = false, currentUser }) {
 // ADMIN NAV
 // ════════════════════════════════════════════════════════
 // ════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════
+// COMPENSATION DETAILS – CTC breakdown calculator (admin only)
+// ════════════════════════════════════════════════════════
+function CompensationDetails() {
+  const [ctc, setCtc] = useState("");
+  const [useVp, setUseVp] = useState(false);
+  const [vpAmount, setVpAmount] = useState("");
+  const [usePda, setUsePda] = useState(false);
+  const [pdaAmount, setPdaAmount] = useState("");
+  const [useIns, setUseIns] = useState(false);
+  const [insAmount, setInsAmount] = useState("");
+  const [useEmployerPf, setUseEmployerPf] = useState(false);
+
+  function round2(n) { return Math.round(n * 100) / 100; }
+  const fmt  = n => Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtR = n => `₹ ${fmt(n)}`;
+
+  const ctcVal = parseFloat(ctc) || 0;
+  const computed = ctcVal > 0 ? (() => {
+    // Basic = 50% of CTC (annual), converted to monthly
+    const basic_m   = round2(ctcVal * 0.50 / 12);
+    const hra_m     = round2(basic_m * 0.50);
+    const lta_m     = round2(basic_m * 0.10);
+    const transport = 1600;
+    const medical   = 1250;
+    const internet  = 1200;
+
+    // VP: checkbox enables it; default = 10% of CTC; override with custom amount
+    const defaultVp_a = round2(ctcVal * 0.10);
+    const vp_a      = useVp ? (vpAmount !== "" ? (parseFloat(vpAmount) || 0) : defaultVp_a) : 0;
+
+    // PDA & Insurance (monthly, taken from special allowance pool)
+    const pda_m     = usePda ? (parseFloat(pdaAmount) || 0) : 0;
+    const ins_m     = useIns ? (parseFloat(insAmount) || 0) : 0;
+
+    // Gratuity & employer PF are CTC components outside gross
+    const gratuity_a    = round2(basic_m * 12 * 0.0481);
+    const employer_pf_a = useEmployerPf ? round2(basic_m * 12 * 0.12) : 0;
+    const employer_pf_m = round2(employer_pf_a / 12);
+
+    // Gross = CTC minus the non-gross CTC components → ensures Total CTC = CTC input
+    const gross_a   = round2(ctcVal - gratuity_a - employer_pf_a - vp_a);
+    const gross_m   = round2(gross_a / 12);
+
+    // Special = what's left after all fixed components (PDA/insurance carve out from it)
+    const remaining = gross_m - basic_m - hra_m - lta_m - transport - medical - internet;
+    const special_m = Math.max(0, round2(remaining - pda_m - ins_m));
+
+    const gross_total_m = round2(basic_m + hra_m + lta_m + transport + medical + internet + special_m + pda_m + ins_m);
+    const gross_total_a = round2(gross_total_m * 12);
+    const total_ctc     = round2(gross_total_a + employer_pf_a + gratuity_a + vp_a);
+
+    return { basic_m, hra_m, lta_m, transport, medical, internet, special_m, pda_m, ins_m,
+             gross_total_m, gross_total_a, employer_pf_m, employer_pf_a, gratuity_a, vp_a, defaultVp_a, total_ctc };
+  })() : null;
+
+  function downloadCompensation() {
+    if (!computed) return;
+    const c = computed;
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
+<title>Compensation Details</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:Arial,sans-serif;font-size:13px;background:#fff;color:#000;}
+  .wrapper{max-width:820px;margin:24px auto;padding:10px;}
+  h2{text-align:center;font-size:17px;margin-bottom:4px;}
+  h3{text-align:center;font-size:13px;font-weight:normal;color:#555;margin-bottom:18px;}
+  table{width:100%;border-collapse:collapse;}
+  th,td{border:1px solid #aaa;padding:6px 12px;}
+  th{background:#d4edda;font-weight:bold;text-align:center;}
+  .label{width:50%;}
+  .num{text-align:right;width:25%;}
+  .note{width:25%;font-style:italic;color:#555;font-size:11px;}
+  .section-header td{background:#f0f0f0;font-weight:bold;font-size:13px;}
+  .total-row td{font-weight:bold;background:#fff9c4;}
+  .ctc-row td{font-weight:bold;background:#d4edda;font-size:14px;}
+</style></head><body><div class="wrapper">
+<h2>FASCINATE IT INDIA PRIVATE LIMITED</h2>
+<h3>Compensation Details — CTC: ₹ ${fmt(ctcVal)}</h3>
+<table>
+  <tr><th class="label"></th><th class="num">Amount in INR/month</th><th class="num">Amount in INR/year</th><th class="note">Remarks</th></tr>
+  <tr><td class="label">Basic Salary</td><td class="num">${fmtR(c.basic_m)}</td><td class="num">${fmtR(round2(c.basic_m*12))}</td><td class="note">50% of CTC</td></tr>
+  <tr><td class="label">House Rent Allowance (HRA)</td><td class="num">${fmtR(c.hra_m)}</td><td class="num">${fmtR(round2(c.hra_m*12))}</td><td class="note">50% of Basic</td></tr>
+  <tr><td class="label">Special Allowance</td><td class="num">${fmtR(c.special_m)}</td><td class="num">${fmtR(round2(c.special_m*12))}</td><td class="note">Remaining - 4.81% Basic - VP</td></tr>
+  <tr><td class="label">Conveyance</td><td class="num">${fmtR(c.transport)}</td><td class="num">${fmtR(round2(c.transport*12))}</td><td class="note">Fixed</td></tr>
+  <tr><td class="label">Medical Allowance</td><td class="num">${fmtR(c.medical)}</td><td class="num">${fmtR(round2(c.medical*12))}</td><td class="note">Fixed</td></tr>
+  <tr><td class="label">Internet & Broadband Allowance</td><td class="num">${fmtR(c.internet)}</td><td class="num">${fmtR(round2(c.internet*12))}</td><td class="note">Fixed</td></tr>
+  <tr><td class="label">Leave Travel Allowance (LTA)</td><td class="num">${fmtR(c.lta_m)}</td><td class="num">${fmtR(round2(c.lta_m*12))}</td><td class="note">10% of Basic</td></tr>
+  <tr><td class="label">Professional Development Allowance</td><td class="num">${c.pda_m > 0 ? fmtR(c.pda_m) : '₹ 0.00'}</td><td class="num">${c.pda_m > 0 ? fmtR(round2(c.pda_m*12)) : ''}</td><td class="note">NA</td></tr>
+  <tr><td class="label">Insurance</td><td class="num">${c.ins_m > 0 ? fmtR(c.ins_m) : '₹ 0.00'}</td><td class="num">${c.ins_m > 0 ? fmtR(round2(c.ins_m*12)) : ''}</td><td class="note">NA</td></tr>
+  <tr class="total-row"><td class="label">Total Gross / Base Salary</td><td class="num">${fmtR(c.gross_total_m)}</td><td class="num">${fmtR(c.gross_total_a)}</td><td class="note">within this INR 200/month deducted as professional tax (if gross ≥ ₹25,000)</td></tr>
+  <tr><td colspan="4" style="padding:4px;border:none;"></td></tr>
+  <tr><td class="label">Provident Fund (Employer)</td><td class="num">${c.employer_pf_m > 0 ? fmtR(c.employer_pf_m) : '0.00'}</td><td class="num">${c.employer_pf_a > 0 ? fmtR(c.employer_pf_a) : '0.00'}</td><td class="note">NA</td></tr>
+  <tr><td class="label">Gratuity</td><td class="num"></td><td class="num">${fmtR(c.gratuity_a)}</td><td class="note">4.81% of Basic</td></tr>
+  <tr><td class="label">Variable Pay (Bonus)*</td><td class="num"></td><td class="num">${c.vp_a > 0 ? fmtR(c.vp_a) : '0.00'}</td><td class="note">10% of CTC</td></tr>
+  <tr><td colspan="4" style="padding:4px;border:none;"></td></tr>
+  <tr class="ctc-row"><td class="label">Total CTC</td><td class="num"></td><td class="num">${fmtR(c.total_ctc)}</td><td class="note"></td></tr>
+</table>
+<p style="margin-top:12px;font-size:11px;color:#888;">* Variable Pay is performance-based and paid at management discretion.</p>
+</div><script>window.onload=function(){window.print();}</script></body></html>`;
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank");
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  }
+
+  const inpStyle = { background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, width: "100%" };
+  const rows = computed ? [
+    ["Basic Salary",                   computed.basic_m,      computed.basic_m * 12,      "50% of CTC"],
+    ["House Rent Allowance (HRA)",     computed.hra_m,        computed.hra_m * 12,        "50% of Basic"],
+    ["Special Allowance",              computed.special_m,    computed.special_m * 12,    "Remaining − 4.81% Basic − VP"],
+    ["Conveyance",                     computed.transport,    computed.transport * 12,    "Fixed"],
+    ["Medical Allowance",              computed.medical,      computed.medical * 12,      "Fixed"],
+    ["Internet & Broadband Allowance", computed.internet,     computed.internet * 12,     "Fixed"],
+    ["Leave Travel Allowance (LTA)",   computed.lta_m,        computed.lta_m * 12,        "10% of Basic"],
+    ["Professional Dev. Allowance",    computed.pda_m,        computed.pda_m * 12,        computed.pda_m > 0 ? "Custom" : "NA"],
+    ["Insurance",                      computed.ins_m,        computed.ins_m * 12,        computed.ins_m > 0 ? "Custom" : "NA"],
+  ] : [];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>Compensation Details</h2>
+          <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>Calculate CTC breakdown — monthly & yearly</p>
+        </div>
+        {computed && <Btn onClick={downloadCompensation}>⬇ Download PDF</Btn>}
+      </div>
+
+      {/* Inputs */}
+      <Card>
+        <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 14 }}>Enter CTC Details</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 16 }}>
+          <div>
+            <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 4 }}>Annual CTC (₹) *</div>
+            <input type="number" min="0" placeholder="e.g. 600000" value={ctc}
+              onChange={e => setCtc(e.target.value)} style={inpStyle} />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: C.text }}>
+              <input type="checkbox" checked={useVp} onChange={e => { setUseVp(e.target.checked); if (!e.target.checked) setVpAmount(""); }} style={{ cursor: "pointer", width: 16, height: 16 }} />
+              Include Variable Pay (Bonus)
+            </label>
+            {useVp ? (
+              <>
+                <div style={{ fontSize: 11, color: C.textMuted }}>
+                  Default: ₹ {ctcVal > 0 ? Math.round(ctcVal * 0.10).toLocaleString("en-IN") : "0"} (10% of CTC) — enter below to override
+                </div>
+                <input type="number" min="0" placeholder="Override annual amount (₹)" value={vpAmount}
+                  onChange={e => setVpAmount(e.target.value)} style={inpStyle} />
+              </>
+            ) : (
+              <div style={{ fontSize: 11, color: C.textMuted, padding: "4px 0" }}>Not included — check to add Variable Pay to CTC</div>
+            )}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: C.text }}>
+              <input type="checkbox" checked={useEmployerPf} onChange={e => setUseEmployerPf(e.target.checked)} style={{ cursor: "pointer", width: 16, height: 16 }} />
+              Employer PF (12% of Basic)
+            </label>
+            <div style={{ fontSize: 11, color: C.textMuted, padding: "8px 0" }}>{computed && useEmployerPf ? `₹ ${fmt(computed.employer_pf_m)}/month` : "Not included in CTC by default"}</div>
+          </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 16, marginTop: 16 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: C.text }}>
+              <input type="checkbox" checked={usePda} onChange={e => setUsePda(e.target.checked)} style={{ cursor: "pointer", width: 16, height: 16 }} />
+              Professional Development Allowance
+            </label>
+            <input type="number" min="0" placeholder="Monthly amount (₹)" value={pdaAmount} disabled={!usePda}
+              onChange={e => setPdaAmount(e.target.value)} style={{ ...inpStyle, opacity: usePda ? 1 : 0.5 }} />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: C.text }}>
+              <input type="checkbox" checked={useIns} onChange={e => setUseIns(e.target.checked)} style={{ cursor: "pointer", width: 16, height: 16 }} />
+              Insurance
+            </label>
+            <input type="number" min="0" placeholder="Monthly amount (₹)" value={insAmount} disabled={!useIns}
+              onChange={e => setInsAmount(e.target.value)} style={{ ...inpStyle, opacity: useIns ? 1 : 0.5 }} />
+          </div>
+        </div>
+      </Card>
+
+      {/* Breakdown Table */}
+      {computed ? (
+        <Card style={{ padding: 0, overflow: "hidden" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ background: C.surface }}>
+                {["Component", "Amount / Month", "Amount / Year", "Remarks"].map(h => (
+                  <th key={h} style={{ padding: "12px 16px", textAlign: h === "Component" || h === "Remarks" ? "left" : "right", fontSize: 11, color: C.textMuted, textTransform: "uppercase", letterSpacing: .5, fontWeight: 700, borderBottom: `1px solid ${C.border}` }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(([label, monthly, yearly, note]) => (
+                <tr key={label} style={{ borderBottom: `1px solid ${C.border}22` }}>
+                  <td style={{ padding: "10px 16px", fontSize: 13, color: C.text }}>{label}</td>
+                  <td style={{ padding: "10px 16px", fontSize: 13, fontWeight: 600, color: C.text, textAlign: "right" }}>{fmtR(round2(monthly))}</td>
+                  <td style={{ padding: "10px 16px", fontSize: 13, color: C.textMuted, textAlign: "right" }}>{fmtR(round2(yearly))}</td>
+                  <td style={{ padding: "10px 16px", fontSize: 12, color: C.textDim, fontStyle: "italic" }}>{note}</td>
+                </tr>
+              ))}
+              {/* Gross total row */}
+              <tr style={{ background: C.surface, borderTop: `2px solid ${C.border}` }}>
+                <td style={{ padding: "12px 16px", fontSize: 14, fontWeight: 800, color: C.text }}>Total Gross / Base Salary</td>
+                <td style={{ padding: "12px 16px", fontSize: 14, fontWeight: 800, color: C.green, textAlign: "right" }}>{fmtR(computed.gross_total_m)}</td>
+                <td style={{ padding: "12px 16px", fontSize: 14, fontWeight: 800, color: C.green, textAlign: "right" }}>{fmtR(computed.gross_total_a)}</td>
+                <td style={{ padding: "10px 16px", fontSize: 11, color: C.textMuted, fontStyle: "italic" }}>
+                  {computed.gross_total_m >= 25000 ? "₹200/month professional tax applicable" : "Below ₹25,000 — no professional tax"}
+                </td>
+              </tr>
+              {/* Separator */}
+              <tr><td colSpan={4} style={{ padding: 0, height: 8, background: C.bg }} /></tr>
+              {/* CTC components below gross */}
+              {[
+                ["Provident Fund (Employer)", computed.employer_pf_m > 0 ? fmtR(computed.employer_pf_m) : "—", computed.employer_pf_a > 0 ? fmtR(computed.employer_pf_a) : "—", "12% of Basic"],
+                ["Gratuity", "—", fmtR(computed.gratuity_a), "4.81% of Basic (annual)"],
+                ["Variable Pay (Bonus)*", "—", computed.vp_a > 0 ? fmtR(computed.vp_a) : "—", "Performance-based"],
+              ].map(([label, monthly, yearly, note]) => (
+                <tr key={label} style={{ borderBottom: `1px solid ${C.border}22` }}>
+                  <td style={{ padding: "10px 16px", fontSize: 13, color: C.text }}>{label}</td>
+                  <td style={{ padding: "10px 16px", fontSize: 13, color: C.textMuted, textAlign: "right" }}>{monthly}</td>
+                  <td style={{ padding: "10px 16px", fontSize: 13, color: C.textMuted, textAlign: "right" }}>{yearly}</td>
+                  <td style={{ padding: "10px 16px", fontSize: 12, color: C.textDim, fontStyle: "italic" }}>{note}</td>
+                </tr>
+              ))}
+              {/* Total CTC */}
+              <tr style={{ background: `${C.green}18`, borderTop: `2px solid ${C.green}44` }}>
+                <td style={{ padding: "14px 16px", fontSize: 15, fontWeight: 800, color: C.text }}>Total CTC</td>
+                <td style={{ padding: "14px 16px", textAlign: "right" }} />
+                <td style={{ padding: "14px 16px", fontSize: 16, fontWeight: 800, color: C.green, textAlign: "right" }}>{fmtR(computed.total_ctc)}</td>
+                <td style={{ padding: "14px 16px", fontSize: 12, color: C.textDim, fontStyle: "italic" }}>Gross + PF (Employer) + Gratuity + VP</td>
+              </tr>
+            </tbody>
+          </table>
+        </Card>
+      ) : (
+        <Card style={{ textAlign: "center", padding: 48, color: C.textMuted }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>🧮</div>
+          <div style={{ fontSize: 15, fontWeight: 600 }}>Enter Annual CTC to see the breakdown</div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 // ADMIN PAYSLIPS – Generate & manage payslips for all employees
 // ════════════════════════════════════════════════════════
 const SLIP_MONTHS = ["January", "February", "March", "April", "May", "June",
@@ -3505,6 +3754,8 @@ function printPayslipData(ps) {
                   <tr><td style="border: none;">Convey Allowance</td><td style="border: none;" class="right">${fmt(ps.transport)}</td></tr>
                   <tr><td style="border: none;">Medical Allowance</td><td style="border: none;" class="right">${fmt(ps.medical_allowance)}</td></tr>
                   <tr><td style="border: none;">Internet & Broadband<br>Allowance</td><td style="border: none;" class="right">${fmt(ps.internet_allowance)}</td></tr>
+                  <tr><td style="border: none;">Professional Development<br>Allowance</td><td style="border: none;" class="right">${Number(ps.professional_dev_allowance) ? fmt(ps.professional_dev_allowance) : '-'}</td></tr>
+                  <tr><td style="border: none;">Insurance</td><td style="border: none;" class="right">${Number(ps.insurance_allowance) ? fmt(ps.insurance_allowance) : '-'}</td></tr>
                   <tr><td style="border: none;">Variable Pay</td><td style="border: none;" class="right">${Number(ps.variable_pay) ? fmt(ps.variable_pay) : '-'}</td></tr>
                   <tr><td style="border: none;">Bonus</td><td style="border: none;" class="right">${Number(ps.bonus) ? fmt(ps.bonus) : '-'}</td></tr>
                   <tr><td style="border: none; padding-bottom: 20px;"></td><td style="border: none;"></td></tr>
@@ -3571,7 +3822,8 @@ function AdminPayslips() {
   const [filterYear, setFilterYear] = useState("");
   const [form, setForm] = useState({
     employeeId: "", month: new Date().getMonth() + 1, year: new Date().getFullYear(),
-    usePf: false, pfAmount: "", useTds: false, tdsAmount: "", useVp: false, vpAmount: ""
+    usePf: false, pfAmount: "", useTds: false, tdsAmount: "", useVp: false, vpAmount: "",
+    usePda: false, pdaAmount: "", useIns: false, insAmount: ""
   });
   const [msg, setMsg] = useState("");
   const origin = window.location.origin;
@@ -3595,7 +3847,9 @@ function AdminPayslips() {
         year: +form.year,
         usePf: form.usePf, pfAmount: form.pfAmount,
         useTds: form.useTds, tdsAmount: form.tdsAmount,
-        useVp: form.useVp, vpAmount: form.vpAmount
+        useVp: form.useVp, vpAmount: form.vpAmount,
+        usePda: form.usePda, pdaAmount: form.pdaAmount,
+        useIns: form.useIns, insAmount: form.insAmount
       });
       setMsg("✅ Payslip generated successfully!");
       await load();
@@ -3679,6 +3933,29 @@ function AdminPayslips() {
             <input type="number" min="0" placeholder="Auto calculate 1/12th VP" value={form.vpAmount} disabled={!form.useVp}
               onChange={e => setForm(f => ({ ...f, vpAmount: e.target.value }))}
               style={{ ...inpStyle, opacity: form.useVp ? 1 : 0.5 }} />
+          </div>
+        </div>
+        {/* Row 3: Professional Dev & Insurance */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginTop: 16 }}>
+          <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: C.text }}>
+              <input type="checkbox" checked={form.usePda} onChange={e => setForm(f => ({ ...f, usePda: e.target.checked }))} style={{ cursor: "pointer", width: 16, height: 16 }} />
+              Professional Development Allowance
+            </label>
+            <input type="number" min="0" placeholder="Enter amount (₹)" value={form.pdaAmount} disabled={!form.usePda}
+              onChange={e => setForm(f => ({ ...f, pdaAmount: e.target.value }))}
+              style={{ ...inpStyle, opacity: form.usePda ? 1 : 0.5 }} />
+            {form.usePda && <div style={{ fontSize: 11, color: C.textMuted }}>Deducted from Special Allowance pool</div>}
+          </div>
+          <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: C.text }}>
+              <input type="checkbox" checked={form.useIns} onChange={e => setForm(f => ({ ...f, useIns: e.target.checked }))} style={{ cursor: "pointer", width: 16, height: 16 }} />
+              Insurance
+            </label>
+            <input type="number" min="0" placeholder="Enter amount (₹)" value={form.insAmount} disabled={!form.useIns}
+              onChange={e => setForm(f => ({ ...f, insAmount: e.target.value }))}
+              style={{ ...inpStyle, opacity: form.useIns ? 1 : 0.5 }} />
+            {form.useIns && <div style={{ fontSize: 11, color: C.textMuted }}>Deducted from Special Allowance pool</div>}
           </div>
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
@@ -4677,6 +4954,7 @@ const ADMIN_NAV = [
   { id: "policies", label: "Company Policy", icon: "📜" },
   { id: "subscriptions", label: "Subscription Management", icon: "🔔" },
   { id: "onboard", label: "Onboard Employee", icon: "🧑‍💼" },
+  { id: "compensation", label: "Compensation Details", icon: "🧮" },
 ];
 
 // ════════════════════════════════════════════════════════
@@ -4833,7 +5111,8 @@ export default function App() {
           {ADMIN_NAV.filter(n =>
             !(n.id === "useraccounts" && isManager) &&
             !(n.id === "payslips" && isManager) &&
-            !(n.id === "project_management" && isManager)
+            !(n.id === "project_management" && isManager) &&
+            !(n.id === "compensation" && isManager)
           ).map(n => {
             const active = page === n.id;
             return (<button key={n.id} onClick={() => nav(n.id)} style={{
@@ -4872,6 +5151,7 @@ export default function App() {
         {page === "resumes" && <AdminCompanyResume />}
         {page === "subscriptions" && <SubscriptionManagement />}
         {page === "onboard" && <OnboardEmployee />}
+        {page === "compensation" && currentUser.role === "admin" && <CompensationDetails />}
         {page === "mywork" && <EmployeeHome currentUser={currentUser} />}
       </main>
     </div>
