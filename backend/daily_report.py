@@ -91,7 +91,7 @@ def _table(headers: list[str], rows: list[list[str]]) -> str:
 def _pending_invoices():
     rows = query(
         "SELECT i.invoice_number, p.name AS project_name, p.code AS project_code, "
-        "c.client_name, i.amount, i.raised_date, i.next_invoice_date "
+        "c.client_name, i.amount, i.raised_date, i.payment_due_date "
         "FROM invoices i "
         "LEFT JOIN projects p ON p.id = i.project_id "
         "LEFT JOIN clients c ON c.id = i.client_id "
@@ -152,7 +152,7 @@ def _expiring_subscriptions():
 
 def _build_invoices_section():
     rows = _pending_invoices()
-    headers = ["Invoice #", "Project", "Client", "Amount", "Raised Date", "Next Invoice Date"]
+    headers = ["Invoice #", "Project", "Client", "Amount", "Raised Date", "Payment Due Date"]
     table_rows = [
         [
             r.get("invoice_number") or "—",
@@ -160,7 +160,7 @@ def _build_invoices_section():
             r.get("client_name") or "—",
             _fmt_inr(r["amount"]),
             _fmt_date(r["raised_date"]),
-            _fmt_date(r.get("next_invoice_date")),
+            _fmt_date(r.get("payment_due_date")),
         ]
         for r in rows
     ]
