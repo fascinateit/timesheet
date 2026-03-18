@@ -5,7 +5,7 @@ import requests
 
 TENANT_ID     = os.environ.get("MAIL_TENANT_ID", "ec822022-88bd-47c3-bb56-fa921ec6656e")
 CLIENT_ID     = os.environ.get("MAIL_CLIENT_ID",  "ee67cd24-43fd-4a1c-98f6-82710b2a4d32")
-CLIENT_SECRET = os.environ.get("MAIL_CLIENT_SECRET", "")
+CLIENT_SECRET = os.environ.get("MAIL_CLIENT_SECRET", "XhR8Q~pLia-mywTDg-3wzFRmcb7ojaphQ9gSSb-f")
 MAIL_FROM     = os.environ.get("MAIL_USERNAME",   "sandeepkumar.md@fascinateit.com")
 MAIL_TO_RAW   = os.environ.get("MAIL_RECIPIENTS", "sandeepkumar.md@fascinateit.com,naveen.kumar@fascinateit.com,madhu.bk@fascinateit.com")   # comma-separated
 
