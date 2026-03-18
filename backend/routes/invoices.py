@@ -9,7 +9,7 @@ invoices_bp = Blueprint("invoices", __name__)
 def get_invoices():
     sql = """
         SELECT i.*, p.name as project_name, p.code as project_code,
-               c.client_name, c.address as client_address
+               c.client_name, c.address as client_address, c.gst_number as client_gst_number
         FROM invoices i
         LEFT JOIN projects p ON i.project_id = p.id
         LEFT JOIN clients c ON i.client_id = c.id
@@ -61,14 +61,16 @@ def update_invoice_status(invoice_id):
 
     if new_status == "cleared":
         payment_received_date = data.get("payment_received_date") or None
+        payment_received = data.get("payment_received")
+        payment_received = float(payment_received) if payment_received not in (None, "") else None
         execute(
-            "UPDATE invoices SET status = %s, payment_received_date = %s WHERE id = %s",
-            (new_status, payment_received_date, invoice_id)
+            "UPDATE invoices SET status = %s, payment_received_date = %s, payment_received = %s WHERE id = %s",
+            (new_status, payment_received_date, payment_received, invoice_id)
         )
     else:
-        # Reverting to pending – clear payment date
+        # Reverting to pending – clear payment fields
         execute(
-            "UPDATE invoices SET status = %s, payment_received_date = NULL WHERE id = %s",
+            "UPDATE invoices SET status = %s, payment_received_date = NULL, payment_received = NULL WHERE id = %s",
             (new_status, invoice_id)
         )
     return jsonify({"message": "Invoice status updated"})

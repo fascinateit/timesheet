@@ -526,6 +526,7 @@ function ProjectManagement({ readOnly = false, currentUser }) {
   const [saving, setSaving] = useState(false);
   const [clearModal, setClearModal] = useState(null);  // null | invoice object
   const [paymentDate, setPaymentDate] = useState("");
+  const [paymentAmount, setPaymentAmount] = useState("");
 
   // List Filters
   const [filterProject, setFilterProject] = useState("all");
@@ -544,6 +545,7 @@ function ProjectManagement({ readOnly = false, currentUser }) {
     if (inv.status === "pending") {
       // Show modal to collect payment received date
       setPaymentDate(new Date().toISOString().slice(0, 10));
+      setPaymentAmount(inv.amount || "");
       setClearModal(inv);
     } else {
       // Revert to pending immediately
@@ -557,8 +559,8 @@ function ProjectManagement({ readOnly = false, currentUser }) {
   async function handleConfirmCleared() {
     if (!clearModal) return;
     try {
-      await api.updateInvoiceStatus(clearModal.id, "cleared", paymentDate || null);
-      setClearModal(null); setPaymentDate("");
+      await api.updateInvoiceStatus(clearModal.id, "cleared", paymentDate || null, paymentAmount !== "" ? paymentAmount : null);
+      setClearModal(null); setPaymentDate(""); setPaymentAmount("");
       await load();
     } catch (e) { alert(e.message); }
   }
@@ -575,13 +577,13 @@ function ProjectManagement({ readOnly = false, currentUser }) {
     try {
       const parsed = JSON.parse(rawStr);
       if (Array.isArray(parsed)) return parsed.map(p => p.description).join(", ");
-    } catch {}
+    } catch { }
     return rawStr || "—";
   };
 
   function handleDownloadCSV(filteredInvoices) {
     if (!filteredInvoices.length) return alert("No invoices to export.");
-    const headers = ["Project Code", "Project Name", "Task / Deliverables", "Amount Raised (INR)", "Date Raised", "Payment Due Date", "Payment Received Date", "Clearance Status"];
+    const headers = ["Project Code", "Project Name", "Task / Deliverables", "Amount Raised (INR)", "Date Raised", "Payment Due Date", "Payment Received (INR)", "Payment Received Date", "Clearance Status"];
     const rows = filteredInvoices.map(inv => [
       inv.project_code,
       `"${inv.project_name.replace(/"/g, '""')}"`,
@@ -589,6 +591,7 @@ function ProjectManagement({ readOnly = false, currentUser }) {
       inv.amount,
       inv.raised_date,
       inv.payment_due_date || "",
+      inv.payment_received != null ? inv.payment_received : "",
       inv.payment_received_date || "",
       inv.status.toUpperCase()
     ]);
@@ -722,8 +725,11 @@ function ProjectManagement({ readOnly = false, currentUser }) {
                         <Td><div style={{ fontSize: 13, color: C.textMuted }}>{fmtD(inv.raised_date)}</div></Td>
                         <Td><div style={{ fontSize: 13, color: C.textMuted }}>{inv.payment_due_date ? fmtD(inv.payment_due_date) : "—"}</div></Td>
                         <Td>
-                          {inv.payment_received_date
-                            ? <div style={{ fontSize: 13, fontWeight: 600, color: C.green }}>{fmtD(inv.payment_received_date)}</div>
+                          {inv.payment_received_date || inv.payment_received
+                            ? <div>
+                              {inv.payment_received != null && <div style={{ fontSize: 13, fontWeight: 700, color: C.green }}>{fmt$(inv.payment_received)}</div>}
+                              {inv.payment_received_date && <div style={{ fontSize: 12, color: C.textMuted }}>{fmtD(inv.payment_received_date)}</div>}
+                            </div>
                             : <span style={{ fontSize: 12, color: C.textMuted }}>—</span>}
                         </Td>
                         <Td>
@@ -769,8 +775,15 @@ function ProjectManagement({ readOnly = false, currentUser }) {
               onChange={v => setPaymentDate(v)}
               required
             />
+            <Inp
+              label="Payment Received Amount (₹)"
+              type="number"
+              value={paymentAmount}
+              onChange={v => setPaymentAmount(v)}
+              placeholder={`Invoice amount: ${fmt$(clearModal?.amount)}`}
+            />
             <p style={{ margin: 0, fontSize: 12, color: C.textMuted }}>
-              Enter the date the payment was actually received. This will be recorded against the invoice.
+              Enter the date and amount actually received. These will be recorded against the invoice.
             </p>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
               <Btn variant="ghost" onClick={() => setClearModal(null)}>Cancel</Btn>
@@ -1318,13 +1331,14 @@ function InvoicePrintPreview({ invoice }) {
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 40 }}>
         <div style={{ width: "50%" }}>
           <h3 style={{ color: "#8E44AD", fontSize: 14, marginBottom: 8 }}>FASCINATE IT INDIA PRIVATE LIMITED</h3>
-          <p style={{ margin: "0 0 4px", fontSize: 13, color: "#555" }}>#20/7, HanuRadha Nilaya, 2nd Main, Near<br />Kateramma Temple, Kattigenahalli, Yelahanka<br />Bengaluru, Karnataka, India - 560064</p>
+          <p style={{ margin: "0 0 4px", fontSize: 13, color: "#000" }}>#20/7, HanuRadha Nilaya, 2nd Main, Near<br />Kateramma Temple, Kattigenahalli, Yelahanka<br />Bengaluru, Karnataka, India - 560064</p>
           <p style={{ margin: "0 0 16px", fontSize: 13, color: "#8E44AD" }}>GSTIN: 29AAFCF9723K1Z3</p>
 
           <h4 style={{ color: "#8E44AD", fontSize: 13, marginBottom: 4 }}>BILL TO</h4>
           <div style={{ borderTop: "2px solid #8E44AD", width: "100%", marginBottom: 8 }} />
-          <h3 style={{ color: "#3498DB", fontSize: 14, margin: "0 0 4px", textTransform: "uppercase" }}>{invoice.client_name || "CLIENT NAME"}</h3>
+          <h3 style={{ color: "#3498DB", fontSize: 14, margin: "0 0 8px", textTransform: "uppercase" }}>{invoice.client_name || "CLIENT NAME"}</h3>
           <p style={{ margin: "0 0 4px", fontSize: 13, color: "#000", whiteSpace: "pre-wrap" }}>{invoice.client_address || ""}</p>
+          {invoice.client_gst_number && <p style={{ margin: "0 0 16px", fontSize: 13, color: "#3498DB" }}>GSTIN: {invoice.client_gst_number}</p>}
         </div>
         <div style={{ width: "35%", textAlign: "center" }}>
           <div>
@@ -3407,35 +3421,35 @@ function CompensationDetails() {
   const [useEmployerPf, setUseEmployerPf] = useState(false);
 
   function round2(n) { return Math.round(n * 100) / 100; }
-  const fmt  = n => Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmt = n => Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtR = n => `₹ ${fmt(n)}`;
 
   const ctcVal = parseFloat(ctc) || 0;
   const computed = ctcVal > 0 ? (() => {
     // Basic = 50% of CTC (annual), converted to monthly
-    const basic_m   = round2(ctcVal * 0.50 / 12);
-    const hra_m     = round2(basic_m * 0.50);
-    const lta_m     = round2(basic_m * 0.10);
+    const basic_m = round2(ctcVal * 0.50 / 12);
+    const hra_m = round2(basic_m * 0.50);
+    const lta_m = round2(basic_m * 0.10);
     const transport = 1600;
-    const medical   = 1250;
-    const internet  = 1200;
+    const medical = 1250;
+    const internet = 1200;
 
     // VP: checkbox enables it; default = 10% of CTC; override with custom amount
     const defaultVp_a = round2(ctcVal * 0.10);
-    const vp_a      = useVp ? (vpAmount !== "" ? (parseFloat(vpAmount) || 0) : defaultVp_a) : 0;
+    const vp_a = useVp ? (vpAmount !== "" ? (parseFloat(vpAmount) || 0) : defaultVp_a) : 0;
 
     // PDA & Insurance (monthly, taken from special allowance pool)
-    const pda_m     = usePda ? (parseFloat(pdaAmount) || 0) : 0;
-    const ins_m     = useIns ? (parseFloat(insAmount) || 0) : 0;
+    const pda_m = usePda ? (parseFloat(pdaAmount) || 0) : 0;
+    const ins_m = useIns ? (parseFloat(insAmount) || 0) : 0;
 
     // Gratuity & employer PF are CTC components outside gross
-    const gratuity_a    = round2(basic_m * 12 * 0.0481);
+    const gratuity_a = round2(basic_m * 12 * 0.0481);
     const employer_pf_a = useEmployerPf ? round2(basic_m * 12 * 0.12) : 0;
     const employer_pf_m = round2(employer_pf_a / 12);
 
     // Gross = CTC minus the non-gross CTC components → ensures Total CTC = CTC input
-    const gross_a   = round2(ctcVal - gratuity_a - employer_pf_a - vp_a);
-    const gross_m   = round2(gross_a / 12);
+    const gross_a = round2(ctcVal - gratuity_a - employer_pf_a - vp_a);
+    const gross_m = round2(gross_a / 12);
 
     // Special = what's left after all fixed components (PDA/insurance carve out from it)
     const remaining = gross_m - basic_m - hra_m - lta_m - transport - medical - internet;
@@ -3443,10 +3457,12 @@ function CompensationDetails() {
 
     const gross_total_m = round2(basic_m + hra_m + lta_m + transport + medical + internet + special_m + pda_m + ins_m);
     const gross_total_a = round2(gross_total_m * 12);
-    const total_ctc     = round2(gross_total_a + employer_pf_a + gratuity_a + vp_a);
+    const total_ctc = round2(gross_total_a + employer_pf_a + gratuity_a + vp_a);
 
-    return { basic_m, hra_m, lta_m, transport, medical, internet, special_m, pda_m, ins_m,
-             gross_total_m, gross_total_a, employer_pf_m, employer_pf_a, gratuity_a, vp_a, defaultVp_a, total_ctc };
+    return {
+      basic_m, hra_m, lta_m, transport, medical, internet, special_m, pda_m, ins_m,
+      gross_total_m, gross_total_a, employer_pf_m, employer_pf_a, gratuity_a, vp_a, defaultVp_a, total_ctc
+    };
   })() : null;
 
   function downloadCompensation() {
@@ -3474,15 +3490,15 @@ function CompensationDetails() {
 <h3>Compensation Details — CTC: ₹ ${fmt(ctcVal)}</h3>
 <table>
   <tr><th class="label"></th><th class="num">Amount in INR/month</th><th class="num">Amount in INR/year</th><th class="note">Remarks</th></tr>
-  <tr><td class="label">Basic Salary</td><td class="num">${fmtR(c.basic_m)}</td><td class="num">${fmtR(round2(c.basic_m*12))}</td><td class="note">50% of CTC</td></tr>
-  <tr><td class="label">House Rent Allowance (HRA)</td><td class="num">${fmtR(c.hra_m)}</td><td class="num">${fmtR(round2(c.hra_m*12))}</td><td class="note">50% of Basic</td></tr>
-  <tr><td class="label">Special Allowance</td><td class="num">${fmtR(c.special_m)}</td><td class="num">${fmtR(round2(c.special_m*12))}</td><td class="note">Remaining - 4.81% Basic - VP</td></tr>
-  <tr><td class="label">Conveyance</td><td class="num">${fmtR(c.transport)}</td><td class="num">${fmtR(round2(c.transport*12))}</td><td class="note">Fixed</td></tr>
-  <tr><td class="label">Medical Allowance</td><td class="num">${fmtR(c.medical)}</td><td class="num">${fmtR(round2(c.medical*12))}</td><td class="note">Fixed</td></tr>
-  <tr><td class="label">Internet & Broadband Allowance</td><td class="num">${fmtR(c.internet)}</td><td class="num">${fmtR(round2(c.internet*12))}</td><td class="note">Fixed</td></tr>
-  <tr><td class="label">Leave Travel Allowance (LTA)</td><td class="num">${fmtR(c.lta_m)}</td><td class="num">${fmtR(round2(c.lta_m*12))}</td><td class="note">10% of Basic</td></tr>
-  <tr><td class="label">Professional Development Allowance</td><td class="num">${c.pda_m > 0 ? fmtR(c.pda_m) : '₹ 0.00'}</td><td class="num">${c.pda_m > 0 ? fmtR(round2(c.pda_m*12)) : ''}</td><td class="note">NA</td></tr>
-  <tr><td class="label">Insurance</td><td class="num">${c.ins_m > 0 ? fmtR(c.ins_m) : '₹ 0.00'}</td><td class="num">${c.ins_m > 0 ? fmtR(round2(c.ins_m*12)) : ''}</td><td class="note">NA</td></tr>
+  <tr><td class="label">Basic Salary</td><td class="num">${fmtR(c.basic_m)}</td><td class="num">${fmtR(round2(c.basic_m * 12))}</td><td class="note">50% of CTC</td></tr>
+  <tr><td class="label">House Rent Allowance (HRA)</td><td class="num">${fmtR(c.hra_m)}</td><td class="num">${fmtR(round2(c.hra_m * 12))}</td><td class="note">50% of Basic</td></tr>
+  <tr><td class="label">Special Allowance</td><td class="num">${fmtR(c.special_m)}</td><td class="num">${fmtR(round2(c.special_m * 12))}</td><td class="note">Remaining - 4.81% Basic - VP</td></tr>
+  <tr><td class="label">Conveyance</td><td class="num">${fmtR(c.transport)}</td><td class="num">${fmtR(round2(c.transport * 12))}</td><td class="note">Fixed</td></tr>
+  <tr><td class="label">Medical Allowance</td><td class="num">${fmtR(c.medical)}</td><td class="num">${fmtR(round2(c.medical * 12))}</td><td class="note">Fixed</td></tr>
+  <tr><td class="label">Internet & Broadband Allowance</td><td class="num">${fmtR(c.internet)}</td><td class="num">${fmtR(round2(c.internet * 12))}</td><td class="note">Fixed</td></tr>
+  <tr><td class="label">Leave Travel Allowance (LTA)</td><td class="num">${fmtR(c.lta_m)}</td><td class="num">${fmtR(round2(c.lta_m * 12))}</td><td class="note">10% of Basic</td></tr>
+  <tr><td class="label">Professional Development Allowance</td><td class="num">${c.pda_m > 0 ? fmtR(c.pda_m) : '₹ 0.00'}</td><td class="num">${c.pda_m > 0 ? fmtR(round2(c.pda_m * 12)) : ''}</td><td class="note">NA</td></tr>
+  <tr><td class="label">Insurance</td><td class="num">${c.ins_m > 0 ? fmtR(c.ins_m) : '₹ 0.00'}</td><td class="num">${c.ins_m > 0 ? fmtR(round2(c.ins_m * 12)) : ''}</td><td class="note">NA</td></tr>
   <tr class="total-row"><td class="label">Total Gross / Base Salary</td><td class="num">${fmtR(c.gross_total_m)}</td><td class="num">${fmtR(c.gross_total_a)}</td><td class="note">within this INR 200/month deducted as professional tax (if gross ≥ ₹25,000)</td></tr>
   <tr><td colspan="4" style="padding:4px;border:none;"></td></tr>
   <tr><td class="label">Provident Fund (Employer)</td><td class="num">${c.employer_pf_m > 0 ? fmtR(c.employer_pf_m) : '0.00'}</td><td class="num">${c.employer_pf_a > 0 ? fmtR(c.employer_pf_a) : '0.00'}</td><td class="note">NA</td></tr>
@@ -3501,15 +3517,15 @@ function CompensationDetails() {
 
   const inpStyle = { background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, width: "100%" };
   const rows = computed ? [
-    ["Basic Salary",                   computed.basic_m,      computed.basic_m * 12,      "50% of CTC"],
-    ["House Rent Allowance (HRA)",     computed.hra_m,        computed.hra_m * 12,        "50% of Basic"],
-    ["Special Allowance",              computed.special_m,    computed.special_m * 12,    "Remaining − 4.81% Basic − VP"],
-    ["Conveyance",                     computed.transport,    computed.transport * 12,    "Fixed"],
-    ["Medical Allowance",              computed.medical,      computed.medical * 12,      "Fixed"],
-    ["Internet & Broadband Allowance", computed.internet,     computed.internet * 12,     "Fixed"],
-    ["Leave Travel Allowance (LTA)",   computed.lta_m,        computed.lta_m * 12,        "10% of Basic"],
-    ["Professional Dev. Allowance",    computed.pda_m,        computed.pda_m * 12,        computed.pda_m > 0 ? "Custom" : "NA"],
-    ["Insurance",                      computed.ins_m,        computed.ins_m * 12,        computed.ins_m > 0 ? "Custom" : "NA"],
+    ["Basic Salary", computed.basic_m, computed.basic_m * 12, "50% of CTC"],
+    ["House Rent Allowance (HRA)", computed.hra_m, computed.hra_m * 12, "50% of Basic"],
+    ["Special Allowance", computed.special_m, computed.special_m * 12, "Remaining − 4.81% Basic − VP"],
+    ["Conveyance", computed.transport, computed.transport * 12, "Fixed"],
+    ["Medical Allowance", computed.medical, computed.medical * 12, "Fixed"],
+    ["Internet & Broadband Allowance", computed.internet, computed.internet * 12, "Fixed"],
+    ["Leave Travel Allowance (LTA)", computed.lta_m, computed.lta_m * 12, "10% of Basic"],
+    ["Professional Dev. Allowance", computed.pda_m, computed.pda_m * 12, computed.pda_m > 0 ? "Custom" : "NA"],
+    ["Insurance", computed.ins_m, computed.ins_m * 12, computed.ins_m > 0 ? "Custom" : "NA"],
   ] : [];
 
   return (
@@ -4514,45 +4530,47 @@ function SubscriptionManagement() {
 // ONBOARD EMPLOYEE
 // ════════════════════════════════════════════════════════
 const ONBOARD_DOC_TYPES = [
-  { key: "photo",          label: "Employee Photo",               required: true },
-  { key: "aadhar",         label: "Aadhar Card",                  required: true },
-  { key: "pan",            label: "PAN Card",                     required: true },
-  { key: "address_proof",  label: "Address Proof (Passport / DL)", required: true },
-  { key: "education",      label: "Educational Certificates",     required: true },
-  { key: "relieving",      label: "Relieving / Experience Letter", required: false },
-  { key: "bank",           label: "Bank Proof (Cheque / Passbook)", required: true },
-  { key: "offer_letter",   label: "Signed Offer Letter",          required: true },
-  { key: "bgv_form",       label: "Background Verification Form", required: false },
-  { key: "other",          label: "Other Document",               required: false },
+  { key: "photo", label: "Employee Photo", required: true },
+  { key: "aadhar", label: "Aadhar Card", required: true },
+  { key: "pan", label: "PAN Card", required: true },
+  { key: "address_proof", label: "Address Proof (Passport / DL)", required: true },
+  { key: "education", label: "Educational Certificates", required: true },
+  { key: "relieving", label: "Relieving / Experience Letter", required: false },
+  { key: "bank", label: "Bank Proof (Cheque / Passbook)", required: true },
+  { key: "offer_letter", label: "Signed Offer Letter", required: true },
+  { key: "bgv_form", label: "Background Verification Form", required: false },
+  { key: "other", label: "Other Document", required: false },
 ];
 
 const ONBOARD_STATUS_COLORS = {
-  pending:     C.amber,
+  pending: C.amber,
   in_progress: C.accent,
-  completed:   C.green,
+  completed: C.green,
 };
 
 function OnboardEmployee() {
-  const [records, setRecords]   = useState([]);
+  const [records, setRecords] = useState([]);
   const [employees, setEmployees] = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [err, setErr]           = useState("");
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
   const [spConfigured, setSpConfigured] = useState(null);
 
   // view = null | "list" | "form" | "detail"
-  const [view, setView]         = useState("list");
+  const [view, setView] = useState("list");
   const [selected, setSelected] = useState(null);   // onboarding record
-  const [detail, setDetail]     = useState(null);   // full record with docs
+  const [detail, setDetail] = useState(null);   // full record with docs
 
   // form state
-  const emptyForm = { employee_id: "", joining_date: "", status: "pending",
+  const emptyForm = {
+    employee_id: "", joining_date: "", status: "pending",
     laptop_issued: false, id_card_issued: false, email_created: false,
-    system_access: false, induction_done: false, notes: "" };
-  const [form, setForm]         = useState(emptyForm);
-  const [saving, setSaving]     = useState(false);
+    system_access: false, induction_done: false, notes: ""
+  };
+  const [form, setForm] = useState(emptyForm);
+  const [saving, setSaving] = useState(false);
 
   // upload state per doc_type
-  const [uploads, setUploads]   = useState({});   // { doc_type: File | null }
+  const [uploads, setUploads] = useState({});   // { doc_type: File | null }
   const [uploading, setUploading] = useState({}); // { doc_type: bool }
 
   const load = useCallback(async () => {
@@ -4560,7 +4578,7 @@ function OnboardEmployee() {
     try {
       const [recs, emps] = await Promise.all([api.getOnboardingRecords(), api.getEmployees()]);
       setRecords(recs); setEmployees(emps);
-      try { const s = await api.getSpStatus(); setSpConfigured(s.configured); } catch {}
+      try { const s = await api.getSpStatus(); setSpConfigured(s.configured); } catch { }
     } catch (e) { setErr(e.message); }
     finally { setLoading(false); }
   }, []);
@@ -4597,7 +4615,7 @@ function OnboardEmployee() {
     setSaving(true);
     try {
       if (selected) await api.updateOnboardingRecord(selected.id, form);
-      else          await api.createOnboardingRecord(form);
+      else await api.createOnboardingRecord(form);
       await load(); setView("list");
     } catch (e) { alert(e.message); }
     finally { setSaving(false); }
@@ -4659,7 +4677,7 @@ function OnboardEmployee() {
     const emp = employees.find(e => detail && e.id === detail.employee_id);
     const docs = detail?.documents || [];
     const done = completedDocs(docs);
-    const pct  = detail ? progress(docs) : 0;
+    const pct = detail ? progress(docs) : 0;
 
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
@@ -4679,7 +4697,7 @@ function OnboardEmployee() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 12 }}>
               {[
                 { label: "Employee ID", val: detail.custom_employee_id || "—" },
-                { label: "Email",       val: detail.email || "—" },
+                { label: "Email", val: detail.email || "—" },
                 { label: "Joining Date", val: detail.joining_date ? fmtD(detail.joining_date) : "—" },
               ].map(i => (
                 <Card key={i.label} style={{ padding: "12px 16px" }}>
@@ -4694,11 +4712,11 @@ function OnboardEmployee() {
               <h4 style={{ margin: "0 0 14px", fontSize: 13, fontWeight: 700, color: C.text }}>IT & HR Checklist</h4>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 10 }}>
                 {[
-                  ["Laptop Issued",    "laptop_issued"],
-                  ["ID Card Issued",   "id_card_issued"],
-                  ["Email Created",    "email_created"],
-                  ["System Access",    "system_access"],
-                  ["Induction Done",   "induction_done"],
+                  ["Laptop Issued", "laptop_issued"],
+                  ["ID Card Issued", "id_card_issued"],
+                  ["Email Created", "email_created"],
+                  ["System Access", "system_access"],
+                  ["Induction Done", "induction_done"],
                 ].map(([lbl, key]) => (
                   <div key={key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ fontSize: 16 }}>{detail[key] ? "✅" : "⬜"}</span>
@@ -4834,11 +4852,11 @@ function OnboardEmployee() {
           <h4 style={{ margin: "0 0 14px", fontSize: 13, fontWeight: 700, color: C.text }}>IT & HR Checklist</h4>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             {[
-              ["Laptop Issued",   "laptop_issued"],
-              ["ID Card Issued",  "id_card_issued"],
-              ["Email Created",   "email_created"],
-              ["System Access",   "system_access"],
-              ["Induction Done",  "induction_done"],
+              ["Laptop Issued", "laptop_issued"],
+              ["ID Card Issued", "id_card_issued"],
+              ["Email Created", "email_created"],
+              ["System Access", "system_access"],
+              ["Induction Done", "induction_done"],
             ].map(([lbl, key]) => (
               <label key={key} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "10px 12px", background: C.surface, borderRadius: 8 }}>
                 <input type="checkbox" checked={!!form[key]}
