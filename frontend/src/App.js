@@ -1487,10 +1487,7 @@ function LoginPage({ onLogin }) {
       }} />
       <div style={{ width: "100%", maxWidth: 420, position: "relative", zIndex: 1 }}>
         <div style={{ textAlign: "center", marginBottom: 32 }}>
-          <img src="/image.png" alt="ProjectPulse Logo" style={{
-            width: 120, height: 80, marginBottom: 8,
-            objectFit: "contain"
-          }} />
+          <img src="/image.png" alt="ProjectPulse Logo" style={{ width: 120, height: 80, marginBottom: 8, objectFit: "contain" }} />
         </div>
         <Card style={{ padding: 32 }}>
           <h2 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 700, color: C.text }}>Welcome back</h2>
@@ -2846,13 +2843,20 @@ function EmployeeHome({ currentUser }) {
   const [tab, setTab] = useState("profile");
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <Card style={{ background: `linear-gradient(135deg,${C.accentDim}22,${C.card})`, border: `1px solid ${C.accent}33` }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
-          <Avatar initials={currentUser.avatar || mkAvi(currentUser.emp_name || "")} color={C.accent} size={54} />
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 20, fontWeight: 800, color: C.text }}>Welcome, {(currentUser.emp_name || currentUser.username).split(" ")[0]} 👋</div>
-            <div style={{ fontSize: 13, color: C.textMuted, marginTop: 3 }}>Employee Portal</div>
-            <div style={{ marginTop: 8 }}><Badge color={C.green}>{currentUser.role === "manager" ? "Manager" : currentUser.role === "admin" ? "Admin" : currentUser.role === "intras" ? "Intern" : "Employee"}</Badge></div>
+      <Card style={{ padding: 0, overflow: "hidden", border: `1px solid ${C.accent}33`, position: "relative", height: 225 }}>
+        <img src="/banner.jpg" alt="Fascinate IT" style={{ width: "100%", height: "100%", display: "block", objectFit: "cover", objectPosition: "bottom" }} />
+        <div style={{
+          position: "absolute", inset: 0,
+          background: "linear-gradient(90deg, rgba(10,14,26,0.88) 0%, rgba(10,14,26,0.65) 50%, rgba(10,14,26,0.15) 100%)",
+          display: "flex", alignItems: "center", padding: "0 28px"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
+            <Avatar initials={currentUser.avatar || mkAvi(currentUser.emp_name || "")} color={C.accent} size={54} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: "#ffffff" }}>Welcome, {(currentUser.emp_name || currentUser.username).split(" ")[0]} 👋</div>
+              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.65)", marginTop: 3 }}>Employee Portal</div>
+              <div style={{ marginTop: 8 }}><Badge color={C.green}>{currentUser.role === "manager" ? "Manager" : currentUser.role === "admin" ? "Admin" : currentUser.role === "intras" ? "Intern" : "Employee"}</Badge></div>
+            </div>
           </div>
         </div>
       </Card>
@@ -3458,22 +3462,22 @@ function CompensationDetails() {
 
   const ctcVal = parseFloat(ctc) || 0;
   const computed = ctcVal > 0 ? (() => {
-    const basic_m   = round2(ctcVal * 0.50 / 12);
-    const hra_m     = round2(basic_m * 0.50);
-    const lta_m     = round2(basic_m * 0.10);
+    const basic_m = round2(ctcVal * 0.50 / 12);
+    const hra_m = round2(basic_m * 0.50);
+    const lta_m = round2(basic_m * 0.10);
     const transport = conveyanceAmount !== "" ? (parseFloat(conveyanceAmount) || 0) : 1600;
-    const medical   = medicalAmount !== ""   ? (parseFloat(medicalAmount)   || 0) : 1250;
-    const internet  = internetAmount !== ""  ? (parseFloat(internetAmount)  || 0) : 1200;
+    const medical = medicalAmount !== "" ? (parseFloat(medicalAmount) || 0) : 1250;
+    const internet = internetAmount !== "" ? (parseFloat(internetAmount) || 0) : 1200;
 
     const pda_m = usePda ? (parseFloat(pdaAmount) || 0) : 0;
     const ins_m = useIns ? (parseFloat(insAmount) || 0) : 0;
 
-    const gratuity_a    = round2(basic_m * 12 * 0.0481);
+    const gratuity_a = round2(basic_m * 12 * 0.0481);
     const employer_pf_a = useEmployerPf ? round2(basic_m * 12 * 0.12) : 0;
     const employer_pf_m = round2(employer_pf_a / 12);
 
     const defaultVp_a = round2(ctcVal * 0.05);
-    const vp_a_input  = useVp ? (vpAmount !== "" ? (parseFloat(vpAmount) || 0) : defaultVp_a) : 0;
+    const vp_a_input = useVp ? (vpAmount !== "" ? (parseFloat(vpAmount) || 0) : defaultVp_a) : 0;
 
     // gross_a = CTC minus retirement and VP — special absorbs the remainder
     const gross_a = round2(ctcVal - gratuity_a - employer_pf_a - vp_a_input);
@@ -3503,14 +3507,14 @@ function CompensationDetails() {
     const n = v => Number(v).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const dash = '<span style="letter-spacing:2px">-</span>';
     const bouquetRows = [
-      [1, "House Rent Allowance (HRA)",          n(c.hra_m),      n(round2(c.hra_m * 12))],
-      [2, "Special Allowance",                    n(c.special_m),  n(round2(c.special_m * 12))],
-      [3, "Conveyance",                           n(c.transport),  n(round2(c.transport * 12))],
-      [4, "Medical Allowance",                    n(c.medical),    n(round2(c.medical * 12))],
-      [5, "Internet &amp; Broadband Allowance",   n(c.internet),   n(round2(c.internet * 12))],
-      [6, "Leave Travel Allowance (LTA)",         n(c.lta_m),      n(round2(c.lta_m * 12))],
-      [7, "Professional Development Allowance",   c.pda_m > 0 ? n(c.pda_m) : dash, c.pda_m > 0 ? n(round2(c.pda_m * 12)) : dash],
-      [8, "Insurance",                            c.ins_m > 0 ? n(c.ins_m) : dash, c.ins_m > 0 ? n(round2(c.ins_m * 12)) : dash],
+      [1, "House Rent Allowance (HRA)", n(c.hra_m), n(round2(c.hra_m * 12))],
+      [2, "Special Allowance", n(c.special_m), n(round2(c.special_m * 12))],
+      [3, "Conveyance", n(c.transport), n(round2(c.transport * 12))],
+      [4, "Medical Allowance", n(c.medical), n(round2(c.medical * 12))],
+      [5, "Internet &amp; Broadband Allowance", n(c.internet), n(round2(c.internet * 12))],
+      [6, "Leave Travel Allowance (LTA)", n(c.lta_m), n(round2(c.lta_m * 12))],
+      [7, "Professional Development Allowance", c.pda_m > 0 ? n(c.pda_m) : dash, c.pda_m > 0 ? n(round2(c.pda_m * 12)) : dash],
+      [8, "Insurance", c.ins_m > 0 ? n(c.ins_m) : dash, c.ins_m > 0 ? n(round2(c.ins_m * 12)) : dash],
     ].map(([sl, label, mo, yr]) => `<tr><td class="sl">${sl}</td><td class="label">${label}</td><td class="num">${mo}</td><td class="num">${yr}</td></tr>`).join("");
 
     const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
@@ -5092,8 +5096,8 @@ function AttendanceClaims({ currentUser }) {
   const [tab, setTab] = useState("timesheets");
   const TABS = [
     { id: "timesheets", label: "Timesheets", icon: "◷" },
-    { id: "leaves",     label: "Leave",      icon: "◌" },
-    { id: "expenses",   label: "Expenses",   icon: "💳" },
+    { id: "leaves", label: "Leave", icon: "◌" },
+    { id: "expenses", label: "Expenses", icon: "💳" },
   ];
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
@@ -5115,8 +5119,8 @@ function AttendanceClaims({ currentUser }) {
         ))}
       </div>
       {tab === "timesheets" && <Timesheets currentUser={currentUser} viewOnly={false} />}
-      {tab === "leaves"     && <Leaves currentUser={currentUser} viewOnly={false} />}
-      {tab === "expenses"   && <Expenses currentUser={currentUser} viewOnly={false} />}
+      {tab === "leaves" && <Leaves currentUser={currentUser} viewOnly={false} />}
+      {tab === "expenses" && <Expenses currentUser={currentUser} viewOnly={false} />}
     </div>
   );
 }
@@ -5189,7 +5193,7 @@ export default function App() {
     localStorage.setItem("pp_token", data.access_token);
     localStorage.setItem("pp_user", JSON.stringify(data.user));
     setCurrentUser(data.user);
-    setPage(data.user.role === "admin" ? "dashboard" : "employee-home");
+    setPage(data.user.role === "admin" ? "dashboard" : data.user.role === "manager" ? "mywork" : "employee-home");
   }
 
   function handleLogout() {
@@ -5289,10 +5293,9 @@ export default function App() {
             }}><span style={{ fontSize: 14 }}>👤</span><span>My Work</span></button>
           )}
           {ADMIN_NAV.filter(n =>
-            !(n.id === "useraccounts" && isManager) &&
-            !(n.id === "payslips" && isManager) &&
-            !(n.id === "project_management" && isManager) &&
-            !(n.id === "compensation" && isManager)
+            isManager
+              ? ["attendance", "documents", "resumes"].includes(n.id)
+              : true
           ).map(n => {
             const active = page === n.id;
             return (<button key={n.id} onClick={() => nav(n.id)} style={{
