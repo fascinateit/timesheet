@@ -1477,55 +1477,107 @@ function LoginPage({ onLogin }) {
   }
 
   return (
-    <div style={{
-      minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center",
-      justifyContent: "center", fontFamily: "'DM Sans','Segoe UI',sans-serif", padding: 20, position: "relative"
-    }}>
-      <div style={{
-        position: "fixed", inset: 0, backgroundImage: `radial-gradient(${C.border} 1px,transparent 1px)`,
-        backgroundSize: "32px 32px", opacity: .5, pointerEvents: "none"
+    <div style={{ minHeight: "100vh", fontFamily: "'DM Sans','Segoe UI',sans-serif", position: "relative", overflow: "hidden" }}>
+
+      {/* Full-page banner background */}
+      <img src="/banner.jpg" alt="" style={{
+        position: "fixed", inset: 0, width: "100%", height: "100%",
+        objectFit: "fill", objectPosition: "center", zIndex: 0
       }} />
-      <div style={{ width: "100%", maxWidth: 420, position: "relative", zIndex: 1 }}>
-        <div style={{ textAlign: "center", marginBottom: 32 }}>
-          <img src="/image.png" alt="ProjectPulse Logo" style={{ width: 120, height: 80, marginBottom: 8, objectFit: "contain" }} />
-        </div>
-        <Card style={{ padding: 32 }}>
-          <h2 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 700, color: C.text }}>Welcome back</h2>
-          <p style={{ margin: "0 0 28px", fontSize: 13, color: C.textMuted }}>Sign in to your workspace</p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <Inp label="Username" value={username} onChange={setUsername} placeholder="Enter username" required />
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <label style={{ fontSize: 12, color: C.textDim, fontWeight: 600, letterSpacing: .4 }}>Password <span style={{ color: C.red }}>*</span></label>
-              <div style={{ position: "relative" }}>
-                <input type={showPass ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && handleSubmit()} placeholder="Enter password"
-                  style={{
-                    width: "100%", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8,
-                    color: C.text, padding: "8px 40px 8px 12px", fontSize: 13, outline: "none", boxSizing: "border-box"
-                  }} />
-                <button onClick={() => setShowPass(v => !v)} style={{
-                  position: "absolute", right: 10, top: "50%",
-                  transform: "translateY(-50%)", background: "none", border: "none", color: C.textMuted, cursor: "pointer", fontSize: 15
-                }}>
-                  {showPass ? "🙈" : "👁"}
-                </button>
-              </div>
-            </div>
-            {error && <div style={{
-              background: C.red + "18", border: `1px solid ${C.red}44`, borderRadius: 8,
-              padding: "10px 14px", fontSize: 12, color: C.red
-            }}>⚠ {error}</div>}
-            <button onClick={handleSubmit} disabled={loading} style={{
-              background: `linear-gradient(135deg,${C.accent},${C.accentDim})`, color: "#fff", border: "none",
-              borderRadius: 10, padding: "12px", fontSize: 14, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer",
-              marginTop: 4, opacity: loading ? .7 : 1, boxShadow: `0 4px 24px ${C.accent}33`
-            }}>
-              {loading ? "Authenticating…" : "Sign In →"}
-            </button>
+      {/* Dark overlay */}
+      <div style={{
+        position: "fixed", inset: 0, zIndex: 1,
+        background: "linear-gradient(135deg, rgba(10,14,26,0.88) 0%, rgba(10,14,26,0.72) 50%, rgba(20,10,40,0.82) 100%)"
+      }} />
+      {/* Ambient glow */}
+      <div style={{ position: "fixed", inset: 0, zIndex: 1, pointerEvents: "none" }}>
+        <div style={{ position: "absolute", top: "10%", left: "5%", width: 400, height: 400, borderRadius: "50%", background: `radial-gradient(circle, ${C.accent}22 0%, transparent 70%)` }} />
+        <div style={{ position: "absolute", bottom: "10%", right: "5%", width: 500, height: 500, borderRadius: "50%", background: "radial-gradient(circle, #7c3aed22 0%, transparent 70%)" }} />
+      </div>
+
+      {/* Content */}
+      <div style={{
+        position: "relative", zIndex: 2,
+        minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "32px 20px"
+      }}>
+        <div style={{ width: "100%", maxWidth: 400 }}>
+
+          {/* Logo + heading */}
+          <div style={{ textAlign: "center", marginBottom: 32 }}>
+            <img src="/image.png" alt="Logo" style={{ objectFit: "contain", marginBottom: 14, filter: "drop-shadow(0 4px 16px rgba(59,130,246,0.4))" }} />
+            <div style={{ fontSize: 24, fontWeight: 800, color: "#fff", letterSpacing: 0.3, textShadow: "0 2px 12px rgba(0,0,0,0.5)" }}>Welcome back</div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", marginTop: 6 }}>Sign in to your Fascinate IT workspace</div>
           </div>
 
+          {/* Glass card */}
+          <div style={{
+            background: "rgba(22,27,42,0.78)",
+            backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
+            border: `1px solid rgba(255,255,255,0.10)`,
+            borderRadius: 18, padding: "32px 28px",
+            boxShadow: `0 8px 48px rgba(0,0,0,0.5), 0 0 0 1px ${C.accent}22`
+          }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-        </Card>
+              {/* Username */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <label style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", fontWeight: 600, letterSpacing: 0.5 }}>USERNAME</label>
+                <div style={{ position: "relative" }}>
+                  <span style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)", fontSize: 14, color: "rgba(255,255,255,0.35)" }}>👤</span>
+                  <input value={username} onChange={e => setUsername(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && handleSubmit()}
+                    placeholder="Enter your username"
+                    style={{
+                      width: "100%", background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)",
+                      borderRadius: 10, color: "#fff", padding: "11px 12px 11px 38px", fontSize: 13,
+                      outline: "none", boxSizing: "border-box", transition: "border-color 0.2s"
+                    }} />
+                </div>
+              </div>
+
+              {/* Password */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <label style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", fontWeight: 600, letterSpacing: 0.5 }}>PASSWORD</label>
+                <div style={{ position: "relative" }}>
+                  <span style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)", fontSize: 14, color: "rgba(255,255,255,0.35)" }}>🔒</span>
+                  <input type={showPass ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && handleSubmit()} placeholder="Enter your password"
+                    style={{
+                      width: "100%", background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)",
+                      borderRadius: 10, color: "#fff", padding: "11px 40px 11px 38px", fontSize: 13,
+                      outline: "none", boxSizing: "border-box"
+                    }} />
+                  <button onClick={() => setShowPass(v => !v)} style={{
+                    position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)",
+                    background: "none", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: 15
+                  }}>{showPass ? "🙈" : "👁"}</button>
+                </div>
+              </div>
+
+              {/* Error */}
+              {error && (
+                <div style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.4)", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#fca5a5" }}>
+                  ⚠ {error}
+                </div>
+              )}
+
+              {/* Submit */}
+              <button onClick={handleSubmit} disabled={loading} style={{
+                background: `linear-gradient(135deg, ${C.accent}, ${C.accentDim})`,
+                color: "#fff", border: "none", borderRadius: 10, padding: "13px",
+                fontSize: 14, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer",
+                marginTop: 4, opacity: loading ? 0.75 : 1,
+                boxShadow: `0 4px 28px ${C.accent}55`, letterSpacing: 0.4
+              }}>
+                {loading ? "Authenticating…" : "Sign In →"}
+              </button>
+            </div>
+          </div>
+
+          <div style={{ textAlign: "center", marginTop: 22, fontSize: 11, color: "rgba(255,255,255,0.3)" }}>
+            © {new Date().getFullYear()} Fascinate IT. All rights reserved.
+          </div>
+        </div>
       </div>
     </div>
   );
