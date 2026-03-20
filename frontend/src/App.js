@@ -5108,6 +5108,237 @@ function OnboardEmployee() {
 }
 
 // ════════════════════════════════════════════════════════
+// INFRA / ASSETS
+// ════════════════════════════════════════════════════════
+const ASSET_TYPE_ICON = {
+  laptop: "💻", headphone: "🎧", headphones: "🎧", monitor: "🖥", keyboard: "⌨️",
+  mouse: "🖱", phone: "📱", tablet: "📱", printer: "🖨", chair: "🪑",
+  desk: "🪑", server: "🗄", router: "📡", other: "📦"
+};
+function assetIcon(t) {
+  if (!t) return "📦";
+  const key = t.toLowerCase();
+  for (const k of Object.keys(ASSET_TYPE_ICON)) { if (key.includes(k)) return ASSET_TYPE_ICON[k]; }
+  return "📦";
+}
+const ASSET_STATUS_COLOR = {
+  available: C.green, assigned: C.accent, maintenance: C.amber, retired: C.textMuted || "#64748b"
+};
+
+function AdminAssets() {
+  const [assets, setAssets] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState(null);
+  const [modal, setModal] = useState(null); // null | "add" | "edit" | "assign"
+  const [editing, setEditing] = useState(null);
+  const [filterStatus, setFilterStatus] = useState("");
+  const [filterType, setFilterType] = useState("");
+  const [search, setSearch] = useState("");
+
+  const EMPTY_FORM = { asset_tag: "", asset_type: "", brand: "", model: "", serial_number: "", purchase_date: "", purchase_cost: "", warranty_expiry: "", status: "available", notes: "" };
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [assignForm, setAssignForm] = useState({ employee_id: "", assigned_date: "" });
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [a, e] = await Promise.all([api.getAssets(), api.getEmployees()]);
+      setAssets(a);
+      setEmployees(e);
+    } catch (e) { setErr(e.message); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  function openAdd() { setForm(EMPTY_FORM); setEditing(null); setModal("add"); }
+  function openEdit(a) { setEditing(a); setForm({ ...a, purchase_cost: a.purchase_cost ?? "", purchase_date: a.purchase_date?.split("T")[0] || "", warranty_expiry: a.warranty_expiry?.split("T")[0] || "" }); setModal("edit"); }
+  function openAssign(a) { setEditing(a); setAssignForm({ employee_id: a.employee_id ? String(a.employee_id) : "", assigned_date: a.assigned_date?.split("T")[0] || "" }); setModal("assign"); }
+
+  async function handleSave() {
+    try {
+      if (modal === "add") await api.createAsset(form);
+      else await api.updateAsset(editing.id, form);
+      setModal(null);
+      load();
+    } catch (e) { alert(e.message); }
+  }
+
+  async function handleAssign() {
+    try {
+      await api.assignAsset(editing.id, { employee_id: assignForm.employee_id || null, assigned_date: assignForm.assigned_date || null });
+      setModal(null);
+      load();
+    } catch (e) { alert(e.message); }
+  }
+
+  async function handleDelete(a) {
+    if (!window.confirm(`Delete asset "${a.asset_tag}"?`)) return;
+    try { await api.deleteAsset(a.id); load(); } catch (e) { alert(e.message); }
+  }
+
+  const filtered = assets.filter(a => {
+    if (filterStatus && a.status !== filterStatus) return false;
+    if (filterType && !a.asset_type?.toLowerCase().includes(filterType.toLowerCase())) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      return (a.asset_tag || "").toLowerCase().includes(q) ||
+        (a.brand || "").toLowerCase().includes(q) ||
+        (a.model || "").toLowerCase().includes(q) ||
+        (a.employee_name || "").toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  const statCounts = { available: 0, assigned: 0, maintenance: 0, retired: 0 };
+  assets.forEach(a => { if (statCounts[a.status] !== undefined) statCounts[a.status]++; });
+
+  const inputStyle = { background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "8px 12px", fontSize: 13, outline: "none", width: "100%" };
+
+  if (loading) return <div style={{ color: C.textMuted, padding: 40, textAlign: "center" }}>Loading…</div>;
+  if (err) return <div style={{ color: C.red, padding: 40 }}>{err}</div>;
+
+  return (
+    <div style={{ padding: "0 0 40px" }}>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: C.text }}>🖥 Infra / Assets</h2>
+          <p style={{ margin: "4px 0 0", fontSize: 13, color: C.textMuted }}>Track company assets assigned to employees</p>
+        </div>
+        <Btn onClick={openAdd}>+ Add Asset</Btn>
+      </div>
+
+      {/* Stat cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
+        {Object.entries(statCounts).map(([s, n]) => (
+          <Card key={s} style={{ padding: "16px 20px", cursor: "pointer", border: filterStatus === s ? `1px solid ${ASSET_STATUS_COLOR[s]}` : `1px solid ${C.border}` }} onClick={() => setFilterStatus(filterStatus === s ? "" : s)}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: ASSET_STATUS_COLOR[s] }}>{n}</div>
+            <div style={{ fontSize: 12, color: C.textMuted, textTransform: "capitalize", marginTop: 2 }}>{s}</div>
+          </Card>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
+        <input placeholder="Search tag / brand / employee…" value={search} onChange={e => setSearch(e.target.value)} style={{ ...inputStyle, width: 240 }} />
+        <input placeholder="Filter by type…" value={filterType} onChange={e => setFilterType(e.target.value)} style={{ ...inputStyle, width: 160 }} />
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ ...inputStyle, width: 150 }}>
+          <option value="">All Statuses</option>
+          {["available", "assigned", "maintenance", "retired"].map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+        </select>
+      </div>
+
+      {/* Table */}
+      <Card style={{ padding: 0, overflow: "hidden" }}>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: C.surface }}>
+                {["Type", "Asset Tag", "Brand / Model", "Serial #", "Purchase", "Warranty", "Status", "Assigned To", ""].map(h => (
+                  <th key={h} style={{ padding: "12px 14px", textAlign: "left", color: C.textMuted, fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: .5, whiteSpace: "nowrap", borderBottom: `1px solid ${C.border}` }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 ? (
+                <tr><td colSpan={9} style={{ padding: 32, textAlign: "center", color: C.textMuted }}>No assets found.</td></tr>
+              ) : filtered.map(a => (
+                <tr key={a.id} style={{ borderBottom: `1px solid ${C.border}55` }}
+                  onMouseEnter={e => e.currentTarget.style.background = C.surface + "88"}
+                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                  <td style={{ padding: "12px 14px", fontSize: 20 }}>{assetIcon(a.asset_type)}</td>
+                  <td style={{ padding: "12px 14px", fontWeight: 600, color: C.text, whiteSpace: "nowrap" }}>{a.asset_tag}</td>
+                  <td style={{ padding: "12px 14px", color: C.textDim }}>
+                    <div>{a.brand || "—"}</div>
+                    <div style={{ fontSize: 12, color: C.textMuted }}>{a.model || ""}</div>
+                  </td>
+                  <td style={{ padding: "12px 14px", color: C.textMuted, fontFamily: "monospace", fontSize: 12 }}>{a.serial_number || "—"}</td>
+                  <td style={{ padding: "12px 14px", color: C.textMuted, whiteSpace: "nowrap" }}>
+                    <div>{a.purchase_date ? a.purchase_date.split("T")[0] : "—"}</div>
+                    <div style={{ fontSize: 12 }}>{a.purchase_cost != null ? `₹${Number(a.purchase_cost).toLocaleString("en-IN")}` : ""}</div>
+                  </td>
+                  <td style={{ padding: "12px 14px", color: C.textMuted, whiteSpace: "nowrap" }}>{a.warranty_expiry ? a.warranty_expiry.split("T")[0] : "—"}</td>
+                  <td style={{ padding: "12px 14px" }}>
+                    <Badge color={ASSET_STATUS_COLOR[a.status] || C.textMuted}>{a.status}</Badge>
+                  </td>
+                  <td style={{ padding: "12px 14px", color: C.textDim }}>
+                    {a.employee_name ? (
+                      <div>
+                        <div style={{ fontWeight: 500 }}>{a.employee_name}</div>
+                        <div style={{ fontSize: 12, color: C.textMuted }}>{a.assigned_date ? a.assigned_date.split("T")[0] : ""}</div>
+                      </div>
+                    ) : <span style={{ color: C.textMuted }}>—</span>}
+                  </td>
+                  <td style={{ padding: "12px 14px", whiteSpace: "nowrap" }}>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <Btn small variant="ghost" onClick={() => openAssign(a)}>Assign</Btn>
+                      <Btn small variant="ghost" onClick={() => openEdit(a)}>Edit</Btn>
+                      <Btn small variant="danger" onClick={() => handleDelete(a)}>✕</Btn>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* Add / Edit Modal */}
+      {(modal === "add" || modal === "edit") && (
+        <Modal title={modal === "add" ? "Add Asset" : "Edit Asset"} onClose={() => setModal(null)} maxWidth={560}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            <Inp label="Asset Tag *" value={form.asset_tag} onChange={v => setForm(f => ({ ...f, asset_tag: v }))} />
+            <Inp label="Asset Type *" value={form.asset_type} onChange={v => setForm(f => ({ ...f, asset_type: v }))} placeholder="Laptop, Headphone, Monitor…" />
+            <Inp label="Brand" value={form.brand} onChange={v => setForm(f => ({ ...f, brand: v }))} />
+            <Inp label="Model" value={form.model} onChange={v => setForm(f => ({ ...f, model: v }))} />
+            <Inp label="Serial Number" value={form.serial_number} onChange={v => setForm(f => ({ ...f, serial_number: v }))} />
+            <Inp label="Purchase Date" type="date" value={form.purchase_date} onChange={v => setForm(f => ({ ...f, purchase_date: v }))} />
+            <Inp label="Purchase Cost (₹)" type="number" value={form.purchase_cost} onChange={v => setForm(f => ({ ...f, purchase_cost: v }))} />
+            <Inp label="Warranty Expiry" type="date" value={form.warranty_expiry} onChange={v => setForm(f => ({ ...f, warranty_expiry: v }))} />
+            <Inp label="Status" value={form.status} onChange={v => setForm(f => ({ ...f, status: v }))} options={["available", "assigned", "maintenance", "retired"].map(s => ({ value: s, label: s.charAt(0).toUpperCase() + s.slice(1) }))} />
+          </div>
+          <div style={{ marginTop: 14 }}>
+            <label style={{ fontSize: 12, color: C.textMuted, fontWeight: 600, display: "block", marginBottom: 6 }}>Notes</label>
+            <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={3} style={{ ...inputStyle, resize: "vertical" }} />
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 20 }}>
+            <Btn variant="ghost" onClick={() => setModal(null)}>Cancel</Btn>
+            <Btn onClick={handleSave}>{modal === "add" ? "Create" : "Save"}</Btn>
+          </div>
+        </Modal>
+      )}
+
+      {/* Assign Modal */}
+      {modal === "assign" && editing && (
+        <Modal title={`Assign – ${editing.asset_tag}`} onClose={() => setModal(null)} maxWidth={400}>
+          <div style={{ marginBottom: 14, padding: "10px 14px", background: C.surface, borderRadius: 8, fontSize: 13, color: C.textDim }}>
+            <span style={{ fontWeight: 600 }}>{assetIcon(editing.asset_type)} {editing.asset_type}</span>
+            {editing.brand && ` · ${editing.brand}`}{editing.model && ` ${editing.model}`}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <SearchableSelect
+              label="Assign to Employee"
+              value={assignForm.employee_id}
+              onChange={v => setAssignForm(f => ({ ...f, employee_id: v }))}
+              options={employees.map(e => ({ value: String(e.id), label: e.name }))}
+              placeholder="Search employee…"
+            />
+            <Inp label="Assigned Date" type="date" value={assignForm.assigned_date} onChange={v => setAssignForm(f => ({ ...f, assigned_date: v }))} />
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 20 }}>
+            <Btn variant="ghost" onClick={() => setModal(null)}>Cancel</Btn>
+            {editing.employee_id && <Btn variant="danger" onClick={async () => { await api.assignAsset(editing.id, { employee_id: null, assigned_date: null }); setModal(null); load(); }}>Unassign</Btn>}
+            <Btn onClick={handleAssign}>Save</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════
 // PEOPLE HUB (Employees + Resources)
 // ════════════════════════════════════════════════════════
 function PeopleHub({ readOnly, currentUser }) {
@@ -5191,6 +5422,7 @@ const ADMIN_NAV = [
   { id: "subscriptions", label: "Subscription Management", icon: "🔔" },
   { id: "onboard", label: "Onboard Employee", icon: "🧑‍💼" },
   { id: "compensation", label: "Compensation Details", icon: "🧮" },
+  { id: "infra", label: "Infra / Assets", icon: "🖥" },
 ];
 
 // ════════════════════════════════════════════════════════
@@ -5382,6 +5614,7 @@ export default function App() {
         {page === "subscriptions" && <SubscriptionManagement />}
         {page === "onboard" && <OnboardEmployee />}
         {page === "compensation" && currentUser.role === "admin" && <CompensationDetails />}
+        {page === "infra" && currentUser.role === "admin" && <AdminAssets />}
         {page === "mywork" && <EmployeeHome currentUser={currentUser} />}
       </main>
     </div>

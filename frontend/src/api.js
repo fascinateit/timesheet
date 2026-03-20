@@ -130,6 +130,13 @@ export const api = {
   updateSubscription: (id, d) => req("PUT", `/subscriptions/${id}`, d),
   deleteSubscription: (id) => req("DELETE", `/subscriptions/${id}`),
 
+  // Assets (Infra)
+  getAssets: (params = {}) => req("GET", `/assets/?${new URLSearchParams(params)}`),
+  createAsset: (d) => req("POST", "/assets/", d),
+  updateAsset: (id, d) => req("PUT", `/assets/${id}`, d),
+  assignAsset: (id, d) => req("PATCH", `/assets/${id}/assign`, d),
+  deleteAsset: (id) => req("DELETE", `/assets/${id}`),
+
   // Onboarding
   getOnboardingRecords: () => req("GET", "/onboarding/"),
   getOnboardingRecord: (id) => req("GET", `/onboarding/${id}`),
