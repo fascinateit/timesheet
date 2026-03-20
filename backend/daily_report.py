@@ -4,6 +4,8 @@ from datetime import date, datetime
 from db import query
 from mailer import send_html_email
 
+PORTAL_URL = "https://myportal.fascinateit.com/"
+
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 def _fmt_date(d):
@@ -28,17 +30,55 @@ def _fmt_inr(n):
 
 _STYLE = """
 <style>
-  body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f2f5; margin: 0; padding: 24px; color: #1a202c; }
-  .wrapper { max-width: 860px; margin: 0 auto; }
-  .header  { background: #1e2740; color: #ffffff; border-radius: 12px 12px 0 0; padding: 28px 32px; }
-  .header h1 { margin: 0 0 4px; font-size: 22px; letter-spacing: .3px; }
-  .header p  { margin: 0; font-size: 13px; color: #94a3b8; }
-  .body    { background: #ffffff; border-radius: 0 0 12px 12px; padding: 32px; }
-  .section { margin-bottom: 36px; }
+  /* ── Reset ── */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: #f0f2f5;
+    color: #1a202c;
+    padding: 16px;
+    -webkit-text-size-adjust: 100%;
+    -ms-text-size-adjust: 100%;
+  }
+
+  .wrapper  { max-width: 860px; margin: 0 auto; }
+
+  /* ── Header ── */
+  .header {
+    background: #1e2740;
+    color: #ffffff;
+    border-radius: 12px 12px 0 0;
+    padding: 24px 28px;
+  }
+  .header h1 { font-size: 20px; letter-spacing: .3px; margin-bottom: 4px; }
+  .header p  { font-size: 12px; color: #94a3b8; margin: 0; }
+
+  /* ── Portal banner ── */
+  .portal-banner {
+    background: #1d4ed811;
+    border: 1px solid #3b82f633;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 24px;
+    font-size: 13px;
+    color: #1e40af;
+  }
+  .portal-banner a {
+    color: #2563eb;
+    font-weight: 700;
+    text-decoration: none;
+  }
+  .portal-banner a:hover { text-decoration: underline; }
+
+  /* ── Body ── */
+  .body { background: #ffffff; border-radius: 0 0 12px 12px; padding: 28px 28px 20px; }
+
+  .section       { margin-bottom: 32px; }
   .section-title {
-    font-size: 16px; font-weight: 700; color: #1e2740;
+    font-size: 15px; font-weight: 700; color: #1e2740;
     border-left: 4px solid #3b82f6; padding-left: 12px;
-    margin: 0 0 14px;
+    margin-bottom: 14px;
   }
   .badge-count {
     display: inline-block; background: #ef444422; color: #ef4444;
@@ -46,20 +86,53 @@ _STYLE = """
     font-weight: 700; margin-left: 8px; vertical-align: middle;
   }
   .empty { color: #94a3b8; font-size: 13px; padding: 10px 0; font-style: italic; }
-  table  { width: 100%; border-collapse: collapse; font-size: 13px; }
+
+  /* ── Responsive table wrapper ── */
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; width: 100%; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 520px; }
   thead tr { background: #f8fafc; }
-  th  { padding: 10px 14px; text-align: left; font-weight: 700; color: #64748b;
-        font-size: 11px; text-transform: uppercase; letter-spacing: .5px;
-        border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
-  td  { padding: 10px 14px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+  th {
+    padding: 10px 12px; text-align: left; font-weight: 700; color: #64748b;
+    font-size: 11px; text-transform: uppercase; letter-spacing: .5px;
+    border-bottom: 2px solid #e2e8f0; white-space: nowrap;
+  }
+  td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
   tr:last-child td { border-bottom: none; }
-  tr:hover td      { background: #f8fafc; }
+
   .badge { display: inline-block; padding: 2px 8px; border-radius: 4px;
            font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; }
-  .badge-pending    { background: #f59e0b22; color: #f59e0b; }
-  .badge-warning    { background: #ef444422; color: #ef4444; }
-  .divider { border: none; border-top: 1px solid #e2e8f0; margin: 28px 0; }
-  .footer { text-align: center; font-size: 11px; color: #94a3b8; margin-top: 24px; }
+  .badge-pending { background: #f59e0b22; color: #f59e0b; }
+  .badge-warning { background: #ef444422; color: #ef4444; }
+
+  /* ── Mark Renewed button ── */
+  .btn-renew {
+    display: inline-block;
+    background: #16a34a;
+    color: #ffffff !important;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 5px 12px;
+    border-radius: 6px;
+    text-decoration: none;
+    white-space: nowrap;
+    letter-spacing: .2px;
+  }
+
+  .divider { border: none; border-top: 1px solid #e2e8f0; margin: 24px 0; }
+  .footer  { text-align: center; font-size: 11px; color: #94a3b8; margin-top: 20px; padding-top: 16px; border-top: 1px solid #e2e8f0; }
+
+  /* ── Mobile overrides ── */
+  @media only screen and (max-width: 600px) {
+    body    { padding: 8px; }
+    .header { padding: 18px 16px; border-radius: 10px 10px 0 0; }
+    .header h1 { font-size: 17px; }
+    .body   { padding: 16px 12px 14px; }
+    .section-title { font-size: 14px; }
+    table   { font-size: 12px; }
+    th, td  { padding: 8px 10px; }
+    .portal-banner { font-size: 12px; padding: 10px 12px; }
+  }
 </style>
 """
 
@@ -83,13 +156,17 @@ def _table(headers: list[str], rows: list[list[str]]) -> str:
     for row in rows:
         tds = "".join(f"<td>{cell}</td>" for cell in row)
         trs += f"<tr>{tds}</tr>"
-    return f"<table><thead><tr>{ths}</tr></thead><tbody>{trs}</tbody></table>"
+    return (
+        f'<div class="table-wrap">'
+        f'<table><thead><tr>{ths}</tr></thead><tbody>{trs}</tbody></table>'
+        f'</div>'
+    )
 
 
 # ── data fetchers ─────────────────────────────────────────────────────────────
 
 def _pending_invoices():
-    rows = query(
+    return query(
         "SELECT i.invoice_number, p.name AS project_name, p.code AS project_code, "
         "c.client_name, i.amount, i.raised_date, i.payment_due_date "
         "FROM invoices i "
@@ -98,11 +175,10 @@ def _pending_invoices():
         "WHERE i.status = 'pending' "
         "ORDER BY i.raised_date DESC"
     )
-    return rows
 
 
 def _pending_timesheets():
-    rows = query(
+    return query(
         "SELECT e.name AS employee_name, p.name AS project_name, p.code AS project_code, "
         "t.work_date, t.hours, t.task "
         "FROM timesheets t "
@@ -111,22 +187,20 @@ def _pending_timesheets():
         "WHERE t.status = 'pending' "
         "ORDER BY t.work_date DESC"
     )
-    return rows
 
 
 def _pending_leaves():
-    rows = query(
+    return query(
         "SELECT e.name AS employee_name, l.leave_type, l.start_date, l.end_date, l.reason "
         "FROM leaves l "
         "JOIN employees e ON e.id = l.employee_id "
         "WHERE l.status = 'pending' "
         "ORDER BY l.start_date DESC"
     )
-    return rows
 
 
 def _pending_expenses():
-    rows = query(
+    return query(
         "SELECT e.name AS employee_name, ex.title, ex.category, ex.amount, "
         "ex.submitted_at, p.name AS project_name "
         "FROM expenses ex "
@@ -135,17 +209,15 @@ def _pending_expenses():
         "WHERE ex.status = 'pending' "
         "ORDER BY ex.submitted_at DESC"
     )
-    return rows
 
 
 def _expiring_subscriptions():
-    rows = query(
+    return query(
         "SELECT app_name, start_date, expire_date, amount, link "
         "FROM subscriptions "
         "WHERE expire_date <= DATE_ADD(CURDATE(), INTERVAL 10 DAY) "
         "ORDER BY expire_date ASC"
     )
-    return rows
 
 
 # ── HTML section builders ─────────────────────────────────────────────────────
@@ -219,7 +291,7 @@ def _build_expenses_section():
 def _build_subscriptions_section():
     rows = _expiring_subscriptions()
     today = date.today()
-    headers = ["App Name", "Expire Date", "Days Left", "Amount", "Link"]
+    headers = ["App Name", "Expire Date", "Days Left", "Amount", "Link", "Action"]
 
     table_rows = []
     for r in rows:
@@ -240,7 +312,14 @@ def _build_subscriptions_section():
         else:
             days_cell = f'<span class="badge badge-warning">{days_left}d left</span>'
 
-        link_cell = f'<a href="{r["link"]}" style="color:#3b82f6;text-decoration:none;">Open ↗</a>' if r.get("link") else "—"
+        link_cell = (
+            f'<a href="{r["link"]}" style="color:#3b82f6;text-decoration:none;">Open ↗</a>'
+            if r.get("link") else "—"
+        )
+
+        renew_cell = (
+            f'<a href="{PORTAL_URL}" class="btn-renew">✔ Mark Renewed</a>'
+        )
 
         table_rows.append([
             r["app_name"],
@@ -248,9 +327,14 @@ def _build_subscriptions_section():
             days_cell,
             _fmt_inr(r["amount"]),
             link_cell,
+            renew_cell,
         ])
 
-    return _section("Subscriptions – Expiring Soon (≤ 10 days)", _table(headers, table_rows), len(rows))
+    return _section(
+        "Subscriptions – Expiring Soon (≤ 10 days)",
+        _table(headers, table_rows),
+        len(rows)
+    )
 
 
 # ── main entrypoint ───────────────────────────────────────────────────────────
@@ -264,9 +348,22 @@ def build_html() -> str:
         + _build_expenses_section()
         + _build_subscriptions_section()
     )
+    portal_banner = f"""
+    <div class="portal-banner">
+      🔗 Manage everything at the portal:&nbsp;
+      <a href="{PORTAL_URL}" target="_blank">{PORTAL_URL}</a>
+      &nbsp;— login to approve, review or update records.
+    </div>
+    """
     return f"""<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8">{_STYLE}</head>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>Fascinate IT Daily Summary</title>
+  {_STYLE}
+</head>
 <body>
   <div class="wrapper">
     <div class="header">
@@ -274,6 +371,7 @@ def build_html() -> str:
       <p>Report generated on {today_str}</p>
     </div>
     <div class="body">
+      {portal_banner}
       {sections}
       <p class="footer">This is an automated report sent every morning at 6:00 AM by Fascinate IT.</p>
     </div>
