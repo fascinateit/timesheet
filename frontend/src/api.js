@@ -76,6 +76,19 @@ export const api = {
   sendbackExpense: (id, note) => req("PATCH", `/expenses/${id}/sendback`, { note }),
   deleteExpense: (id) => req("DELETE", `/expenses/${id}`),
 
+  uploadExpenseReceipt: async (file) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch(`${BASE}/expenses/upload-receipt`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token()}` },
+      body: fd,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    return data;
+  },
+
   // Reports
   getDashboard: () => req("GET", "/reports/dashboard"),
   getProjectReport: (id) => req("GET", `/reports/project/${id}`),

@@ -3,7 +3,7 @@ ProjectPulse – Flask Backend
 Entry point: app.py
 """
 import os
-from flask import Flask
+from flask import Flask, send_from_directory
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from dotenv import load_dotenv
@@ -60,6 +60,11 @@ def create_app():
     @app.route("/api/health")
     def health():
         return {"status": "ok", "service": "ProjectPulse API"}
+
+    @app.route("/api/receipts/<path:filename>")
+    def serve_receipt(filename):
+        receipts_dir = os.path.join(os.path.dirname(__file__), "receipts")
+        return send_from_directory(receipts_dir, filename)
 
     return app
 

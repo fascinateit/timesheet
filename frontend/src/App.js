@@ -625,12 +625,12 @@ function ProjectManagement({ readOnly = false, currentUser }) {
       </div>
 
       <div style={{ display: "flex", gap: 4, background: C.surface, padding: 4, borderRadius: 10, width: "fit-content", overflowX: "auto" }}>
-        {["dashboard", "invoices", "company_expenses"].map(t => (
+        {["dashboard", "invoices", "company_expenses", "clients", "projects"].map(t => (
           <button key={t} onClick={() => setTab(t)} style={{
             background: tab === t ? C.card : "transparent", color: tab === t ? C.text : C.textMuted,
             border: tab === t ? `1px solid ${C.border}` : "1px solid transparent",
             borderRadius: 8, padding: "6px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", textTransform: "capitalize"
-          }}>{t === "dashboard" ? "Dashboard" : t === "company_expenses" ? "Company Expenses" : "Client Budgets & Invoiced"}</button>
+          }}>{t === "dashboard" ? "Dashboard" : t === "company_expenses" ? "Company Expenses" : t === "clients" ? "Clients" : t === "projects" ? "Projects" : "Client Budgets & Invoiced"}</button>
         ))}
       </div>
 
@@ -821,6 +821,10 @@ function ProjectManagement({ readOnly = false, currentUser }) {
       {tab === "company_expenses" && (
         <CompanyExpenses modal={modal} setModal={setModal} currentUser={currentUser} projects={projects} />
       )}
+
+      {tab === "clients" && <AdminClients />}
+
+      {tab === "projects" && <Projects readOnly={readOnly} />}
 
       {viewInvoice && (
         <Modal title="Invoice Preview" onClose={() => setViewInvoice(null)} maxWidth="100%">
@@ -3055,8 +3059,15 @@ function Expenses({ currentUser, viewOnly }) {
   async function handleSave(form) {
     setSaving(true);
     try {
-      if (modal === "new") await api.createExpense({ ...form, employeeId: currentUser.employee_id });
-      else await api.updateExpense(modal.id, form);
+      let receiptUrl = form.receiptUrl || "";
+      if (form.receiptFile) {
+        const res = await api.uploadExpenseReceipt(form.receiptFile);
+        receiptUrl = res.filename;
+      }
+      const payload = { ...form, receiptUrl };
+      delete payload.receiptFile;
+      if (modal === "new") await api.createExpense({ ...payload, employeeId: currentUser.employee_id });
+      else await api.updateExpense(modal.id, payload);
       setModal(null); await load();
     } catch (e) { alert(e.message); } finally { setSaving(false); }
   }
@@ -3133,6 +3144,13 @@ function Expenses({ currentUser, viewOnly }) {
                 <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
                   {canEdit && <Btn small variant="ghost" onClick={() => setModal(ex)}>✏ Edit</Btn>}
                   {canEdit && <Btn small variant="danger" onClick={() => handleDelete(ex.id)}>🗑 Delete</Btn>}
+                  {ex.receipt_url && (
+                    <a href={`${process.env.REACT_APP_API_URL || "http://localhost:5002/api"}/receipts/${ex.receipt_url}`}
+                      target="_blank" rel="noreferrer"
+                      style={{ fontSize: 12, padding: "4px 10px", borderRadius: 6, background: C.accent + "18", color: C.accent, textDecoration: "none", border: `1px solid ${C.accent}44`, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                      📎 View Receipt
+                    </a>
+                  )}
                   {!viewOnly && ex.status === "pending" && (
                     <>
                       <Btn small variant="success" onClick={() => setNoteModal({ id: ex.id, action: "approve" })}>✓ Approve</Btn>
@@ -3154,8 +3172,8 @@ function Expenses({ currentUser, viewOnly }) {
       {modal && (
         <Modal title={modal === "new" ? "Submit Expense" : "Edit Expense"} onClose={() => setModal(null)}>
           <ExpenseForm
-            init={modal === "new" ? { title: "", amount: "", category: "Other", projectId: "", description: "" } :
-              { title: modal.title, amount: modal.amount, category: modal.category, projectId: modal.project_id || "", description: modal.description || "" }}
+            init={modal === "new" ? { title: "", amount: "", category: "Other", projectId: "", description: "", receiptUrl: "" } :
+              { title: modal.title, amount: modal.amount, category: modal.category, projectId: modal.project_id || "", description: modal.description || "", receiptUrl: modal.receipt_url || "" }}
             projects={projects}
             saving={saving}
             onCancel={() => setModal(null)}
@@ -3190,6 +3208,7 @@ function Expenses({ currentUser, viewOnly }) {
 
 function ExpenseForm({ init, projects, employees, saving, onCancel, onSave, btnLabel }) {
   const [form, setForm] = useState(init);
+  const [receiptFile, setReceiptFile] = useState(null);
 
   const empOptions = employees ? [
     ...employees.map(e => ({ value: e.id, label: e.name || e.username }))
@@ -3215,12 +3234,22 @@ function ExpenseForm({ init, projects, employees, saving, onCancel, onSave, btnL
       <Inp label="Project (optional)" value={form.projectId} onChange={v => setForm(f => ({ ...f, projectId: v }))}
         options={projects.filter(p => !["closed", "completed"].includes(p.status)).map(p => ({ value: p.id, label: `${p.code} — ${p.name} ` }))} />
       <Inp label="Description" value={form.description} onChange={v => setForm(f => ({ ...f, description: v }))} placeholder="Details…" />
+      <div>
+        <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 6 }}>Receipt / Bill (optional)</label>
+        <input type="file" accept="image/*,.pdf"
+          onChange={e => setReceiptFile(e.target.files[0] || null)}
+          style={{ fontSize: 13, color: C.text, width: "100%" }} />
+        {init.receiptUrl && !receiptFile && (
+          <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4 }}>Current: {init.receiptUrl} (upload new to replace)</div>
+        )}
+        {receiptFile && <div style={{ fontSize: 11, color: C.green, marginTop: 4 }}>Selected: {receiptFile.name}</div>}
+      </div>
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
         <Btn variant="ghost" onClick={onCancel}>Cancel</Btn>
         <Btn onClick={() => {
           if (!form.title || !form.amount) return alert("Title and Amount are required");
           if (employees && form.employeeId === undefined) return alert("Please select an employee owning this expense.");
-          onSave(form);
+          onSave({ ...form, receiptFile: receiptFile || null });
         }} disabled={saving}>{saving ? "Saving…" : btnLabel}</Btn>
       </div>
     </div>
@@ -3412,13 +3441,16 @@ function AdminEmployees({ readOnly = false, currentUser }) {
 // ════════════════════════════════════════════════════════
 function CompensationDetails() {
   const [ctc, setCtc] = useState("");
-  const [useVp, setUseVp] = useState(false);
+  const [useVp, setUseVp] = useState(true);
   const [vpAmount, setVpAmount] = useState("");
   const [usePda, setUsePda] = useState(false);
   const [pdaAmount, setPdaAmount] = useState("");
   const [useIns, setUseIns] = useState(false);
   const [insAmount, setInsAmount] = useState("");
   const [useEmployerPf, setUseEmployerPf] = useState(false);
+  const [conveyanceAmount, setConveyanceAmount] = useState("");
+  const [medicalAmount, setMedicalAmount] = useState("");
+  const [internetAmount, setInternetAmount] = useState("");
 
   function round2(n) { return Math.round(n * 100) / 100; }
   const fmt = n => Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -3426,88 +3458,106 @@ function CompensationDetails() {
 
   const ctcVal = parseFloat(ctc) || 0;
   const computed = ctcVal > 0 ? (() => {
-    // Basic = 50% of CTC (annual), converted to monthly
-    const basic_m = round2(ctcVal * 0.50 / 12);
-    const hra_m = round2(basic_m * 0.50);
-    const lta_m = round2(basic_m * 0.10);
-    const transport = 1600;
-    const medical = 1250;
-    const internet = 1200;
+    const basic_m   = round2(ctcVal * 0.50 / 12);
+    const hra_m     = round2(basic_m * 0.50);
+    const lta_m     = round2(basic_m * 0.10);
+    const transport = conveyanceAmount !== "" ? (parseFloat(conveyanceAmount) || 0) : 1600;
+    const medical   = medicalAmount !== ""   ? (parseFloat(medicalAmount)   || 0) : 1250;
+    const internet  = internetAmount !== ""  ? (parseFloat(internetAmount)  || 0) : 1200;
 
-    // VP: checkbox enables it; default = 10% of CTC; override with custom amount
-    const defaultVp_a = round2(ctcVal * 0.10);
-    const vp_a = useVp ? (vpAmount !== "" ? (parseFloat(vpAmount) || 0) : defaultVp_a) : 0;
-
-    // PDA & Insurance (monthly, taken from special allowance pool)
     const pda_m = usePda ? (parseFloat(pdaAmount) || 0) : 0;
     const ins_m = useIns ? (parseFloat(insAmount) || 0) : 0;
 
-    // Gratuity & employer PF are CTC components outside gross
-    const gratuity_a = round2(basic_m * 12 * 0.0481);
+    const gratuity_a    = round2(basic_m * 12 * 0.0481);
     const employer_pf_a = useEmployerPf ? round2(basic_m * 12 * 0.12) : 0;
     const employer_pf_m = round2(employer_pf_a / 12);
 
-    // Gross = CTC minus the non-gross CTC components → ensures Total CTC = CTC input
-    const gross_a = round2(ctcVal - gratuity_a - employer_pf_a - vp_a);
+    const defaultVp_a = round2(ctcVal * 0.05);
+    const vp_a_input  = useVp ? (vpAmount !== "" ? (parseFloat(vpAmount) || 0) : defaultVp_a) : 0;
+
+    // gross_a = CTC minus retirement and VP — special absorbs the remainder
+    const gross_a = round2(ctcVal - gratuity_a - employer_pf_a - vp_a_input);
     const gross_m = round2(gross_a / 12);
 
-    // Special = what's left after all fixed components (PDA/insurance carve out from it)
-    const remaining = gross_m - basic_m - hra_m - lta_m - transport - medical - internet;
-    const special_m = Math.max(0, round2(remaining - pda_m - ins_m));
+    // Special Allowance = remaining balance (no floor/cap)
+    const remaining = round2(gross_m - basic_m - hra_m - lta_m - transport - medical - internet - pda_m - ins_m);
+    const special_m = remaining;
 
     const gross_total_m = round2(basic_m + hra_m + lta_m + transport + medical + internet + special_m + pda_m + ins_m);
     const gross_total_a = round2(gross_total_m * 12);
+
+    const vp_a = useVp ? vp_a_input : 0;
+    const vp_m = round2(vp_a / 12);
+
     const total_ctc = round2(gross_total_a + employer_pf_a + gratuity_a + vp_a);
 
     return {
       basic_m, hra_m, lta_m, transport, medical, internet, special_m, pda_m, ins_m,
-      gross_total_m, gross_total_a, employer_pf_m, employer_pf_a, gratuity_a, vp_a, defaultVp_a, total_ctc
+      gross_total_m, gross_total_a, employer_pf_m, employer_pf_a, gratuity_a, vp_a, vp_m, defaultVp_a, total_ctc
     };
   })() : null;
 
   function downloadCompensation() {
     if (!computed) return;
     const c = computed;
+    const n = v => Number(v).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const dash = '<span style="letter-spacing:2px">-</span>';
+    const bouquetRows = [
+      [1, "House Rent Allowance (HRA)",          n(c.hra_m),      n(round2(c.hra_m * 12))],
+      [2, "Special Allowance",                    n(c.special_m),  n(round2(c.special_m * 12))],
+      [3, "Conveyance",                           n(c.transport),  n(round2(c.transport * 12))],
+      [4, "Medical Allowance",                    n(c.medical),    n(round2(c.medical * 12))],
+      [5, "Internet &amp; Broadband Allowance",   n(c.internet),   n(round2(c.internet * 12))],
+      [6, "Leave Travel Allowance (LTA)",         n(c.lta_m),      n(round2(c.lta_m * 12))],
+      [7, "Professional Development Allowance",   c.pda_m > 0 ? n(c.pda_m) : dash, c.pda_m > 0 ? n(round2(c.pda_m * 12)) : dash],
+      [8, "Insurance",                            c.ins_m > 0 ? n(c.ins_m) : dash, c.ins_m > 0 ? n(round2(c.ins_m * 12)) : dash],
+    ].map(([sl, label, mo, yr]) => `<tr><td class="sl">${sl}</td><td class="label">${label}</td><td class="num">${mo}</td><td class="num">${yr}</td></tr>`).join("");
+
     const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
 <title>Compensation Details</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0;}
   body{font-family:Arial,sans-serif;font-size:13px;background:#fff;color:#000;}
-  .wrapper{max-width:820px;margin:24px auto;padding:10px;}
-  h2{text-align:center;font-size:17px;margin-bottom:4px;}
-  h3{text-align:center;font-size:13px;font-weight:normal;color:#555;margin-bottom:18px;}
-  table{width:100%;border-collapse:collapse;}
-  th,td{border:1px solid #aaa;padding:6px 12px;}
-  th{background:#d4edda;font-weight:bold;text-align:center;}
-  .label{width:50%;}
-  .num{text-align:right;width:25%;}
-  .note{width:25%;font-style:italic;color:#555;font-size:11px;}
-  .section-header td{background:#f0f0f0;font-weight:bold;font-size:13px;}
-  .total-row td{font-weight:bold;background:#fff9c4;}
-  .ctc-row td{font-weight:bold;background:#d4edda;font-size:14px;}
+  .wrapper{max-width:860px;margin:24px auto;padding:16px;}
+  table{width:100%;border-collapse:collapse;border:1px solid #999;}
+  td,th{border:1px solid #999;padding:6px 10px;font-size:13px;}
+  .sl{width:52px;text-align:center;}
+  .label{text-align:left;}
+  .num{text-align:right;width:160px;}
+  .title-row td{background:#4a4a6a;color:#fff;font-weight:bold;font-size:14px;text-align:center;padding:10px;}
+  .col-header td{background:#e8e8e8;font-weight:bold;text-align:center;font-size:12px;}
+  .section-row td{background:#c8c8d8;font-weight:bold;text-align:center;font-size:13px;padding:7px 10px;}
+  .total-row td{background:#8888aa;color:#fff;font-weight:bold;}
+  .ctc-row td{background:#4a4a6a;color:#fff;font-weight:bold;font-size:14px;}
+  .empty-sl{width:52px;}
+  @media print{body{margin:0;} .wrapper{margin:0;padding:8px;}}
 </style></head><body><div class="wrapper">
-<h2>FASCINATE IT INDIA PRIVATE LIMITED</h2>
-<h3>Compensation Details — CTC: ₹ ${fmt(ctcVal)}</h3>
 <table>
-  <tr><th class="label"></th><th class="num">Amount in INR/month</th><th class="num">Amount in INR/year</th><th class="note">Remarks</th></tr>
-  <tr><td class="label">Basic Salary</td><td class="num">${fmtR(c.basic_m)}</td><td class="num">${fmtR(round2(c.basic_m * 12))}</td><td class="note">50% of CTC</td></tr>
-  <tr><td class="label">House Rent Allowance (HRA)</td><td class="num">${fmtR(c.hra_m)}</td><td class="num">${fmtR(round2(c.hra_m * 12))}</td><td class="note">50% of Basic</td></tr>
-  <tr><td class="label">Special Allowance</td><td class="num">${fmtR(c.special_m)}</td><td class="num">${fmtR(round2(c.special_m * 12))}</td><td class="note">Remaining - 4.81% Basic - VP</td></tr>
-  <tr><td class="label">Conveyance</td><td class="num">${fmtR(c.transport)}</td><td class="num">${fmtR(round2(c.transport * 12))}</td><td class="note">Fixed</td></tr>
-  <tr><td class="label">Medical Allowance</td><td class="num">${fmtR(c.medical)}</td><td class="num">${fmtR(round2(c.medical * 12))}</td><td class="note">Fixed</td></tr>
-  <tr><td class="label">Internet & Broadband Allowance</td><td class="num">${fmtR(c.internet)}</td><td class="num">${fmtR(round2(c.internet * 12))}</td><td class="note">Fixed</td></tr>
-  <tr><td class="label">Leave Travel Allowance (LTA)</td><td class="num">${fmtR(c.lta_m)}</td><td class="num">${fmtR(round2(c.lta_m * 12))}</td><td class="note">10% of Basic</td></tr>
-  <tr><td class="label">Professional Development Allowance</td><td class="num">${c.pda_m > 0 ? fmtR(c.pda_m) : '₹ 0.00'}</td><td class="num">${c.pda_m > 0 ? fmtR(round2(c.pda_m * 12)) : ''}</td><td class="note">NA</td></tr>
-  <tr><td class="label">Insurance</td><td class="num">${c.ins_m > 0 ? fmtR(c.ins_m) : '₹ 0.00'}</td><td class="num">${c.ins_m > 0 ? fmtR(round2(c.ins_m * 12)) : ''}</td><td class="note">NA</td></tr>
-  <tr class="total-row"><td class="label">Total Gross / Base Salary</td><td class="num">${fmtR(c.gross_total_m)}</td><td class="num">${fmtR(c.gross_total_a)}</td><td class="note">within this INR 200/month deducted as professional tax (if gross ≥ ₹25,000)</td></tr>
-  <tr><td colspan="4" style="padding:4px;border:none;"></td></tr>
-  <tr><td class="label">Provident Fund (Employer)</td><td class="num">${c.employer_pf_m > 0 ? fmtR(c.employer_pf_m) : '0.00'}</td><td class="num">${c.employer_pf_a > 0 ? fmtR(c.employer_pf_a) : '0.00'}</td><td class="note">NA</td></tr>
-  <tr><td class="label">Gratuity</td><td class="num"></td><td class="num">${fmtR(c.gratuity_a)}</td><td class="note">4.81% of Basic</td></tr>
-  <tr><td class="label">Variable Pay (Bonus)*</td><td class="num"></td><td class="num">${c.vp_a > 0 ? fmtR(c.vp_a) : '0.00'}</td><td class="note">10% of CTC</td></tr>
-  <tr><td colspan="4" style="padding:4px;border:none;"></td></tr>
-  <tr class="ctc-row"><td class="label">Total CTC</td><td class="num"></td><td class="num">${fmtR(c.total_ctc)}</td><td class="note"></td></tr>
+  <tr class="title-row"><td colspan="4">COMPENSATION DETAILS* (All Amount in INR)</td></tr>
+
+  <!-- Section A: Basic Salary -->
+  <tr class="section-row"><td colspan="4">Basic Salary - A</td></tr>
+  <tr class="col-header"><td class="sl">Sl.No.</td><td class="label"></td><td class="num">INR Monthly</td><td class="num">INR Annualized</td></tr>
+  <tr><td class="sl">1</td><td class="label">Basic Salary</td><td class="num">${n(c.basic_m)}</td><td class="num">${n(round2(c.basic_m * 12))}</td></tr>
+
+  <!-- Section B: Bouquet of Allowances -->
+  <tr class="section-row"><td colspan="4">Bouquet of Allowances - B</td></tr>
+  ${bouquetRows}
+  <tr class="total-row"><td class="sl"></td><td class="label">Monthly Gross Salary</td><td class="num">${n(c.gross_total_m)}</td><td class="num">${n(c.gross_total_a)}</td></tr>
+
+  <!-- Section C: Retirement & Corporate Benefits -->
+  <tr class="section-row"><td colspan="4">Retirement &amp; Corporate Benefits - C</td></tr>
+  <tr><td class="sl">1</td><td class="label">Provident Fund Employer Contribution</td><td class="num">${c.employer_pf_m > 0 ? n(c.employer_pf_m) : dash}</td><td class="num">${c.employer_pf_a > 0 ? n(c.employer_pf_a) : dash}</td></tr>
+  <tr><td class="sl">2</td><td class="label">Gratuity</td><td class="num">${dash}</td><td class="num">${n(c.gratuity_a)}</td></tr>
+
+  <!-- Section D: Variable Pay -->
+  <tr class="section-row"><td colspan="4">Variable Pay/Bonus &#8211; D</td></tr>
+  <tr><td class="sl">1</td><td class="label">Variable Performance Pay</td><td class="num">${c.vp_m > 0 ? n(c.vp_m) : dash}</td><td class="num">${c.vp_a > 0 ? n(c.vp_a) : dash}</td></tr>
+
+  <!-- Total CTC -->
+  <tr class="ctc-row"><td class="sl"></td><td class="label">Yearly CTC (A + B + C + D)</td><td class="num"></td><td class="num">${n(c.total_ctc)}</td></tr>
 </table>
-<p style="margin-top:12px;font-size:11px;color:#888;">* Variable Pay is performance-based and paid at management discretion.</p>
+<p style="margin-top:10px;font-size:11px;color:#555;">* Variable Pay is performance-based and paid at management discretion.</p>
 </div><script>window.onload=function(){window.print();}</script></body></html>`;
     const blob = new Blob([html], { type: "text/html" });
     const url = URL.createObjectURL(blob);
@@ -3519,13 +3569,13 @@ function CompensationDetails() {
   const rows = computed ? [
     ["Basic Salary", computed.basic_m, computed.basic_m * 12, "50% of CTC"],
     ["House Rent Allowance (HRA)", computed.hra_m, computed.hra_m * 12, "50% of Basic"],
-    ["Special Allowance", computed.special_m, computed.special_m * 12, "Remaining − 4.81% Basic − VP"],
-    ["Conveyance", computed.transport, computed.transport * 12, "Fixed"],
-    ["Medical Allowance", computed.medical, computed.medical * 12, "Fixed"],
-    ["Internet & Broadband Allowance", computed.internet, computed.internet * 12, "Fixed"],
     ["Leave Travel Allowance (LTA)", computed.lta_m, computed.lta_m * 12, "10% of Basic"],
-    ["Professional Dev. Allowance", computed.pda_m, computed.pda_m * 12, computed.pda_m > 0 ? "Custom" : "NA"],
-    ["Insurance", computed.ins_m, computed.ins_m * 12, computed.ins_m > 0 ? "Custom" : "NA"],
+    ["Conveyance", computed.transport, computed.transport * 12, "Fixed (default ₹1,600)"],
+    ["Medical Allowance", computed.medical, computed.medical * 12, "Fixed (default ₹1,250)"],
+    ["Internet & Broadband Allowance", computed.internet, computed.internet * 12, "Fixed (default ₹1,200)"],
+    ["Professional Dev. Allowance", computed.pda_m, computed.pda_m * 12, computed.pda_m > 0 ? "Fixed monthly" : "NA"],
+    ["Insurance (Group Medical/Life)", computed.ins_m, computed.ins_m * 12, computed.ins_m > 0 ? "Fixed monthly" : "NA"],
+    ["Special Allowance", computed.special_m, computed.special_m * 12, "Remaining balance"],
   ] : [];
 
   return (
@@ -3555,7 +3605,7 @@ function CompensationDetails() {
             {useVp ? (
               <>
                 <div style={{ fontSize: 11, color: C.textMuted }}>
-                  Default: ₹ {ctcVal > 0 ? Math.round(ctcVal * 0.10).toLocaleString("en-IN") : "0"} (10% of CTC) — enter below to override
+                  Default: ₹ {computed ? Math.round(computed.defaultVp_a).toLocaleString("en-IN") : "0"}/yr (5% of CTC) — enter annual amount below to override
                 </div>
                 <input type="number" min="0" placeholder="Override annual amount (₹)" value={vpAmount}
                   onChange={e => setVpAmount(e.target.value)} style={inpStyle} />
@@ -3588,6 +3638,25 @@ function CompensationDetails() {
             </label>
             <input type="number" min="0" placeholder="Monthly amount (₹)" value={insAmount} disabled={!useIns}
               onChange={e => setInsAmount(e.target.value)} style={{ ...inpStyle, opacity: useIns ? 1 : 0.5 }} />
+          </div>
+        </div>
+        {/* Fixed component overrides */}
+        <div style={{ marginTop: 16, fontSize: 13, fontWeight: 700, color: C.textMuted, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>Override Fixed Components</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16 }}>
+          <div>
+            <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 4 }}>Conveyance (default ₹1,600)</div>
+            <input type="number" min="0" placeholder="1600" value={conveyanceAmount}
+              onChange={e => setConveyanceAmount(e.target.value)} style={inpStyle} />
+          </div>
+          <div>
+            <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 4 }}>Medical Allowance (default ₹1,250)</div>
+            <input type="number" min="0" placeholder="1250" value={medicalAmount}
+              onChange={e => setMedicalAmount(e.target.value)} style={inpStyle} />
+          </div>
+          <div>
+            <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 4 }}>Internet Allowance (default ₹1,200)</div>
+            <input type="number" min="0" placeholder="1200" value={internetAmount}
+              onChange={e => setInternetAmount(e.target.value)} style={inpStyle} />
           </div>
         </div>
       </Card>
@@ -3625,9 +3694,9 @@ function CompensationDetails() {
               <tr><td colSpan={4} style={{ padding: 0, height: 8, background: C.bg }} /></tr>
               {/* CTC components below gross */}
               {[
-                ["Provident Fund (Employer)", computed.employer_pf_m > 0 ? fmtR(computed.employer_pf_m) : "—", computed.employer_pf_a > 0 ? fmtR(computed.employer_pf_a) : "—", "12% of Basic"],
-                ["Gratuity", "—", fmtR(computed.gratuity_a), "4.81% of Basic (annual)"],
-                ["Variable Pay (Bonus)*", "—", computed.vp_a > 0 ? fmtR(computed.vp_a) : "—", "Performance-based"],
+                ["Provident Fund (Employer)", computed.employer_pf_m > 0 ? fmtR(computed.employer_pf_m) : "—", computed.employer_pf_a > 0 ? fmtR(computed.employer_pf_a) : "NA", "12% of Basic"],
+                ["Gratuity", "—", fmtR(computed.gratuity_a), "4.81% of Basic"],
+                ["Variable Pay / Bonus*", computed.vp_m > 0 ? fmtR(computed.vp_m) : "—", computed.vp_a > 0 ? fmtR(computed.vp_a) : "—", "5% of CTC (default)"],
               ].map(([label, monthly, yearly, note]) => (
                 <tr key={label} style={{ borderBottom: `1px solid ${C.border}22` }}>
                   <td style={{ padding: "10px 16px", fontSize: 13, color: C.text }}>{label}</td>
@@ -3641,7 +3710,7 @@ function CompensationDetails() {
                 <td style={{ padding: "14px 16px", fontSize: 15, fontWeight: 800, color: C.text }}>Total CTC</td>
                 <td style={{ padding: "14px 16px", textAlign: "right" }} />
                 <td style={{ padding: "14px 16px", fontSize: 16, fontWeight: 800, color: C.green, textAlign: "right" }}>{fmtR(computed.total_ctc)}</td>
-                <td style={{ padding: "14px 16px", fontSize: 12, color: C.textDim, fontStyle: "italic" }}>Gross + PF (Employer) + Gratuity + VP</td>
+                <td style={{ padding: "14px 16px", fontSize: 12, color: C.textDim, fontStyle: "italic" }}>Gross + Gratuity + PF (Employer) + VP</td>
               </tr>
             </tbody>
           </table>
@@ -3838,8 +3907,9 @@ function AdminPayslips() {
   const [filterYear, setFilterYear] = useState("");
   const [form, setForm] = useState({
     employeeId: "", month: new Date().getMonth() + 1, year: new Date().getFullYear(),
-    usePf: false, pfAmount: "", useTds: false, tdsAmount: "", useVp: false, vpAmount: "",
-    usePda: false, pdaAmount: "", useIns: false, insAmount: ""
+    usePf: false, pfAmount: "", useTds: false, tdsAmount: "", useVp: true, vpAmount: "",
+    usePda: false, pdaAmount: "", useIns: false, insAmount: "",
+    conveyanceAmount: "", medicalAmount: "", internetAmount: ""
   });
   const [msg, setMsg] = useState("");
   const origin = window.location.origin;
@@ -3865,7 +3935,10 @@ function AdminPayslips() {
         useTds: form.useTds, tdsAmount: form.tdsAmount,
         useVp: form.useVp, vpAmount: form.vpAmount,
         usePda: form.usePda, pdaAmount: form.pdaAmount,
-        useIns: form.useIns, insAmount: form.insAmount
+        useIns: form.useIns, insAmount: form.insAmount,
+        conveyanceAmount: form.conveyanceAmount || null,
+        medicalAmount: form.medicalAmount || null,
+        internetAmount: form.internetAmount || null,
       });
       setMsg("✅ Payslip generated successfully!");
       await load();
@@ -3946,9 +4019,10 @@ function AdminPayslips() {
               <input type="checkbox" checked={form.useVp} onChange={e => setForm(f => ({ ...f, useVp: e.target.checked }))} style={{ cursor: "pointer", width: 16, height: 16 }} />
               Variable Pay
             </label>
-            <input type="number" min="0" placeholder="Auto calculate 1/12th VP" value={form.vpAmount} disabled={!form.useVp}
+            <input type="number" min="0" placeholder="Auto: 5% of gross monthly" value={form.vpAmount} disabled={!form.useVp}
               onChange={e => setForm(f => ({ ...f, vpAmount: e.target.value }))}
               style={{ ...inpStyle, opacity: form.useVp ? 1 : 0.5 }} />
+            {form.useVp && !form.vpAmount && <div style={{ fontSize: 11, color: C.textMuted }}>Default 5% of gross — enter amount to override</div>}
           </div>
         </div>
         {/* Row 3: Professional Dev & Insurance */}
@@ -3972,6 +4046,29 @@ function AdminPayslips() {
               onChange={e => setForm(f => ({ ...f, insAmount: e.target.value }))}
               style={{ ...inpStyle, opacity: form.useIns ? 1 : 0.5 }} />
             {form.useIns && <div style={{ fontSize: 11, color: C.textMuted }}>Deducted from Special Allowance pool</div>}
+          </div>
+        </div>
+        {/* Row 4: Fixed Component Overrides */}
+        <div style={{ marginTop: 16 }}>
+          <div style={{ fontSize: 12, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>
+            Override Fixed Components <span style={{ fontWeight: 400, textTransform: "none" }}>(leave blank to use defaults)</span>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 4 }}>Conveyance (default ₹1,600)</div>
+              <input type="number" min="0" placeholder="₹ 1,600" value={form.conveyanceAmount}
+                onChange={e => setForm(f => ({ ...f, conveyanceAmount: e.target.value }))} style={inpStyle} />
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 4 }}>Medical Allowance (default ₹1,250)</div>
+              <input type="number" min="0" placeholder="₹ 1,250" value={form.medicalAmount}
+                onChange={e => setForm(f => ({ ...f, medicalAmount: e.target.value }))} style={inpStyle} />
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 4 }}>Internet & Broadband (default ₹1,200)</div>
+              <input type="number" min="0" placeholder="₹ 1,200" value={form.internetAmount}
+                onChange={e => setForm(f => ({ ...f, internetAmount: e.target.value }))} style={inpStyle} />
+            </div>
           </div>
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
@@ -4954,16 +5051,81 @@ function OnboardEmployee() {
   );
 }
 
+// ════════════════════════════════════════════════════════
+// PEOPLE HUB (Employees + Resources)
+// ════════════════════════════════════════════════════════
+function PeopleHub({ readOnly, currentUser }) {
+  const [tab, setTab] = useState("employees");
+  const TABS = [
+    { id: "employees", label: "Employees", icon: "👥" },
+    { id: "resources", label: "Resources", icon: "◉" },
+  ];
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      <div>
+        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>Employees & Resources</h2>
+        <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>Manage employees, groups, project assignments and resources</p>
+      </div>
+      <div style={{ display: "flex", gap: 4, background: C.surface, padding: 4, borderRadius: 10, width: "fit-content" }}>
+        {TABS.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)} style={{
+            background: tab === t.id ? C.card : "transparent",
+            color: tab === t.id ? C.text : C.textMuted,
+            border: tab === t.id ? `1px solid ${C.border}` : "1px solid transparent",
+            borderRadius: 8, padding: "6px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer",
+            display: "flex", alignItems: "center", gap: 6
+          }}>
+            <span>{t.icon}</span>{t.label}
+          </button>
+        ))}
+      </div>
+      {tab === "employees" && <AdminEmployees readOnly={readOnly} currentUser={currentUser} />}
+      {tab === "resources" && <Resources readOnly={readOnly} />}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════
+// ATTENDANCE & CLAIMS (Timesheets / Leave / Expenses)
+// ════════════════════════════════════════════════════════
+function AttendanceClaims({ currentUser }) {
+  const [tab, setTab] = useState("timesheets");
+  const TABS = [
+    { id: "timesheets", label: "Timesheets", icon: "◷" },
+    { id: "leaves",     label: "Leave",      icon: "◌" },
+    { id: "expenses",   label: "Expenses",   icon: "💳" },
+  ];
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      <div>
+        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>Attendance & Claims</h2>
+        <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>Manage timesheets, leave requests and expense claims</p>
+      </div>
+      <div style={{ display: "flex", gap: 4, background: C.surface, padding: 4, borderRadius: 10, width: "fit-content" }}>
+        {TABS.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)} style={{
+            background: tab === t.id ? C.card : "transparent",
+            color: tab === t.id ? C.text : C.textMuted,
+            border: tab === t.id ? `1px solid ${C.border}` : "1px solid transparent",
+            borderRadius: 8, padding: "6px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer",
+            display: "flex", alignItems: "center", gap: 6
+          }}>
+            <span>{t.icon}</span>{t.label}
+          </button>
+        ))}
+      </div>
+      {tab === "timesheets" && <Timesheets currentUser={currentUser} viewOnly={false} />}
+      {tab === "leaves"     && <Leaves currentUser={currentUser} viewOnly={false} />}
+      {tab === "expenses"   && <Expenses currentUser={currentUser} viewOnly={false} />}
+    </div>
+  );
+}
+
 const ADMIN_NAV = [
   { id: "dashboard", label: "Dashboard", icon: "⬡" },
-  { id: "clients", label: "Clients", icon: "🏢" },
   { id: "project_management", label: "Project Mgmt (Client)", icon: "📊" },
-  { id: "projects", label: "Projects", icon: "◈" },
-  { id: "employees", label: "Employees", icon: "👥" },
-  { id: "resources", label: "Resources", icon: "◉" },
-  { id: "timesheets", label: "Timesheets", icon: "◷", badge: "ts" },
-  { id: "leaves", label: "Leave", icon: "◌", badge: "lv" },
-  { id: "expenses", label: "Expenses", icon: "💳" },
+  { id: "people", label: "Employees & Resources", icon: "👥" },
+  { id: "attendance", label: "Attendance & Claims", icon: "◷" },
   { id: "payslips", label: "Payslips", icon: "💰" },
   { id: "reports", label: "Reports", icon: "◫" },
   { id: "useraccounts", label: "User Accounts", icon: "🔑" },
@@ -5153,14 +5315,9 @@ export default function App() {
       </nav>
       <main className="main-content">
         {page === "dashboard" && <Dashboard />}
-        {page === "clients" && <AdminClients />}
         {page === "project_management" && <ProjectManagement readOnly={isManager} currentUser={currentUser} />}
-        {page === "projects" && <Projects readOnly={isManager} />}
-        {page === "employees" && <AdminEmployees readOnly={isManager} currentUser={currentUser} />}
-        {page === "resources" && <Resources readOnly={isManager} />}
-        {page === "timesheets" && <Timesheets currentUser={currentUser} viewOnly={false} />}
-        {page === "leaves" && <Leaves currentUser={currentUser} viewOnly={false} />}
-        {page === "expenses" && <Expenses currentUser={currentUser} viewOnly={false} />}
+        {page === "people" && <PeopleHub readOnly={isManager} currentUser={currentUser} />}
+        {page === "attendance" && <AttendanceClaims currentUser={currentUser} />}
         {page === "payslips" && !isManager && <AdminPayslips />}
         {page === "reports" && <Reports />}
         {page === "useraccounts" && <UserAccounts />}

@@ -37,8 +37,8 @@ def login():
     if not row["active"]:
         return jsonify(error="Account deactivated. Contact your administrator."), 403
 
-    # if not bcrypt.checkpw(password.encode(), row["password_hash"].encode()):
-    #     return jsonify(error="Invalid username or password"), 401
+    if not bcrypt.checkpw(password.encode(), row["password_hash"].encode()):
+        return jsonify(error="Invalid username or password"), 401
 
     identity = {
         "id":          row["id"],

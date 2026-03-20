@@ -12,21 +12,27 @@ def _compute(ctc, variable_pay_annual=0,
              use_tds=False, tds_override=None,
              use_vp=False, vp_override=None,
              use_pda=False, pda_override=None,
-             use_ins=False, ins_override=None):
-    fixed_ctc   = ctc 
+             use_ins=False, ins_override=None,
+             conveyance_override=None, medical_override=None, internet_override=None):
+    fixed_ctc   = ctc
     gross       = round(fixed_ctc / 12, 2)
     variable_pay_monthly = round(variable_pay_annual / 12, 2)
     basic       = round(gross * 0.50, 2)
     hra         = round(basic * 0.50, 2)
     lta         = round(basic * 0.10, 2)
 
-    transport   = 1600.00
-    medical     = 1250.00
-    internet    = 1200.00
+    def _fixed(override, default):
+        if override is not None and str(override).strip() != "":
+            return round(float(override), 2)
+        return default
+
+    transport = _fixed(conveyance_override, 1600.00)
+    medical   = _fixed(medical_override,    1250.00)
+    internet  = _fixed(internet_override,   1200.00)
 
     vp_monthly  = 0.00
     if use_vp:
-        vp_monthly = round(float(vp_override) if vp_override is not None and str(vp_override).strip() != "" else (variable_pay_annual / 12), 2) 
+        vp_monthly = round(float(vp_override) if vp_override is not None and str(vp_override).strip() != "" else (gross * 0.05), 2)
 
 
     pda = 0.00
@@ -37,13 +43,13 @@ def _compute(ctc, variable_pay_annual=0,
     if use_ins:
         ins = round(float(ins_override) if ins_override is not None and str(ins_override).strip() != "" else 0, 2)
 
-    # Special Allowance = Remaining − 4.81% of Basic − Variable Pay − PDA − Insurance
+    # Special Allowance = MAX(Gross − components, Gross × 10%)
     gratuity_contribution = round(basic * 0.0481, 2)
 
-    remaining   = gross - basic - hra - lta - transport - medical - internet
-    default_vp = variable_pay_monthly if vp_monthly == 0.00 else vp_monthly
-    special     = max(0, round(remaining - gratuity_contribution - default_vp - pda - ins, 2))
-    print(special)
+    remaining     = gross - basic - hra - lta - transport - medical - internet
+    default_vp    = variable_pay_monthly if vp_monthly == 0.00 else vp_monthly
+    floor_special = round(gross * 0.10, 2)
+    special       = max(floor_special, round(remaining - gratuity_contribution - default_vp - pda - ins, 2))
     pf_emp      = 0.00
     if use_pf:
         pf_emp = round(float(pf_override) if pf_override is not None and str(pf_override).strip() != "" else (basic * 0.12), 2)
@@ -150,6 +156,9 @@ def generate_payslip():
         pda_override=d.get("pdaAmount"),
         use_ins=d.get("useIns", False),
         ins_override=d.get("insAmount"),
+        conveyance_override=d.get("conveyanceAmount"),
+        medical_override=d.get("medicalAmount"),
+        internet_override=d.get("internetAmount"),
     )
 
     gratuity_increment = round(slip["basic"] * 0.0481, 2)

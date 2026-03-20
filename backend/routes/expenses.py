@@ -3,8 +3,13 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from db import query, execute
 import json
+import os
+import uuid
 
 expenses_bp = Blueprint("expenses", __name__)
+
+RECEIPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "receipts")
+ALLOWED_EXT = {"png", "jpg", "jpeg", "gif", "pdf", "webp"}
 
 
 def _fmt(row):
@@ -12,6 +17,23 @@ def _fmt(row):
         if row.get(k) and hasattr(row[k], "isoformat"):
             row[k] = row[k].isoformat()
     return row
+
+
+@expenses_bp.route("/upload-receipt", methods=["POST"])
+@jwt_required()
+def upload_receipt():
+    if "file" not in request.files:
+        return jsonify(error="No file provided"), 400
+    f = request.files["file"]
+    if not f.filename:
+        return jsonify(error="No file selected"), 400
+    ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else ""
+    if ext not in ALLOWED_EXT:
+        return jsonify(error="File type not allowed. Use PNG, JPG, GIF, PDF or WEBP"), 400
+    os.makedirs(RECEIPTS_DIR, exist_ok=True)
+    filename = f"{uuid.uuid4().hex}.{ext}"
+    f.save(os.path.join(RECEIPTS_DIR, filename))
+    return jsonify(filename=filename), 200
 
 
 @expenses_bp.route("/", methods=["GET"])
