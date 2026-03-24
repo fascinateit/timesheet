@@ -7,69 +7,79 @@ import json
 payslips_bp = Blueprint("payslips", __name__)
 
 
-def _compute(ctc, variable_pay_annual=0,
+def _compute(ctc,
              use_pf=False, pf_override=None,
              use_tds=False, tds_override=None,
              use_vp=False, vp_override=None,
              use_pda=False, pda_override=None,
              use_ins=False, ins_override=None,
              conveyance_override=None, medical_override=None, internet_override=None):
-    fixed_ctc   = ctc
-    gross       = round(fixed_ctc / 12, 2)
-    variable_pay_monthly = round(variable_pay_annual / 12, 2)
-    basic       = round(gross * 0.50, 2)
-    hra         = round(basic * 0.50, 2)
-    lta         = round(basic * 0.10, 2)
-
+    """
+    Compute payslip figures — algorithm matches CompensationDetails exactly:
+      basic      = 50% of annual CTC / 12
+      gratuity_a = basic_annual × 4.81%
+      vp_a       = 5% of CTC (default) or override × 12
+      gross_m    = (CTC − gratuity_a − vp_a) / 12   ← reduced pool
+      special    = gross_m − basic − hra − lta − fixed  ← pure remainder, no floor
+    """
+    def _r(n): return round(n, 2)
     def _fixed(override, default):
         if override is not None and str(override).strip() != "":
-            return round(float(override), 2)
+            return _r(float(override))
         return default
 
+    basic_m   = _r(ctc * 0.50 / 12)
+    hra_m     = _r(basic_m * 0.50)
+    lta_m     = _r(basic_m * 0.10)
     transport = _fixed(conveyance_override, 1600.00)
     medical   = _fixed(medical_override,    1250.00)
     internet  = _fixed(internet_override,   1200.00)
+    pda_m     = _r(float(pda_override)) if use_pda and pda_override and str(pda_override).strip() else 0.00
+    ins_m     = _r(float(ins_override))  if use_ins  and ins_override  and str(ins_override).strip()  else 0.00
 
-    vp_monthly  = 0.00
+    # Annual components deducted from CTC (same logic as CompensationDetails)
+    gratuity_a = _r(basic_m * 12 * 0.0481)
+
+    # Variable Pay — vp_override from the payslip form is a monthly amount
+    vp_a = 0.00
+    vp_m = 0.00
     if use_vp:
-        vp_monthly = round(float(vp_override) if vp_override is not None and str(vp_override).strip() != "" else (gross * 0.05), 2)
+        if vp_override is not None and str(vp_override).strip() != "":
+            vp_m = _r(float(vp_override))   # monthly override entered in form
+            vp_a = _r(vp_m * 12)
+        else:
+            vp_a = _r(ctc * 0.05)           # default: 5% of annual CTC
+            vp_m = _r(vp_a / 12)
 
+    # Monthly gross pool = CTC minus annual retirements and VP (matches CompensationDetails)
+    gross_m = _r((ctc - gratuity_a - vp_a) / 12)
 
-    pda = 0.00
-    if use_pda:
-        pda = round(float(pda_override) if pda_override is not None and str(pda_override).strip() != "" else 0, 2)
+    # Special Allowance = pure remaining balance — no floor, no re-subtracting gratuity/VP
+    special_m = _r(gross_m - basic_m - hra_m - lta_m - transport - medical - internet - pda_m - ins_m)
 
-    ins = 0.00
-    if use_ins:
-        ins = round(float(ins_override) if ins_override is not None and str(ins_override).strip() != "" else 0, 2)
+    # Payslip gross = all earnings including VP (so earnings column sums correctly on slip)
+    gross_total = _r(basic_m + hra_m + lta_m + transport + medical + internet + special_m + pda_m + ins_m + vp_m)
 
-    # Special Allowance = MAX(Gross − components, Gross × 10%)
-    gratuity_contribution = round(basic * 0.0481, 2)
-
-    remaining     = gross - basic - hra - lta - transport - medical - internet
-    default_vp    = variable_pay_monthly if vp_monthly == 0.00 else vp_monthly
-    floor_special = round(gross * 0.10, 2)
-    special       = max(floor_special, round(remaining - gratuity_contribution - default_vp - pda - ins, 2))
-    pf_emp      = 0.00
+    # Deductions
+    pf_emp = 0.00
     if use_pf:
-        pf_emp = round(float(pf_override) if pf_override is not None and str(pf_override).strip() != "" else (basic * 0.12), 2)
+        pf_emp = _r(float(pf_override)) if pf_override and str(pf_override).strip() else _r(basic_m * 0.12)
 
-    income_tax  = 0.00
+    income_tax = 0.00
     if use_tds:
-        income_tax = round(float(tds_override) if tds_override is not None and str(tds_override).strip() != "" else 0, 2)
+        income_tax = _r(float(tds_override)) if tds_override and str(tds_override).strip() else 0.00
 
-    gross_total = round(basic + hra + lta + special + transport + medical + internet + vp_monthly + pda + ins, 2)
-    pre_net     = gross_total - pf_emp - income_tax
-    prof_tax    = 0.00 if pre_net < 25000 else 200.00
-    net_pay     = round(pre_net - prof_tax, 2)
+    pre_net  = _r(gross_total - pf_emp - income_tax)
+    prof_tax = 0.00 if pre_net < 25000 else 200.00
+    net_pay  = _r(pre_net - prof_tax)
 
     return dict(
-        gross=gross_total, basic=basic, hra=hra,
-        lta=lta, transport=transport, medical=medical, internet=internet,
-        special_allowance=special, variable_pay=vp_monthly,
-        professional_dev_allowance=pda, insurance_allowance=ins,
+        gross=gross_total, basic=basic_m, hra=hra_m,
+        lta=lta_m, transport=transport, medical=medical, internet=internet,
+        special_allowance=special_m, variable_pay=vp_m,
+        professional_dev_allowance=pda_m, insurance_allowance=ins_m,
         pf_employee=pf_emp, professional_tax=prof_tax, income_tax=income_tax,
-        net_pay=net_pay
+        net_pay=net_pay, gratuity_contribution=_r(basic_m * 0.0481)
     )
 
 
@@ -145,7 +155,6 @@ def generate_payslip():
 
     slip = _compute(
         ctc=ctc,
-        variable_pay_annual=float(emp.get("variable_pay_amount") or 0),
         use_pf=d.get("usePf", False),
         pf_override=d.get("pfAmount"),
         use_tds=d.get("useTds", False),
@@ -161,7 +170,7 @@ def generate_payslip():
         internet_override=d.get("internetAmount"),
     )
 
-    gratuity_increment = round(slip["basic"] * 0.0481, 2)
+    gratuity_increment = slip["gratuity_contribution"]
 
     existing = query(
         "SELECT id FROM payslips WHERE employee_id=%s AND month=%s AND year=%s",

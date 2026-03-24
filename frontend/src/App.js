@@ -938,7 +938,10 @@ function CompanyExpenses({ modal, setModal, currentUser, projects }) {
         e.status.toUpperCase()
       ];
     });
-    const csvStr = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+    const totalAmount = filteredList.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+    const totalGst = filteredList.reduce((sum, e) => sum + (parseFloat(e.gst_amount) || 0), 0);
+    const totalRow = ["", "TOTAL", totalAmount.toFixed(2), totalGst.toFixed(2), "", "", "", ""];
+    const csvStr = [headers.join(","), ...rows.map(r => r.join(",")), totalRow.join(",")].join("\n");
     const blob = new Blob([csvStr], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -4075,10 +4078,10 @@ function AdminPayslips() {
               <input type="checkbox" checked={form.useVp} onChange={e => setForm(f => ({ ...f, useVp: e.target.checked }))} style={{ cursor: "pointer", width: 16, height: 16 }} />
               Variable Pay
             </label>
-            <input type="number" min="0" placeholder="Auto: 5% of gross monthly" value={form.vpAmount} disabled={!form.useVp}
+            <input type="number" min="0" placeholder="Monthly amount (auto: 5% of CTC ÷ 12)" value={form.vpAmount} disabled={!form.useVp}
               onChange={e => setForm(f => ({ ...f, vpAmount: e.target.value }))}
               style={{ ...inpStyle, opacity: form.useVp ? 1 : 0.5 }} />
-            {form.useVp && !form.vpAmount && <div style={{ fontSize: 11, color: C.textMuted }}>Default 5% of gross — enter amount to override</div>}
+            {form.useVp && !form.vpAmount && <div style={{ fontSize: 11, color: C.textMuted }}>Default: 5% of annual CTC ÷ 12 — enter monthly amount to override</div>}
           </div>
         </div>
         {/* Row 3: Professional Dev & Insurance */}
