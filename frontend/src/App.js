@@ -5193,7 +5193,7 @@ function AdminAssets() {
   const [filterType, setFilterType] = useState("");
   const [search, setSearch] = useState("");
 
-  const EMPTY_FORM = { asset_tag: "", asset_type: "", brand: "", model: "", serial_number: "", purchase_date: "", purchase_cost: "", warranty_expiry: "", status: "available", notes: "" };
+  const EMPTY_FORM = { asset_tag: "", asset_type: "", brand: "", model: "", serial_number: "", purchase_date: "", purchase_cost: "", warranty_expiry: "", status: "available", notes: "", depreciation_amount: "" };
   const [form, setForm] = useState(EMPTY_FORM);
   const [assignForm, setAssignForm] = useState({ employee_id: "", assigned_date: "" });
 
@@ -5210,7 +5210,7 @@ function AdminAssets() {
   useEffect(() => { load(); }, [load]);
 
   function openAdd() { setForm(EMPTY_FORM); setEditing(null); setModal("add"); }
-  function openEdit(a) { setEditing(a); setForm({ ...a, purchase_cost: a.purchase_cost ?? "", purchase_date: a.purchase_date?.split("T")[0] || "", warranty_expiry: a.warranty_expiry?.split("T")[0] || "" }); setModal("edit"); }
+  function openEdit(a) { setEditing(a); setForm({ ...a, purchase_cost: a.purchase_cost ?? "", purchase_date: a.purchase_date?.split("T")[0] || "", warranty_expiry: a.warranty_expiry?.split("T")[0] || "", depreciation_amount: a.depreciation_amount ?? "" }); setModal("edit"); }
   function openAssign(a) { setEditing(a); setAssignForm({ employee_id: a.employee_id ? String(a.employee_id) : "", assigned_date: a.assigned_date?.split("T")[0] || "" }); setModal("assign"); }
 
   async function handleSave() {
@@ -5293,14 +5293,14 @@ function AdminAssets() {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr style={{ background: C.surface }}>
-                {["Type", "Asset Tag", "Brand / Model", "Serial #", "Purchase", "Warranty", "Status", "Assigned To", ""].map(h => (
+                {["Type", "Asset Tag", "Brand / Model", "Serial #", "Purchase", "Depreciation", "Warranty", "Status", "Assigned To", ""].map(h => (
                   <th key={h} style={{ padding: "12px 14px", textAlign: "left", color: C.textMuted, fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: .5, whiteSpace: "nowrap", borderBottom: `1px solid ${C.border}` }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={9} style={{ padding: 32, textAlign: "center", color: C.textMuted }}>No assets found.</td></tr>
+                <tr><td colSpan={10} style={{ padding: 32, textAlign: "center", color: C.textMuted }}>No assets found.</td></tr>
               ) : filtered.map(a => (
                 <tr key={a.id} style={{ borderBottom: `1px solid ${C.border}55` }}
                   onMouseEnter={e => e.currentTarget.style.background = C.surface + "88"}
@@ -5315,6 +5315,9 @@ function AdminAssets() {
                   <td style={{ padding: "12px 14px", color: C.textMuted, whiteSpace: "nowrap" }}>
                     <div>{a.purchase_date ? a.purchase_date.split("T")[0] : "—"}</div>
                     <div style={{ fontSize: 12 }}>{a.purchase_cost != null ? `₹${Number(a.purchase_cost).toLocaleString("en-IN")}` : ""}</div>
+                  </td>
+                  <td style={{ padding: "12px 14px", color: C.textMuted, whiteSpace: "nowrap" }}>
+                    {a.depreciation_amount != null ? `₹${Number(a.depreciation_amount).toLocaleString("en-IN")}` : "—"}
                   </td>
                   <td style={{ padding: "12px 14px", color: C.textMuted, whiteSpace: "nowrap" }}>{a.warranty_expiry ? a.warranty_expiry.split("T")[0] : "—"}</td>
                   <td style={{ padding: "12px 14px" }}>
@@ -5353,6 +5356,7 @@ function AdminAssets() {
             <Inp label="Serial Number" value={form.serial_number} onChange={v => setForm(f => ({ ...f, serial_number: v }))} />
             <Inp label="Purchase Date" type="date" value={form.purchase_date} onChange={v => setForm(f => ({ ...f, purchase_date: v }))} />
             <Inp label="Purchase Cost (₹)" type="number" value={form.purchase_cost} onChange={v => setForm(f => ({ ...f, purchase_cost: v }))} />
+            <Inp label="Depreciation Amount (₹)" type="number" value={form.depreciation_amount} onChange={v => setForm(f => ({ ...f, depreciation_amount: v }))} />
             <Inp label="Warranty Expiry" type="date" value={form.warranty_expiry} onChange={v => setForm(f => ({ ...f, warranty_expiry: v }))} />
             <Inp label="Status" value={form.status} onChange={v => setForm(f => ({ ...f, status: v }))} options={["available", "assigned", "maintenance", "retired"].map(s => ({ value: s, label: s.charAt(0).toUpperCase() + s.slice(1) }))} />
           </div>

@@ -52,8 +52,8 @@ def create_asset():
     aid = execute(
         """INSERT INTO assets
            (asset_tag, asset_type, brand, model, serial_number,
-            purchase_date, purchase_cost, warranty_expiry, status, notes)
-           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+            purchase_date, purchase_cost, warranty_expiry, status, notes, depreciation_amount)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
         (d["asset_tag"], d["asset_type"],
          d.get("brand") or None, d.get("model") or None,
          d.get("serial_number") or None,
@@ -61,7 +61,8 @@ def create_asset():
          float(d["purchase_cost"]) if d.get("purchase_cost") else None,
          d.get("warranty_expiry") or None,
          d.get("status", "available"),
-         d.get("notes") or None)
+         d.get("notes") or None,
+         float(d["depreciation_amount"]) if d.get("depreciation_amount") else None)
     )
     row = query(ASSET_SELECT + " AND a.id=%s", (aid,), fetch="one")
     return jsonify(_fmt(row)), 201
@@ -78,7 +79,8 @@ def update_asset(aid):
     execute(
         """UPDATE assets SET
            asset_tag=%s, asset_type=%s, brand=%s, model=%s, serial_number=%s,
-           purchase_date=%s, purchase_cost=%s, warranty_expiry=%s, status=%s, notes=%s
+           purchase_date=%s, purchase_cost=%s, warranty_expiry=%s, status=%s, notes=%s,
+           depreciation_amount=%s
            WHERE id=%s""",
         (d.get("asset_tag"), d.get("asset_type"),
          d.get("brand") or None, d.get("model") or None,
@@ -87,7 +89,9 @@ def update_asset(aid):
          float(d["purchase_cost"]) if d.get("purchase_cost") else None,
          d.get("warranty_expiry") or None,
          d.get("status", "available"),
-         d.get("notes") or None, aid)
+         d.get("notes") or None,
+         float(d["depreciation_amount"]) if d.get("depreciation_amount") else None,
+         aid)
     )
     row = query(ASSET_SELECT + " AND a.id=%s", (aid,), fetch="one")
     return jsonify(_fmt(row)), 200
