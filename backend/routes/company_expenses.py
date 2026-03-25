@@ -8,8 +8,9 @@ company_expenses_bp = Blueprint("company_expenses", __name__, url_prefix="/api/c
 def _fmt(r):
     if not r: return None
     import datetime
-    if "expense_date" in r and isinstance(r["expense_date"], datetime.date):
-        r["expense_date"] = r["expense_date"].isoformat()
+    for k in ("expense_date", "cleared_date"):
+        if k in r and isinstance(r[k], datetime.date):
+            r[k] = r[k].isoformat()
     if "created_at" in r and isinstance(r["created_at"], datetime.datetime):
         r["created_at"] = r["created_at"].isoformat()
     for k in ["amount", "gst_amount"]:
@@ -89,7 +90,11 @@ def update_expense_status(eid):
     if new_status not in ["pending", "cleared", "sent to auditing"]:
         return jsonify(error="Invalid status"), 400
 
-    execute("UPDATE company_expenses SET status=%s WHERE id=%s", (new_status, eid))
+    cleared_date = d.get("cleared_date") or None
+    if new_status == "cleared":
+        execute("UPDATE company_expenses SET status=%s, cleared_date=%s WHERE id=%s", (new_status, cleared_date, eid))
+    else:
+        execute("UPDATE company_expenses SET status=%s WHERE id=%s", (new_status, eid))
     row = query("SELECT * FROM company_expenses WHERE id=%s", (eid,), fetch="one")
     return jsonify(_fmt(row)), 200
 

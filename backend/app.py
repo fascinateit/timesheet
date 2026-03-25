@@ -3,6 +3,7 @@ ProjectPulse – Flask Backend
 Entry point: app.py
 """
 import os
+from datetime import timedelta
 from flask import Flask, send_from_directory
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
@@ -16,7 +17,7 @@ def create_app():
     # ── Config ────────────────────────────────────────────────────────────
     app.config["SECRET_KEY"]              = os.environ["SECRET_KEY"]
     app.config["JWT_SECRET_KEY"]          = os.environ["JWT_SECRET_KEY"]
-    app.config["JWT_ACCESS_TOKEN_EXPIRES"] = False   # long-lived for demo; set timedelta in production
+    app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=30)
 
     # ── Extensions ────────────────────────────────────────────────────────
     CORS(app, resources={r"/api/*": {"origins": "*"}})

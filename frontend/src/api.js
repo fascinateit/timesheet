@@ -13,6 +13,12 @@ async function req(method, path, body) {
     headers,
     body: body ? JSON.stringify(body) : undefined,
   });
+  if (res.status === 401) {
+    localStorage.removeItem("pp_token");
+    localStorage.removeItem("pp_user");
+    window.dispatchEvent(new Event("pp_session_expired"));
+    throw new Error("Session expired. Please log in again.");
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
   return data;
@@ -115,7 +121,7 @@ export const api = {
   getCompanyExpenses: () => req("GET", "/company-expenses/"),
   createCompanyExpense: (d) => req("POST", "/company-expenses/", d),
   updateCompanyExpense: (id, d) => req("PUT", `/company-expenses/${id}`, d),
-  updateCompanyExpenseStatus: (id, status) => req("PUT", `/company-expenses/${id}/status`, { status }),
+  updateCompanyExpenseStatus: (id, status, cleared_date) => req("PUT", `/company-expenses/${id}/status`, { status, cleared_date }),
   deleteCompanyExpense: (id) => req("DELETE", `/company-expenses/${id}`),
 
   // Clients

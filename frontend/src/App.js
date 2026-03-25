@@ -864,8 +864,10 @@ function CompanyExpenses({ modal, setModal, currentUser, projects }) {
   const [saving, setSaving] = useState(false);
   const [editObj, setEditObj] = useState(null);
   const [filterMonth, setFilterMonth] = useState("all");
+  const [filterClearedMonth, setFilterClearedMonth] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [chartOffset, setChartOffset] = useState(0);
+  const [clearModal, setClearModal] = useState(null); // { id, clearedDate }
 
   const initForm = { expenseDate: "", purpose: "", amount: "", paidBy: "", itrType: "", taxType: "", gstAmount: "", status: "pending" };
   const [form, setForm] = useState({ ...initForm });
@@ -913,34 +915,39 @@ function CompanyExpenses({ modal, setModal, currentUser, projects }) {
     } catch (e) { alert(e.message); }
   }
 
-  async function handleToggleStatus(id, newStatus) {
+  async function handleToggleStatus(id, newStatus, clearedDate) {
     try {
-      await api.updateCompanyExpenseStatus(id, newStatus);
+      await api.updateCompanyExpenseStatus(id, newStatus, clearedDate || null);
       await load();
     } catch (e) { alert(e.message); }
   }
 
   function handleDownloadCSV() {
     if (!filteredList || !filteredList.length) return alert("No company expenses to export.");
-    const headers = ["Expense Date", "Purpose", "Amount (INR)", "GST Amount (INR)", "Paid By", "ITR Type", "Tax Type", "Status"];
+    const headers = ["Expense Date", "Purpose", "Amount (INR)", "GST Amount (INR)", "Total Amount (INR)", "Paid By", "ITR Type", "Tax Type", "Status", "Cleared Date"];
     const rows = filteredList.map(e => {
-      // Parse strictly as dd-mm-yyyy per requirements
       const [yr, mo, da] = (e.expense_date || "").split("-");
       const fmtDate = yr && mo && da ? `${da}-${mo}-${yr}` : e.expense_date;
+      const [cyr, cmo, cda] = (e.cleared_date || "").split("-");
+      const fmtCleared = cyr && cmo && cda ? `${cda}-${cmo}-${cyr}` : (e.cleared_date || "");
+      const total = (parseFloat(e.amount) || 0) + (parseFloat(e.gst_amount) || 0);
       return [
         fmtDate,
         `"${(e.purpose || "").replace(/"/g, '""')}"`,
         e.amount,
         e.gst_amount || 0,
+        total.toFixed(2),
         `"${(e.paid_by || "").replace(/"/g, '""')}"`,
         e.itr_type || "",
         e.tax_type || "",
-        e.status.toUpperCase()
+        e.status.toUpperCase(),
+        fmtCleared
       ];
     });
     const totalAmount = filteredList.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
     const totalGst = filteredList.reduce((sum, e) => sum + (parseFloat(e.gst_amount) || 0), 0);
-    const totalRow = ["", "TOTAL", totalAmount.toFixed(2), totalGst.toFixed(2), "", "", "", ""];
+    const grandTotal = totalAmount + totalGst;
+    const totalRow = ["", "TOTAL", totalAmount.toFixed(2), totalGst.toFixed(2), grandTotal.toFixed(2), "", "", "", "", ""];
     const csvStr = [headers.join(","), ...rows.map(r => r.join(",")), totalRow.join(",")].join("\n");
     const blob = new Blob([csvStr], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -967,9 +974,11 @@ function CompanyExpenses({ modal, setModal, currentUser, projects }) {
 
   const chartDataMap = {};
   const monthOptions = Array.from(new Set(expenses.map(e => e.expense_date?.slice(0, 7)).filter(Boolean))).sort().reverse();
+  const clearedMonthOptions = Array.from(new Set(expenses.filter(e => e.cleared_date).map(e => e.cleared_date?.slice(0, 7)).filter(Boolean))).sort().reverse();
   const filteredList = expenses.filter(e => {
-    if (filterMonth !== "all" && !e.expense_date?.startsWith(filterMonth)) return false;
     if (filterStatus !== "all" && e.status !== filterStatus) return false;
+    if (filterMonth !== "all" && !e.expense_date?.startsWith(filterMonth)) return false;
+    if (filterClearedMonth !== "all" && !e.cleared_date?.startsWith(filterClearedMonth)) return false;
     return true;
   });
   const filteredTotal = filteredList.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0) + (parseFloat(curr.gst_amount) || 0), 0);
@@ -987,23 +996,23 @@ function CompanyExpenses({ modal, setModal, currentUser, projects }) {
           <div style={{ fontSize: 28, fontWeight: 800, color: C.text, marginTop: 8 }}>{fmt$(totalExpenses)}</div>
         </Card>
         <Card>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <div>
-              <div style={{ fontSize: 13, color: C.textMuted, fontWeight: 700, letterSpacing: .5 }}>FILTERED EXPENSES</div>
-              <div style={{ fontSize: 28, fontWeight: 800, color: C.text, marginTop: 8 }}>{fmt$(filteredTotal)}</div>
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 12px", outline: "none", fontSize: 13 }}>
-                <option value="all">All Statuses</option>
-                <option value="pending">Pending</option>
-                <option value="cleared">Cleared</option>
-                <option value="sent to auditing">Sent to Auditing</option>
-              </select>
-              <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} style={{ background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 12px", outline: "none", fontSize: 13 }}>
-                <option value="all">All Months</option>
-                {monthOptions.map(m => <option key={m} value={m}>{new Date(m + "-01T12:00:00").toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</option>)}
-              </select>
-            </div>
+          <div style={{ fontSize: 13, color: C.textMuted, fontWeight: 700, letterSpacing: .5, marginBottom: 8 }}>FILTERED EXPENSES</div>
+          <div style={{ fontSize: 28, fontWeight: 800, color: C.text, marginBottom: 14 }}>{fmt$(filteredTotal)}</div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <select value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setFilterMonth("all"); setFilterClearedMonth("all"); }} style={{ background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 12px", outline: "none", fontSize: 13 }}>
+              <option value="all">All Statuses</option>
+              <option value="pending">Pending</option>
+              <option value="cleared">Cleared</option>
+              <option value="sent to auditing">Sent to Auditing</option>
+            </select>
+            <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} style={{ background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 12px", outline: "none", fontSize: 13 }}>
+              <option value="all">All Expense Months</option>
+              {monthOptions.map(m => <option key={m} value={m}>{new Date(m + "-01T12:00:00").toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</option>)}
+            </select>
+            <select value={filterClearedMonth} onChange={e => setFilterClearedMonth(e.target.value)} style={{ background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 12px", outline: "none", fontSize: 13 }}>
+              <option value="all">All Cleared Months</option>
+              {clearedMonthOptions.map(m => <option key={m} value={m}>{new Date(m + "-01T12:00:00").toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</option>)}
+            </select>
           </div>
         </Card>
       </div>
@@ -1054,6 +1063,7 @@ function CompanyExpenses({ modal, setModal, currentUser, projects }) {
                   <Th>Paid By</Th>
                   <Th>ITR / Tax Type</Th>
                   <Th>Status</Th>
+                  <Th>Cleared Date</Th>
                   <Th>Action</Th>
                 </tr>
               </thead>
@@ -1079,12 +1089,18 @@ function CompanyExpenses({ modal, setModal, currentUser, projects }) {
                         </Badge>
                       </Td>
                       <Td>
+                        {exp.cleared_date
+                          ? <div style={{ fontSize: 13, fontWeight: 600, color: C.green }}>{(() => { const [cy, cm, cd] = exp.cleared_date.split("T")[0].split("-"); return `${cd}-${cm}-${cy}`; })()}</div>
+                          : <div style={{ fontSize: 13, color: C.textMuted }}>—</div>
+                        }
+                      </Td>
+                      <Td>
                         <div style={{ display: "flex", gap: 6 }}>
                           {(!exp.paid_by?.toUpperCase().includes('FIT') && exp.status !== "sent to auditing") && (
                             <Btn small variant="outline" onClick={() => { setEditObj(exp); setModal("generateExpense"); }}>Generate Exp</Btn>
                           )}
                           {exp.status === "pending" && (
-                            <Btn small variant="success" onClick={() => handleToggleStatus(exp.id, "cleared")}>Mark Cleared</Btn>
+                            <Btn small variant="success" onClick={() => setClearModal({ id: exp.id, clearedDate: new Date().toISOString().split("T")[0] })}>Mark Cleared</Btn>
                           )}
                           {exp.status === "cleared" && (
                             <Btn small style={{ background: C.purple, color: "#fff", border: "none" }} onClick={() => handleToggleStatus(exp.id, "sent to auditing")}>Send to Auditing</Btn>
@@ -1105,6 +1121,29 @@ function CompanyExpenses({ modal, setModal, currentUser, projects }) {
           </div>
         )}
       </Card>
+
+      {clearModal && (
+        <Modal title="Mark as Cleared" onClose={() => setClearModal(null)} maxWidth={360}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ fontSize: 13, color: C.textMuted }}>Select the date this expense was cleared / paid.</div>
+            <div>
+              <label style={{ fontSize: 12, color: C.textMuted, fontWeight: 600, display: "block", marginBottom: 6 }}>Cleared Date *</label>
+              <input type="date" value={clearModal.clearedDate}
+                onChange={e => setClearModal(m => ({ ...m, clearedDate: e.target.value }))}
+                style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "8px 12px", fontSize: 13, width: "100%" }} />
+            </div>
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 20 }}>
+            <Btn variant="ghost" onClick={() => setClearModal(null)}>Cancel</Btn>
+            <Btn variant="success" onClick={async () => {
+              try {
+                await handleToggleStatus(clearModal.id, "cleared", clearModal.clearedDate || null);
+                setClearModal(null);
+              } catch (e) { alert(e.message); }
+            }}>Confirm Cleared</Btn>
+          </div>
+        </Modal>
+      )}
 
       {modal === "generateExpense" && editObj && (
         <Modal title="Generate Employee Expense" onClose={() => { setModal(false); setEditObj(null); }}>
@@ -2749,6 +2788,7 @@ function MyProfile({ currentUser }) {
   const [pwSaving, setPwSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [showPwModal, setShowPwModal] = useState(false);
+  const [showCtc, setShowCtc] = useState(false);
 
   useEffect(() => {
     api.getEmployee(currentUser.employee_id)
@@ -2839,7 +2879,21 @@ function MyProfile({ currentUser }) {
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Inp label="Joining Date" value={profile.joining_date ? fmtD(profile.joining_date) : "—"} disabled />
-              <Inp label="Annual CTC" value={profile.ctc_annual ? `₹${Number(profile.ctc_annual).toLocaleString("en-IN")}` : "—"} disabled />
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <label style={{ fontSize: 12, color: C.textMuted, fontWeight: 600, letterSpacing: .4 }}>Annual CTC</label>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px" }}>
+                  <span style={{ flex: 1, fontSize: 13, color: C.text, letterSpacing: showCtc ? "normal" : "0.15em" }}>
+                    {profile.ctc_annual
+                      ? (showCtc ? `₹${Number(profile.ctc_annual).toLocaleString("en-IN")}` : "••••••••")
+                      : "—"}
+                  </span>
+                  {profile.ctc_annual && (
+                    <button onClick={() => setShowCtc(v => !v)} style={{ background: "none", border: "none", color: C.textMuted, cursor: "pointer", fontSize: 15, padding: 0, lineHeight: 1 }} title={showCtc ? "Hide" : "Show"}>
+                      {showCtc ? "🙈" : "👁"}
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </Card>
@@ -5435,6 +5489,8 @@ const STYLE = [
   "@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');",
   "* { box-sizing: border-box; }",
   "input, select, button { font-family: inherit !important; }",
+  "input[type='date'], input[type='time'], input[type='datetime-local'] { color-scheme: dark; }",
+  "input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webkit-calendar-picker-indicator, input[type='datetime-local']::-webkit-calendar-picker-indicator { filter: brightness(0) invert(1) !important; opacity: 1 !important; cursor: pointer; }",
   "::-webkit-scrollbar { width: 4px; height: 4px; }",
   "::-webkit-scrollbar-track { background: transparent; }",
   "::-webkit-scrollbar-thumb { background: #1E2740; border-radius: 4px; }",
@@ -5474,6 +5530,12 @@ export default function App() {
   const [page, setPage] = useState("dashboard");
   const [navOpen, setNavOpen] = useState(false);
   const nav = (p) => { setPage(p); setNavOpen(false); };
+
+  useEffect(() => {
+    function onSessionExpired() { setCurrentUser(null); setPage("dashboard"); }
+    window.addEventListener("pp_session_expired", onSessionExpired);
+    return () => window.removeEventListener("pp_session_expired", onSessionExpired);
+  }, []);
 
   async function handleLogin(username, password) {
     const data = await api.login(username, password);

@@ -7,7 +7,7 @@ import json
 payslips_bp = Blueprint("payslips", __name__)
 
 
-def _compute(ctc,
+def _compute(ctc,variable_pay_annual=0,
              use_pf=False, pf_override=None,
              use_tds=False, tds_override=None,
              use_vp=False, vp_override=None,
@@ -47,18 +47,18 @@ def _compute(ctc,
         if vp_override is not None and str(vp_override).strip() != "":
             vp_m = _r(float(vp_override))   # monthly override entered in form
             vp_a = _r(vp_m * 12)
-        else:
-            vp_a = _r(ctc * 0.05)           # default: 5% of annual CTC
-            vp_m = _r(vp_a / 12)
+        # else:
+        #     vp_a = _r(ctc * 0.05)           # default: 5% of annual CTC
+        #     vp_m = _r(vp_a / 12)
 
-    # Monthly gross pool = CTC minus annual retirements and VP (matches CompensationDetails)
-    gross_m = _r((ctc - gratuity_a - vp_a) / 12)
+    # Monthly gross pool = CTC minus gratuity only — VP is NOT deducted, it is purely additive
+    gross_m = _r((ctc - gratuity_a - variable_pay_annual) / 12)
 
-    # Special Allowance = pure remaining balance — no floor, no re-subtracting gratuity/VP
+    # Special Allowance = remaining balance after fixed components (VP excluded — added on top)
     special_m = _r(gross_m - basic_m - hra_m - lta_m - transport - medical - internet - pda_m - ins_m)
 
-    # Payslip gross = all earnings including VP (so earnings column sums correctly on slip)
-    gross_total = _r(basic_m + hra_m + lta_m + transport + medical + internet + special_m + pda_m + ins_m + vp_m)
+    # Payslip gross = fixed gross + VP (VP is additive, increases total take-home)
+    gross_total = _r(gross_m + vp_m)
 
     # Deductions
     pf_emp = 0.00
@@ -155,6 +155,7 @@ def generate_payslip():
 
     slip = _compute(
         ctc=ctc,
+        variable_pay_annual=float(emp.get("variable_pay_amount") or 0),
         use_pf=d.get("usePf", False),
         pf_override=d.get("pfAmount"),
         use_tds=d.get("useTds", False),
