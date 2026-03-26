@@ -217,6 +217,28 @@ def generate_payslip():
     return jsonify(_fmt(row)), 201
 
 
+@payslips_bp.route("/<int:psid>/request-download", methods=["POST"])
+@jwt_required()
+def request_download(psid):
+    execute("UPDATE payslips SET download_requested=1 WHERE id=%s", (psid,))
+    row = query(SLIP_SELECT + " AND ps.id=%s", (psid,), fetch="one")
+    return jsonify(_fmt(row)), 200
+
+
+@payslips_bp.route("/<int:psid>/approve", methods=["POST"])
+@jwt_required()
+def approve_payslip(psid):
+    user = json.loads(get_jwt_identity())
+    if user["role"] not in ("admin", "manager"):
+        return jsonify(error="Forbidden"), 403
+    execute(
+        "UPDATE payslips SET is_approved=1, approved_by=%s, approved_at=NOW() WHERE id=%s",
+        (user.get("employee_id"), psid)
+    )
+    row = query(SLIP_SELECT + " AND ps.id=%s", (psid,), fetch="one")
+    return jsonify(_fmt(row)), 200
+
+
 @payslips_bp.route("/<int:psid>", methods=["DELETE"])
 @jwt_required()
 def delete_payslip(psid):

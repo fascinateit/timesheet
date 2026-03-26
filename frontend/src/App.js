@@ -542,10 +542,10 @@ function ProjectManagement({ readOnly = false, currentUser }) {
   useEffect(() => { load(); }, []);
 
   async function handleToggleStatus(inv) {
-    if (inv.status === "pending") {
-      // Show modal to collect payment received date
+    if (inv.status !== "cleared") {
+      // Show modal to collect payment received date (pending or partial)
       setPaymentDate(new Date().toISOString().slice(0, 10));
-      setPaymentAmount(inv.amount || "");
+      setPaymentAmount(inv.status === "partial" && inv.balance_amount != null ? inv.balance_amount : (inv.amount || ""));
       setClearModal(inv);
     } else {
       // Revert to pending immediately
@@ -583,16 +583,22 @@ function ProjectManagement({ readOnly = false, currentUser }) {
 
   function handleDownloadCSV(filteredInvoices) {
     if (!filteredInvoices.length) return alert("No invoices to export.");
+    const fmtCsvDate = d => {
+      if (!d) return "";
+      const dt = new Date(d);
+      if (isNaN(dt)) return d;
+      return dt.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }).replace(/ /g, "-");
+    };
     const headers = ["Project Code", "Project Name", "Task / Deliverables", "Amount Raised (INR)", "Date Raised", "Payment Due Date", "Payment Received (INR)", "Payment Received Date", "Clearance Status"];
     const rows = filteredInvoices.map(inv => [
       inv.project_code,
       `"${inv.project_name.replace(/"/g, '""')}"`,
       `"${parseTaskNames(inv.task_details).replace(/"/g, '""')}"`,
       inv.amount,
-      inv.raised_date,
-      inv.payment_due_date || "",
+      fmtCsvDate(inv.raised_date),
+      fmtCsvDate(inv.payment_due_date),
       inv.payment_received != null ? inv.payment_received : "",
-      inv.payment_received_date || "",
+      fmtCsvDate(inv.payment_received_date),
       inv.status.toUpperCase()
     ]);
     const csvStr = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
@@ -685,6 +691,7 @@ function ProjectManagement({ readOnly = false, currentUser }) {
                   <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ padding: "6px 10px", borderRadius: 6, background: C.bg, border: `1px solid ${C.border}`, color: filterStatus !== "all" ? C.text : C.textMuted, fontSize: 12, outline: "none", cursor: "pointer" }}>
                     <option value="all">All Statuses</option>
                     <option value="pending">Pending</option>
+                    <option value="partial">Partial</option>
                     <option value="cleared">Cleared</option>
                   </select>
                 </div>
@@ -713,6 +720,11 @@ function ProjectManagement({ readOnly = false, currentUser }) {
                       <tr key={inv.id} style={{ borderBottom: `1px solid ${C.border}` }}>
                         <Td>
                           <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{inv.invoice_number}</div>
+                          {inv.parent_invoice_number && (
+                            <div style={{ fontSize: 11, color: "#f97316", marginBottom: 2 }}>
+                              ↳ Balance of {inv.parent_invoice_number}
+                            </div>
+                          )}
                           <div style={{ fontSize: 13, fontWeight: 700, color: C.accent }}>{inv.client_name || inv.project_name}</div>
                           <div style={{ fontSize: 11, color: C.textMuted }}>{inv.project_code}</div>
                         </Td>
@@ -733,17 +745,22 @@ function ProjectManagement({ readOnly = false, currentUser }) {
                             : <span style={{ fontSize: 12, color: C.textMuted }}>—</span>}
                         </Td>
                         <Td>
-                          <Badge color={inv.status === "cleared" ? C.green : C.amber}>
+                          <Badge color={inv.status === "cleared" ? C.green : inv.status === "partial" ? "#f97316" : C.amber}>
                             {inv.status}
                           </Badge>
+                          {inv.status === "partial" && inv.balance_amount != null && (
+                            <div style={{ fontSize: 11, color: "#f97316", marginTop: 3, fontWeight: 600 }}>
+                              Balance: {fmt$(inv.balance_amount)}
+                            </div>
+                          )}
                         </Td>
                         {!readOnly && (
                           <Td>
                             <div style={{ display: "flex", gap: 8 }}>
                               <Btn small variant="ghost" onClick={() => setViewInvoice(inv)}>👁</Btn>
-                              <Btn small variant={inv.status === "pending" ? "success" : "ghost"}
+                              <Btn small variant={inv.status === "cleared" ? "ghost" : "success"}
                                 onClick={() => handleToggleStatus(inv)}>
-                                {inv.status === "pending" ? "Mark Cleared" : "Mark Pending"}
+                                {inv.status === "cleared" ? "Mark Pending" : "Mark Cleared"}
                               </Btn>
                               <Btn small variant="ghost" onClick={() => { setEditInvoice(inv); setModal("edit"); }}>✏</Btn>
                               <Btn small variant="danger" onClick={() => handleDelete(inv.id)}>🗑</Btn>
@@ -760,38 +777,86 @@ function ProjectManagement({ readOnly = false, currentUser }) {
         </div>
       )}
 
-      {clearModal && (
-        <Modal title="Mark Invoice as Cleared" onClose={() => setClearModal(null)}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-            <div style={{ background: C.surface, borderRadius: 10, padding: "14px 16px" }}>
-              <div style={{ fontSize: 12, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>Invoice</div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{clearModal.invoice_number || clearModal.client_name || clearModal.project_name}</div>
-              <div style={{ fontSize: 13, color: C.green, fontWeight: 700, marginTop: 4 }}>{fmt$(clearModal.amount)}</div>
+      {clearModal && (() => {
+        const raisedAmt = parseFloat(clearModal.amount || 0);
+        const receivedAmt = parseFloat(paymentAmount || 0);
+        const diff = raisedAmt - receivedAmt;
+        const hasShortfall = paymentAmount !== "" && diff > 0.005;
+        const hasOverpay   = paymentAmount !== "" && diff < -0.005;
+        return (
+          <Modal title="Mark Invoice as Cleared" onClose={() => setClearModal(null)}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {/* Invoice summary */}
+              <div style={{ background: C.surface, borderRadius: 10, padding: "14px 16px" }}>
+                <div style={{ fontSize: 12, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>Invoice</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{clearModal.invoice_number || clearModal.client_name || clearModal.project_name}</div>
+                <div style={{ display: "flex", gap: 20, marginTop: 6 }}>
+                  <div>
+                    <div style={{ fontSize: 11, color: C.textMuted }}>Amount Raised</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{fmt$(raisedAmt)}</div>
+                  </div>
+                  {clearModal.parent_invoice_number && (
+                    <div>
+                      <div style={{ fontSize: 11, color: C.textMuted }}>Parent Invoice</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#f97316" }}>{clearModal.parent_invoice_number}</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <Inp label="Payment Received Date" type="date" value={paymentDate} onChange={v => setPaymentDate(v)} required />
+              <Inp
+                label="Payment Received Amount (₹)"
+                type="number"
+                value={paymentAmount}
+                onChange={v => setPaymentAmount(v)}
+                placeholder={`Full amount: ${fmt$(raisedAmt)}`}
+              />
+
+              {/* Difference indicator */}
+              {hasShortfall && (
+                <div style={{ background: "#f9731622", border: "1px solid #f97316", borderRadius: 8, padding: "12px 14px" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#f97316", marginBottom: 4 }}>⚠ Shortfall Detected</div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.textDim }}>
+                    <span>Amount Raised</span><span style={{ fontWeight: 700 }}>{fmt$(raisedAmt)}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.textDim }}>
+                    <span>Payment Received</span><span style={{ fontWeight: 700, color: C.green }}>{fmt$(receivedAmt)}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, borderTop: `1px solid #f9731644`, marginTop: 6, paddingTop: 6 }}>
+                    <span style={{ fontWeight: 700, color: "#f97316" }}>Balance Due</span>
+                    <span style={{ fontWeight: 800, color: "#f97316" }}>{fmt$(diff)}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: C.textMuted, marginTop: 6 }}>
+                    {(() => {
+                      const rootNum = (clearModal.invoice_number || "").replace(/^(BAL-\d{4}-)+/, "");
+                      const mmdd = new Date().toLocaleDateString("en-GB", { month: "2-digit", day: "2-digit" }).replace("/", "");
+                      return <>Invoice will be marked <strong>partial</strong>. A new balance invoice <strong>BAL-{mmdd}-{rootNum}</strong> (₹{diff.toLocaleString("en-IN", { minimumFractionDigits: 2 })}) will be auto-created and linked to this invoice.</>;
+                    })()}
+                  </div>
+                </div>
+              )}
+              {hasOverpay && (
+                <div style={{ background: C.green + "22", border: `1px solid ${C.green}`, borderRadius: 8, padding: "10px 14px", fontSize: 12, color: C.green }}>
+                  ℹ Overpayment of {fmt$(Math.abs(diff))} detected. Invoice will be marked cleared.
+                </div>
+              )}
+              {paymentAmount !== "" && !hasShortfall && !hasOverpay && (
+                <div style={{ background: C.green + "22", border: `1px solid ${C.green}`, borderRadius: 8, padding: "10px 14px", fontSize: 12, color: C.green }}>
+                  ✓ Full payment. Invoice will be marked cleared.
+                </div>
+              )}
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 4 }}>
+                <Btn variant="ghost" onClick={() => setClearModal(null)}>Cancel</Btn>
+                <Btn variant="success" onClick={handleConfirmCleared}>
+                  {hasShortfall ? "✓ Confirm Partial Payment" : "✓ Confirm Cleared"}
+                </Btn>
+              </div>
             </div>
-            <Inp
-              label="Payment Received Date"
-              type="date"
-              value={paymentDate}
-              onChange={v => setPaymentDate(v)}
-              required
-            />
-            <Inp
-              label="Payment Received Amount (₹)"
-              type="number"
-              value={paymentAmount}
-              onChange={v => setPaymentAmount(v)}
-              placeholder={`Invoice amount: ${fmt$(clearModal?.amount)}`}
-            />
-            <p style={{ margin: 0, fontSize: 12, color: C.textMuted }}>
-              Enter the date and amount actually received. These will be recorded against the invoice.
-            </p>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-              <Btn variant="ghost" onClick={() => setClearModal(null)}>Cancel</Btn>
-              <Btn variant="success" onClick={handleConfirmCleared}>✓ Confirm Cleared</Btn>
-            </div>
-          </div>
-        </Modal>
-      )}
+          </Modal>
+        );
+      })()}
 
       {modal && (
         <Modal title={modal === "edit" ? "Edit Invoice" : "Raise New Invoice"} onClose={() => { setModal(false); setEditInvoice(null); }}>
@@ -3010,6 +3075,8 @@ function MyPay({ currentUser }) {
   const [payslips, setPayslips] = useState([]);
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [requesting, setRequesting] = useState(false);
+  const [showAmounts, setShowAmounts] = useState(false);
   const origin = window.location.origin;
 
   useEffect(() => {
@@ -3019,9 +3086,20 @@ function MyPay({ currentUser }) {
     }).catch(() => { }).finally(() => setLoading(false));
   }, []);
 
+  async function handleRequestDownload(ps) {
+    setRequesting(true);
+    try {
+      const updated = await api.requestPayslipDownload(ps.id);
+      setPayslips(prev => prev.map(p => p.id === ps.id ? { ...p, ...updated } : p));
+      setSelected(prev => prev?.id === ps.id ? { ...prev, ...updated } : prev);
+    } catch (e) { alert(e.message); }
+    finally { setRequesting(false); }
+  }
+
   if (loading) return <Spinner />;
 
   const fmt = n => `₹${Number(n).toLocaleString("en-IN")}`;
+  const mask = n => showAmounts ? fmt(n) : "••••••";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
@@ -3032,13 +3110,23 @@ function MyPay({ currentUser }) {
         </div>
         {payslips.length > 0 && (
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <button onClick={() => setShowAmounts(v => !v)} title={showAmounts ? "Hide amounts" : "View amounts"}
+              style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.textMuted, padding: "7px 12px", fontSize: 14, cursor: "pointer", lineHeight: 1 }}>
+              {showAmounts ? "🙈 Hide" : "👁 View"}
+            </button>
             <select value={selected?.id || ""} onChange={e => setSelected(payslips.find(p => p.id === +e.target.value))}
               style={{ background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "7px 12px", fontSize: 13, cursor: "pointer" }}>
               {payslips.map(p => (
                 <option key={p.id} value={p.id}>{SLIP_MONTHS[p.month - 1]} {p.year}</option>
               ))}
             </select>
-            {selected && <Btn onClick={() => printPayslipData(selected, origin)}>🖨 Download PDF</Btn>}
+            {selected && (
+              selected.is_approved
+                ? <Btn onClick={() => printPayslipData(selected, origin)}>🖨 Download PDF</Btn>
+                : selected.download_requested
+                  ? <Btn variant="ghost" disabled style={{ opacity: 0.6, cursor: "not-allowed" }}>⏳ Awaiting Approval</Btn>
+                  : <Btn variant="ghost" onClick={() => handleRequestDownload(selected)} disabled={requesting}>📩 Request for Download</Btn>
+            )}
           </div>
         )}
       </div>
@@ -3052,9 +3140,9 @@ function MyPay({ currentUser }) {
       ) : selected ? (
         <>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 14 }}>
-            {[["Monthly Gross", fmt(selected.gross), C.green], ["Basic Salary", fmt(selected.basic), C.accent],
-            ["HRA", fmt(selected.hra), C.purple], ["Transport", fmt(selected.transport), C.amber],
-            ["PF Deduction", fmt(selected.pf_employee), C.red], ["Net Pay", fmt(selected.net_pay), C.green]].map(([label, value, color]) => (
+            {[["Monthly Gross", mask(selected.gross), C.green], ["Basic Salary", mask(selected.basic), C.accent],
+            ["HRA", mask(selected.hra), C.purple], ["Transport", mask(selected.transport), C.amber],
+            ["PF Deduction", mask(selected.pf_employee), C.red], ["Net Pay", mask(selected.net_pay), C.green]].map(([label, value, color]) => (
               <Card key={label} style={{ textAlign: "center", padding: "18px 12px" }}>
                 <div style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", letterSpacing: .5, marginBottom: 6 }}>{label}</div>
                 <div style={{ fontSize: 20, fontWeight: 800, color }}>{value}</div>
@@ -3081,11 +3169,11 @@ function MyPay({ currentUser }) {
                   ["Bonus", selected.bonus]
                 ].map(([k, v]) => Number(v) > 0 ? (
                   <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.border}22`, fontSize: 13 }}>
-                    <span style={{ color: C.textDim }}>{k}</span><span style={{ fontWeight: 600, color: C.text }}>{fmt(v)}</span>
+                    <span style={{ color: C.textDim }}>{k}</span><span style={{ fontWeight: 600, color: C.text }}>{mask(v)}</span>
                   </div>
                 ) : null)}
                 <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", fontSize: 14, fontWeight: 800, color: C.green, borderTop: `2px solid ${C.border}44`, marginTop: 4 }}>
-                  <span>Gross Salary</span><span>{fmt(selected.gross)}</span>
+                  <span>Gross Salary</span><span>{mask(selected.gross)}</span>
                 </div>
               </div>
               <div>
@@ -3097,17 +3185,17 @@ function MyPay({ currentUser }) {
                   ["Other Deductions", selected.extra_deductions]
                 ].map(([k, v]) => Number(v) > 0 ? (
                   <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.border}22`, fontSize: 13 }}>
-                    <span style={{ color: C.textDim }}>{k}</span><span style={{ fontWeight: 600, color: C.red }}>{fmt(v)}</span>
+                    <span style={{ color: C.textDim }}>{k}</span><span style={{ fontWeight: 600, color: C.red }}>{mask(v)}</span>
                   </div>
                 ) : null)}
                 <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", fontSize: 14, fontWeight: 800, color: C.red, borderTop: `2px solid ${C.border}44`, marginTop: 4 }}>
-                  <span>Total Deductions</span><span>{fmt(Number(selected.pf_employee) + Number(selected.professional_tax) + Number(selected.income_tax) + Number(selected.extra_deductions))}</span>
+                  <span>Total Deductions</span><span>{mask(Number(selected.pf_employee) + Number(selected.professional_tax) + Number(selected.income_tax) + Number(selected.extra_deductions))}</span>
                 </div>
               </div>
             </div>
             <div style={{ background: `linear-gradient(135deg,#1a234044,#2d3d6e44)`, border: `1px solid ${C.accent}44`, borderRadius: 10, padding: "16px 24px", marginTop: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ fontSize: 13, color: C.textMuted }}>Net Pay for {SLIP_MONTHS[selected.month - 1]} {selected.year}</div>
-              <div style={{ fontSize: 26, fontWeight: 800, color: C.green }}>{fmt(selected.net_pay)}</div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: C.green }}>{mask(selected.net_pay)}</div>
             </div>
           </Card>
         </>
@@ -3127,10 +3215,17 @@ function MyPay({ currentUser }) {
               {payslips.map(p => (
                 <tr key={p.id} style={{ borderBottom: `1px solid ${C.border}22`, background: selected?.id === p.id ? C.accentGlow : "transparent", cursor: "pointer" }} onClick={() => setSelected(p)}>
                   <td style={{ padding: "11px 16px", fontSize: 13, fontWeight: 600, color: C.text }}>{SLIP_MONTHS[p.month - 1]} {p.year}</td>
-                  <td style={{ padding: "11px 16px", fontSize: 13, color: C.green }}>{fmt(p.gross)}</td>
-                  <td style={{ padding: "11px 16px", fontSize: 13, color: C.red }}>{fmt(Number(p.pf_employee) + Number(p.professional_tax))}</td>
-                  <td style={{ padding: "11px 16px", fontSize: 14, fontWeight: 800, color: C.green }}>{fmt(p.net_pay)}</td>
-                  <td style={{ padding: "11px 16px" }}><Btn small variant="ghost" onClick={e => { e.stopPropagation(); printPayslipData(p, origin); }}>🖨 Print</Btn></td>
+                  <td style={{ padding: "11px 16px", fontSize: 13, color: C.green }}>{mask(p.gross)}</td>
+                  <td style={{ padding: "11px 16px", fontSize: 13, color: C.red }}>{mask(Number(p.pf_employee) + Number(p.professional_tax))}</td>
+                  <td style={{ padding: "11px 16px", fontSize: 14, fontWeight: 800, color: C.green }}>{mask(p.net_pay)}</td>
+                  <td style={{ padding: "11px 16px" }} onClick={e => e.stopPropagation()}>
+                    {p.is_approved
+                      ? <Btn small variant="ghost" onClick={() => printPayslipData(p, origin)}>🖨 Download PDF</Btn>
+                      : p.download_requested
+                        ? <span style={{ fontSize: 12, color: C.textMuted, padding: "4px 8px", border: `1px solid ${C.border}`, borderRadius: 6 }}>⏳ Awaiting Approval</span>
+                        : <Btn small variant="ghost" onClick={() => handleRequestDownload(p)} disabled={requesting}>📩 Request</Btn>
+                    }
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -4063,6 +4158,13 @@ function AdminPayslips() {
     try { await api.deletePayslip(id); setPayslips(ps => ps.filter(p => p.id !== id)); } catch (e) { alert(e.message); }
   }
 
+  async function approve(id) {
+    try {
+      const updated = await api.approvePayslip(id);
+      setPayslips(ps => ps.map(p => p.id === id ? { ...p, ...updated } : p));
+    } catch (e) { alert(e.message); }
+  }
+
   const shown = payslips.filter(p => {
     if (filterEmp && p.employee_id !== +filterEmp) return false;
     if (filterYear && p.year !== +filterYear) return false;
@@ -4212,7 +4314,7 @@ function AdminPayslips() {
         ) : (
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead><tr style={{ background: C.surface }}>
-              {["Employee", "Period", "Gross", "Bonus", "Deductions", "Net Pay", "Generated", ""].map(h => (
+              {["Employee", "Period", "Gross", "Bonus", "Deductions", "Net Pay", "Generated", "Approval", ""].map(h => (
                 <th key={h} style={{ padding: "10px 16px", textAlign: "left", fontSize: 11, color: C.textMuted, textTransform: "uppercase", letterSpacing: .5, fontWeight: 700, borderBottom: `1px solid ${C.border}` }}>{h}</th>
               ))}
             </tr></thead>
@@ -4234,6 +4336,14 @@ function AdminPayslips() {
                   <td style={{ padding: "12px 16px", fontSize: 13, color: C.red }}>{fmt(Number(ps.pf_employee) + Number(ps.professional_tax) + Number(ps.extra_deductions || 0))}</td>
                   <td style={{ padding: "12px 16px", fontSize: 14, fontWeight: 800, color: C.green }}>{fmt(ps.net_pay)}</td>
                   <td style={{ padding: "12px 16px", fontSize: 11, color: C.textMuted }}>{ps.generated_at?.slice(0, 10)}</td>
+                  <td style={{ padding: "12px 16px" }}>
+                    {ps.is_approved
+                      ? <Badge color={C.green}>✓ Approved</Badge>
+                      : ps.download_requested
+                        ? <Btn small variant="success" onClick={() => approve(ps.id)}>Approve</Btn>
+                        : <span style={{ fontSize: 12, color: C.textMuted }}>—</span>
+                    }
+                  </td>
                   <td style={{ padding: "12px 16px" }}>
                     <div style={{ display: "flex", gap: 6 }}>
                       <Btn small variant="ghost" onClick={() => printPayslipData(ps, origin)}>🖨 Print</Btn>

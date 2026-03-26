@@ -102,6 +102,8 @@ export const api = {
   // Payslips
   getPayslips: (params = {}) => req("GET", `/payslips/?${new URLSearchParams(params)}`),
   generatePayslip: (d) => req("POST", "/payslips/generate", d),
+  requestPayslipDownload: (id) => req("POST", `/payslips/${id}/request-download`),
+  approvePayslip: (id) => req("POST", `/payslips/${id}/approve`),
   deletePayslip: (id) => req("DELETE", `/payslips/${id}`),
 
   // Documents
