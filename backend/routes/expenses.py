@@ -2,6 +2,7 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from db import query, execute
+from notifications import notify_expense_requested, notify_expense_actioned
 import json
 import os
 import uuid
@@ -106,6 +107,7 @@ def create_expense():
            LEFT JOIN projects p ON p.id = ex.project_id
            WHERE  ex.id = %s""", (eid,), fetch="one"
     )
+    notify_expense_requested(emp_id, title, amount, d.get("category", "Other"))
     return jsonify(_fmt(row)), 201
 
 
@@ -162,6 +164,7 @@ def approve_expense(eid):
             return jsonify(error="Forbidden"), 403
 
     execute("UPDATE expenses SET status='approved', admin_note=NULL WHERE id=%s", (eid,))
+    notify_expense_actioned(eid, "approved")
     return jsonify(updated=True), 200
 
 
@@ -194,8 +197,9 @@ def reject_expense(eid):
             return jsonify(error="Forbidden"), 403
 
     d = request.get_json(silent=True) or {}
-    execute("UPDATE expenses SET status='rejected', admin_note=%s WHERE id=%s",
-            (d.get("note", ""), eid))
+    note = d.get("note", "")
+    execute("UPDATE expenses SET status='rejected', admin_note=%s WHERE id=%s", (note, eid))
+    notify_expense_actioned(eid, "rejected", note)
     return jsonify(updated=True), 200
 
 
@@ -211,8 +215,9 @@ def sendback_expense(eid):
             return jsonify(error="Forbidden"), 403
 
     d = request.get_json(silent=True) or {}
-    execute("UPDATE expenses SET status='needs_correction', admin_note=%s WHERE id=%s",
-            (d.get("note", ""), eid))
+    note = d.get("note", "")
+    execute("UPDATE expenses SET status='needs_correction', admin_note=%s WHERE id=%s", (note, eid))
+    notify_expense_actioned(eid, "needs_correction", note)
     return jsonify(updated=True), 200
 
 

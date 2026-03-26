@@ -2,6 +2,7 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from db import query, execute
+from notifications import notify_payslip_download_requested, notify_payslip_approved
 import json
 
 payslips_bp = Blueprint("payslips", __name__)
@@ -222,6 +223,7 @@ def generate_payslip():
 def request_download(psid):
     execute("UPDATE payslips SET download_requested=1 WHERE id=%s", (psid,))
     row = query(SLIP_SELECT + " AND ps.id=%s", (psid,), fetch="one")
+    notify_payslip_download_requested(psid)
     return jsonify(_fmt(row)), 200
 
 
@@ -236,6 +238,7 @@ def approve_payslip(psid):
         (user.get("employee_id"), psid)
     )
     row = query(SLIP_SELECT + " AND ps.id=%s", (psid,), fetch="one")
+    notify_payslip_approved(psid)
     return jsonify(_fmt(row)), 200
 
 

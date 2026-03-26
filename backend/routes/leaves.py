@@ -2,6 +2,7 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from db import query, execute
+from notifications import notify_leave_requested, notify_leave_actioned
 import json
 
 leaves_bp = Blueprint("leaves", __name__)
@@ -55,9 +56,10 @@ def create_leave():
     if not all([emp_id, d.get("startDate"), d.get("endDate")]):
         return jsonify(error="employeeId, startDate, endDate are required"), 400
 
+    leave_type = d.get("type", "Annual")
     lid = execute(
         "INSERT INTO leaves (employee_id,leave_type,start_date,end_date,reason,status) VALUES (%s,%s,%s,%s,%s,'pending')",
-        (emp_id, d.get("type","Annual"), d.get("startDate"), d.get("endDate"), d.get("reason","")),
+        (emp_id, leave_type, d.get("startDate"), d.get("endDate"), d.get("reason","")),
     )
     row = query(
         """
@@ -67,6 +69,7 @@ def create_leave():
         """,
         (lid,), fetch="one",
     )
+    notify_leave_requested(emp_id, leave_type, d.get("startDate"), d.get("endDate"), d.get("reason",""))
     return jsonify(_fmt(row)), 201
 
 
@@ -82,6 +85,7 @@ def approve_leave(lid):
             return jsonify(error="Forbidden"), 403
 
     execute("UPDATE leaves SET status='approved' WHERE id=%s", (lid,))
+    notify_leave_actioned(lid, "approved")
     return jsonify(updated=True), 200
 
 
@@ -97,6 +101,7 @@ def reject_leave(lid):
             return jsonify(error="Forbidden"), 403
 
     execute("UPDATE leaves SET status='rejected' WHERE id=%s", (lid,))
+    notify_leave_actioned(lid, "rejected")
     return jsonify(updated=True), 200
 
 
