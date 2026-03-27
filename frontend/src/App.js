@@ -141,6 +141,50 @@ const SearchableSelect = ({ label, value, onChange, options, placeholder = "Sear
     </div>
   );
 };
+// ── Dialog (replaces window.alert / window.confirm) ──────────────────────────
+let _setDialogState;
+const dialog = {
+  alert: (message, { title = "Notice", dtype = "info" } = {}) =>
+    new Promise(resolve => {
+      _setDialogState({ kind: "alert", title, message, dtype, onOk: () => { _setDialogState(null); resolve(); } });
+    }),
+  confirm: (message, { title = "Confirm", dtype = "warning" } = {}) =>
+    new Promise(resolve => {
+      _setDialogState({
+        kind: "confirm", title, message, dtype,
+        onOk:     () => { _setDialogState(null); resolve(true); },
+        onCancel: () => { _setDialogState(null); resolve(false); },
+      });
+    }),
+};
+function DialogProvider() {
+  const [state, setState] = useState(null);
+  _setDialogState = setState;
+  if (!state) return null;
+  const icons = { info: "ℹ️", warning: "⚠️", error: "❌", success: "✅" };
+  const colors = { info: C.accent, warning: C.amber, error: C.red, success: C.green };
+  const color = colors[state.dtype] || C.accent;
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ background: C.card, border: `1px solid ${color}55`, borderRadius: 16, padding: 28, width: "100%", maxWidth: 400, boxShadow: "0 20px 60px rgba(0,0,0,0.7)" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 22 }}>
+          <span style={{ fontSize: 28, lineHeight: 1, flexShrink: 0 }}>{icons[state.dtype] || "ℹ️"}</span>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 6 }}>{state.title}</div>
+            <div style={{ fontSize: 13, color: C.textDim, lineHeight: 1.6 }}>{state.message}</div>
+          </div>
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+          {state.kind === "confirm" && (
+            <button onClick={state.onCancel} style={{ background: "transparent", border: `1px solid ${C.border}`, borderRadius: 8, color: C.textDim, padding: "8px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+          )}
+          <button onClick={state.onOk} style={{ background: color, color: "#fff", border: "none", borderRadius: 8, padding: "8px 24px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>OK</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const Modal = ({ title, onClose, children, maxWidth = 520 }) => (
   <div style={{
     position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 1000,
@@ -226,14 +270,14 @@ function AdminClients() {
       if (modal === "new") await api.createClient(form);
       else await api.updateClient(modal.id, form);
       setModal(null); load();
-    } catch (e) { alert("Error: " + e.message); }
+    } catch (e) { dialog.alert("Error: " + e.message, { title: "Error", dtype: "error" }); }
     finally { setSaving(false); }
   };
 
   const del = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this client?")) return;
+    if (!await dialog.confirm("Are you sure you want to delete this client?", { dtype: "warning" })) return;
     try { await api.deleteClient(id); load(); }
-    catch (e) { alert("Error: " + e.message); }
+    catch (e) { dialog.alert("Error: " + e.message, { title: "Error", dtype: "error" }); }
   };
 
   if (loading) return <Spinner />;
@@ -552,7 +596,7 @@ function ProjectManagement({ readOnly = false, currentUser }) {
       try {
         await api.updateInvoiceStatus(inv.id, "pending");
         await load();
-      } catch (e) { alert(e.message); }
+      } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
     }
   }
 
@@ -562,15 +606,15 @@ function ProjectManagement({ readOnly = false, currentUser }) {
       await api.updateInvoiceStatus(clearModal.id, "cleared", paymentDate || null, paymentAmount !== "" ? paymentAmount : null);
       setClearModal(null); setPaymentDate(""); setPaymentAmount("");
       await load();
-    } catch (e) { alert(e.message); }
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
   }
 
   async function handleDelete(id) {
-    if (!window.confirm("Are you sure you want to delete this invoice?")) return;
+    if (!await dialog.confirm("Are you sure you want to delete this invoice?", { dtype: "warning" })) return;
     try {
       await api.deleteInvoice(id);
       await load();
-    } catch (e) { alert(e.message); }
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
   }
 
   const parseTaskNames = (rawStr) => {
@@ -582,7 +626,7 @@ function ProjectManagement({ readOnly = false, currentUser }) {
   };
 
   function handleDownloadCSV(filteredInvoices) {
-    if (!filteredInvoices.length) return alert("No invoices to export.");
+    if (!filteredInvoices.length) { dialog.alert("No invoices to export."); return; }
     const fmtCsvDate = d => {
       if (!d) return "";
       const dt = new Date(d);
@@ -877,7 +921,7 @@ function ProjectManagement({ readOnly = false, currentUser }) {
                 setModal(false);
                 setEditInvoice(null);
                 await load();
-              } catch (e) { alert(e.message); } finally { setSaving(false); }
+              } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setSaving(false); }
             }}
           />
         </Modal>
@@ -973,22 +1017,22 @@ function CompanyExpenses({ modal, setModal, currentUser, projects }) {
   }
 
   async function handleDelete(id) {
-    if (!window.confirm("Are you sure you want to delete this expense?")) return;
+    if (!await dialog.confirm("Are you sure you want to delete this expense?", { dtype: "warning" })) return;
     try {
       await api.deleteCompanyExpense(id);
       await load();
-    } catch (e) { alert(e.message); }
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
   }
 
   async function handleToggleStatus(id, newStatus, clearedDate) {
     try {
       await api.updateCompanyExpenseStatus(id, newStatus, clearedDate || null);
       await load();
-    } catch (e) { alert(e.message); }
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
   }
 
   function handleDownloadCSV() {
-    if (!filteredList || !filteredList.length) return alert("No company expenses to export.");
+    if (!filteredList || !filteredList.length) { dialog.alert("No company expenses to export."); return; }
     const headers = ["Expense Date", "Purpose", "Amount (INR)", "GST Amount (INR)", "Total Amount (INR)", "Paid By", "ITR Type", "Tax Type", "Status", "Cleared Date"];
     const rows = filteredList.map(e => {
       const [yr, mo, da] = (e.expense_date || "").split("-");
@@ -1204,7 +1248,7 @@ function CompanyExpenses({ modal, setModal, currentUser, projects }) {
               try {
                 await handleToggleStatus(clearModal.id, "cleared", clearModal.clearedDate || null);
                 setClearModal(null);
-              } catch (e) { alert(e.message); }
+              } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
             }}>Confirm Cleared</Btn>
           </div>
         </Modal>
@@ -1230,8 +1274,8 @@ function CompanyExpenses({ modal, setModal, currentUser, projects }) {
                 await api.createExpense({ ...f, employeeId: f.employeeId || currentUser.employee_id });
                 setModal(false);
                 setEditObj(null);
-                alert("Employee expense drafted & submitted for approval!");
-              } catch (ex) { alert(ex.message); }
+                dialog.alert("Employee expense drafted & submitted for approval!", { title: "Success", dtype: "success" });
+              } catch (ex) { dialog.alert(ex.message, { title: "Error", dtype: "error" }); }
               finally { setSaving(false); }
             }}
             btnLabel="Generate & Submit"
@@ -1854,7 +1898,7 @@ function Projects({ readOnly = false }) {
                 if (modal === "new") await api.createProject({ ...form, budget: +form.budget, assignedGroups: [], assignedEmployees: [] });
                 else await api.updateProject(modal.id, { ...form, budget: +form.budget });
                 setModal(false); await load();
-              } catch (e) { alert(e.message); } finally { setSaving(false); }
+              } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setSaving(false); }
             }}
           />
         </Modal>
@@ -1920,7 +1964,7 @@ function Resources({ readOnly = false }) {
       if (isNewEmp) await api.createEmployee(payload);
       else await api.updateEmployee(modal.id, payload);
       setModal(null); await load();
-    } catch (e) { alert(e.message); } finally { setSaving(false); }
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setSaving(false); }
   }
 
   async function saveGrp(form) {
@@ -1930,17 +1974,17 @@ function Resources({ readOnly = false }) {
       if (isNewGrp) await api.createGroup({ ...form, hourlyRate: +form.hourlyRate });
       else await api.updateGroup(modal.id, { ...form, hourlyRate: +form.hourlyRate });
       setModal(null); await load();
-    } catch (e) { alert(e.message); } finally { setSaving(false); }
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setSaving(false); }
   }
 
   async function openAssign(emp) {
     try { const ids = await api.getEmployeeProjects(emp.id); setAssignedIds(ids); setAssignModal(emp); }
-    catch (e) { alert(e.message); }
+    catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
   }
   async function saveAssign() {
     setSaving(true);
     try { await api.updateEmployeeProjects(assignModal.id, assignedIds); setAssignModal(null); }
-    catch (e) { alert(e.message); } finally { setSaving(false); }
+    catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setSaving(false); }
   }
 
   return (
@@ -2166,32 +2210,32 @@ function Timesheets({ currentUser, viewOnly }) {
     try {
       await api.createTimesheet({ employeeId: currentUser.employee_id, projectId: +addRow.projectId, date: addRow.dayIso, hours: +addRow.hours, task: "" });
       setAddRow(null); await load();
-    } catch (e) { alert(e.message); } finally { setSaving(false); }
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setSaving(false); }
   }
 
   async function handleSubmitWeek() {
     const startDate = isoDate(weekOf);
     const endDate   = isoDate(addDays(weekOf, 6));
     const draftCount = rows.filter(r => r.work_date?.slice(0, 10) >= startDate && r.work_date?.slice(0, 10) <= endDate && r.status === "draft").length;
-    if (draftCount === 0) return alert("No saved (draft) entries to submit for this week.");
-    if (!window.confirm(`Submit ${draftCount} draft entr${draftCount === 1 ? "y" : "ies"} for this week to your manager?`)) return;
+    if (draftCount === 0) { dialog.alert("No saved (draft) entries to submit for this week."); return; }
+    if (!await dialog.confirm(`Submit ${draftCount} draft entr${draftCount === 1 ? "y" : "ies"} for this week to your manager?`, { title: "Submit Timesheet", dtype: "info" })) return;
     setSaving(true);
     try {
       await api.submitWeekTimesheets(startDate, endDate);
       await load();
-    } catch (e) { alert(e.message); } finally { setSaving(false); }
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setSaving(false); }
   }
 
   async function handleDelete(id) {
-    if (!window.confirm("Remove this entry?")) return;
-    try { await api.deleteTimesheet(id); await load(); } catch (e) { alert(e.message); }
+    if (!await dialog.confirm("Remove this entry?", { dtype: "warning" })) return;
+    try { await api.deleteTimesheet(id); await load(); } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
   }
 
-  async function handleApprove(id) { try { await api.approveTimesheet(id); await load(); } catch (e) { alert(e.message); } }
-  async function handleReject(id) { try { await api.rejectTimesheet(id); await load(); } catch (e) { alert(e.message); } }
+  async function handleApprove(id) { try { await api.approveTimesheet(id); await load(); } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } }
+  async function handleReject(id) { try { await api.rejectTimesheet(id); await load(); } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } }
 
   function handleDownloadCSV(filteredRows) {
-    if (filteredRows.length === 0) return alert("No data to download.");
+    if (filteredRows.length === 0) { dialog.alert("No data to download."); return; }
     const headers = ["ID", "Employee", "Project Code", "Date", "Hours", "Task", "Status"];
     const csvContent = "data:text/csv;charset=utf-8,"
       + headers.join(",") + "\n"
@@ -2548,7 +2592,7 @@ function Leaves({ currentUser, viewOnly }) {
       const empId = viewOnly ? currentUser.employee_id : +form.employeeId;
       await api.createLeave({ employeeId: empId, ...form });
       setModal(false); setForm({ employeeId: "", type: "Annual", startDate: "", endDate: "", reason: "" }); await load();
-    } catch (e) { alert(e.message); } finally { setSaving(false); }
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setSaving(false); }
   }
 
   const summary = { total: rows.length, pending: rows.filter(l => l.status === "pending").length, approved: rows.filter(l => l.status === "approved").length };
@@ -2593,8 +2637,8 @@ function Leaves({ currentUser, viewOnly }) {
                   <Td><StatusBadge status={l.status} /></Td>
                   {!viewOnly && <Td>{l.status === "pending" && (
                     <div style={{ display: "flex", gap: 6 }}>
-                      <Btn small variant="success" onClick={async () => { try { await api.approveLeave(l.id); await load(); } catch (e) { alert(e.message); } }}>✓</Btn>
-                      <Btn small variant="danger" onClick={async () => { try { await api.rejectLeave(l.id); await load(); } catch (e) { alert(e.message); } }}>✕</Btn>
+                      <Btn small variant="success" onClick={async () => { try { await api.approveLeave(l.id); await load(); } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } }}>✓</Btn>
+                      <Btn small variant="danger" onClick={async () => { try { await api.rejectLeave(l.id); await load(); } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } }}>✕</Btn>
                     </div>
                   )}</Td>}
                 </tr>
@@ -2663,12 +2707,12 @@ function UserAccounts() {
   async function handleEdit() {
     setSaving(true);
     try { await api.updateAccount(editId, { ...editForm }); setEditId(null); await load(); }
-    catch (e) { alert(e.message); } finally { setSaving(false); }
+    catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setSaving(false); }
   }
 
   async function toggleActive(id, current) {
     try { const acct = accounts.find(a => a.id === id); await api.updateAccount(id, { ...acct, active: !current }); await load(); }
-    catch (e) { alert(e.message); }
+    catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
   }
 
   if (loading) return <Spinner />;
@@ -2711,7 +2755,7 @@ function UserAccounts() {
                   </button></Td>
                   <Td><div style={{ display: "flex", gap: 6 }}>
                     <Btn small variant="ghost" onClick={() => { setEditForm({ ...a, newPass: "" }); setEditId(a.id); }}>✏ Edit</Btn>
-                    <Btn small variant="danger" onClick={async () => { if (window.confirm("Delete this account?")) try { await api.deleteAccount(a.id); await load(); } catch (e) { alert(e.message); } }}>🗑</Btn>
+                    <Btn small variant="danger" onClick={async () => { if (await dialog.confirm("Delete this account?", { dtype: "warning" })) try { await api.deleteAccount(a.id); await load(); } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } }}>🗑</Btn>
                   </div></Td>
                 </tr>);
               })}
@@ -2892,7 +2936,7 @@ function MyProfile({ currentUser }) {
         panNumber: form.panNumber, designation: profile.designation, location: profile.location, variablePay: profile.variable_pay_amount
       };
       await api.updateEmployee(currentUser.employee_id, payload);
-      alert("Profile updated successfully!");
+      dialog.alert("Profile updated successfully!", { title: "Success", dtype: "success" });
       setIsEditing(false);
     } catch (e) {
       setErr(e.message);
@@ -2906,7 +2950,7 @@ function MyProfile({ currentUser }) {
     setPwSaving(true);
     try {
       await api.updatePassword(pwForm);
-      alert("Password updated successfully!");
+      dialog.alert("Password updated successfully!", { title: "Success", dtype: "success" });
       setPwForm({ oldPassword: "", newPassword: "" });
       setErr(null);
       setShowPwModal(false);
@@ -3112,7 +3156,7 @@ function MyPay({ currentUser }) {
       const updated = await api.requestPayslipDownload(ps.id);
       setPayslips(prev => prev.map(p => p.id === ps.id ? { ...p, ...updated } : p));
       setSelected(prev => prev?.id === ps.id ? { ...prev, ...updated } : prev);
-    } catch (e) { alert(e.message); }
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
     finally { setRequesting(false); }
   }
 
@@ -3297,11 +3341,11 @@ function Expenses({ currentUser, viewOnly }) {
       if (modal === "new") await api.createExpense({ ...payload, employeeId: currentUser.employee_id });
       else await api.updateExpense(modal.id, payload);
       setModal(null); await load();
-    } catch (e) { alert(e.message); } finally { setSaving(false); }
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setSaving(false); }
   }
   async function handleDelete(id) {
-    if (!window.confirm("Delete this expense?")) return;
-    try { await api.deleteExpense(id); await load(); } catch (e) { alert(e.message); }
+    if (!await dialog.confirm("Delete this expense?", { dtype: "warning" })) return;
+    try { await api.deleteExpense(id); await load(); } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
   }
   async function handleAction() {
     setSaving(true);
@@ -3311,7 +3355,7 @@ function Expenses({ currentUser, viewOnly }) {
       else if (noteModal.action === "reject") await api.rejectExpense(noteModal.id, note);
       else await api.sendbackExpense(noteModal.id, note);
       setNoteModal(null); setNote(""); await load();
-    } catch (e) { alert(e.message); } finally { setSaving(false); }
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setSaving(false); }
   }
 
   if (loading) return <Spinner />;
@@ -3475,8 +3519,8 @@ function ExpenseForm({ init, projects, employees, saving, onCancel, onSave, btnL
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
         <Btn variant="ghost" onClick={onCancel}>Cancel</Btn>
         <Btn onClick={() => {
-          if (!form.title || !form.amount) return alert("Title and Amount are required");
-          if (employees && form.employeeId === undefined) return alert("Please select an employee owning this expense.");
+          if (!form.title || !form.amount) { dialog.alert("Title and Amount are required", { title: "Validation", dtype: "warning" }); return; };
+          if (employees && form.employeeId === undefined) { dialog.alert("Please select an employee owning this expense.", { title: "Validation", dtype: "warning" }); return; };
           onSave({ ...form, receiptFile: receiptFile || null });
         }} disabled={saving}>{saving ? "Saving…" : btnLabel}</Btn>
       </div>
@@ -3513,7 +3557,7 @@ function AdminEmployees({ readOnly = false, currentUser }) {
       if (modal === "new") await api.createEmployee({ ...form, groupId: form.groupId ? +form.groupId : null });
       else await api.updateEmployee(modal.id, { ...form, groupId: form.groupId ? +form.groupId : null });
       setModal(null); await load();
-    } catch (e) { alert(e.message); } finally { setSaving(false); }
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setSaving(false); }
   }
 
   if (loading) return <Spinner />;
@@ -4174,15 +4218,15 @@ function AdminPayslips() {
   }
 
   async function del(id) {
-    if (!window.confirm("Delete this payslip?")) return;
-    try { await api.deletePayslip(id); setPayslips(ps => ps.filter(p => p.id !== id)); } catch (e) { alert(e.message); }
+    if (!await dialog.confirm("Delete this payslip?", { dtype: "warning" })) return;
+    try { await api.deletePayslip(id); setPayslips(ps => ps.filter(p => p.id !== id)); } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
   }
 
   async function approve(id) {
     try {
       const updated = await api.approvePayslip(id);
       setPayslips(ps => ps.map(p => p.id === id ? { ...p, ...updated } : p));
-    } catch (e) { alert(e.message); }
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
   }
 
   const shown = payslips.filter(p => {
@@ -4391,26 +4435,26 @@ function DocumentGrid({ type = "document", allowEdit = false }) {
 
   async function load() {
     setLoading(true);
-    try { setDocs(await api.getDocuments({ type })); } catch (e) { alert("Failed to fetch: " + e.message); }
+    try { setDocs(await api.getDocuments({ type })); } catch (e) { dialog.alert("Failed to fetch: " + e.message, { title: "Error", dtype: "error" }); }
     setLoading(false);
   }
   useEffect(() => { load(); }, [type]);
 
   async function save() {
-    if (!modal.title || !modal.url) return alert("Title and URL required");
+    if (!modal.title || !modal.url) { dialog.alert("Title and URL required", { title: "Validation", dtype: "warning" }); return; }
     setSaving(true);
     try {
       if (modal.id) await api.updateDocument(modal.id, { title: modal.title, url: modal.url, type });
       else await api.createDocument({ title: modal.title, url: modal.url, type });
       setModal(null);
       load();
-    } catch (e) { alert(e.message); }
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
     setSaving(false);
   }
 
   async function del(id) {
-    if (!window.confirm("Delete this document link?")) return;
-    try { await api.deleteDocument(id); setDocs(ds => ds.filter(d => d.id !== id)); } catch (e) { alert(e.message); }
+    if (!await dialog.confirm("Delete this document link?", { dtype: "warning" })) return;
+    try { await api.deleteDocument(id); setDocs(ds => ds.filter(d => d.id !== id)); } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
   }
 
   return (
@@ -4760,21 +4804,21 @@ function SubscriptionManagement() {
 
   async function handleSave() {
     if (!form.app_name || !form.start_date || !form.expire_date || !form.link)
-      return alert("App name, start date, expire date and link are required.");
+      { dialog.alert("App name, start date, expire date and link are required.", { title: "Validation", dtype: "warning" }); return; }
     setSaving(true);
     try {
       const payload = { ...form, amount: parseFloat(form.amount) || 0 };
       if (modal === "new") await api.createSubscription(payload);
       else await api.updateSubscription(modal.id, payload);
       setModal(false); await load();
-    } catch (e) { alert(e.message); }
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
     finally { setSaving(false); }
   }
 
   async function handleDelete(id) {
-    if (!window.confirm("Delete this subscription?")) return;
+    if (!await dialog.confirm("Delete this subscription?", { dtype: "warning" })) return;
     try { await api.deleteSubscription(id); await load(); }
-    catch (e) { alert(e.message); }
+    catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
   }
 
   if (loading) return <Spinner />;
@@ -4929,7 +4973,7 @@ function OnboardEmployee() {
     try {
       const r = await api.getOnboardingRecord(rid);
       setDetail(r);
-    } catch (e) { alert(e.message); }
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
   }
 
   function openNew() {
@@ -4951,20 +4995,20 @@ function OnboardEmployee() {
   }
 
   async function handleSave() {
-    if (!form.employee_id) return alert("Please select an employee.");
+    if (!form.employee_id) { dialog.alert("Please select an employee.", { title: "Validation", dtype: "warning" }); return; }
     setSaving(true);
     try {
       if (selected) await api.updateOnboardingRecord(selected.id, form);
       else await api.createOnboardingRecord(form);
       await load(); setView("list");
-    } catch (e) { alert(e.message); }
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
     finally { setSaving(false); }
   }
 
   async function handleDelete(id) {
-    if (!window.confirm("Delete this onboarding record and all its documents?")) return;
+    if (!await dialog.confirm("Delete this onboarding record and all its documents?", { dtype: "warning" })) return;
     try { await api.deleteOnboardingRecord(id); await load(); }
-    catch (e) { alert(e.message); }
+    catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
   }
 
   async function handleUpload(docType) {
@@ -4975,16 +5019,16 @@ function OnboardEmployee() {
       await api.uploadOnboardingDocument(detail.id, docType, file);
       setUploads(u => ({ ...u, [docType]: null }));
       await loadDetail(detail.id);
-    } catch (e) { alert(e.message); }
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
     finally { setUploading(u => ({ ...u, [docType]: false })); }
   }
 
   async function handleDeleteDoc(did) {
-    if (!window.confirm("Remove this document?")) return;
+    if (!await dialog.confirm("Remove this document?", { dtype: "warning" })) return;
     try {
       await api.deleteOnboardingDocument(detail.id, did);
       await loadDetail(detail.id);
-    } catch (e) { alert(e.message); }
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
   }
 
   function empOptions() {
@@ -5349,7 +5393,7 @@ function AdminAssets() {
       else await api.updateAsset(editing.id, form);
       setModal(null);
       load();
-    } catch (e) { alert(e.message); }
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
   }
 
   async function handleAssign() {
@@ -5357,12 +5401,12 @@ function AdminAssets() {
       await api.assignAsset(editing.id, { employee_id: assignForm.employee_id || null, assigned_date: assignForm.assigned_date || null });
       setModal(null);
       load();
-    } catch (e) { alert(e.message); }
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
   }
 
   async function handleDelete(a) {
-    if (!window.confirm(`Delete asset "${a.asset_tag}"?`)) return;
-    try { await api.deleteAsset(a.id); load(); } catch (e) { alert(e.message); }
+    if (!await dialog.confirm(`Delete asset "${a.asset_tag}"?`, { dtype: "warning" })) return;
+    try { await api.deleteAsset(a.id); load(); } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
   }
 
   const filtered = assets.filter(a => {
@@ -5690,6 +5734,7 @@ export default function App() {
   const isManager = currentUser.role === "manager";
 
   if (!isAdmin) return (
+    <><DialogProvider />
     <div className="app-layout" style={{ background: C.bg, color: C.text, fontFamily: "'DM Sans','Segoe UI',sans-serif" }}>
       <style>{STYLE}</style>
       {/* Hamburger button */}
@@ -5737,9 +5782,11 @@ export default function App() {
         {page === "resumes" && <AdminCompanyResume />}
       </main>
     </div>
+    </>
   );
 
   return (
+    <><DialogProvider />
     <div className="app-layout" style={{ background: C.bg, color: C.text, fontFamily: "'DM Sans','Segoe UI',sans-serif" }}>
       <style>{STYLE}</style>
       {/* Hamburger button */}
@@ -5817,5 +5864,6 @@ export default function App() {
         {page === "mywork" && <EmployeeHome currentUser={currentUser} />}
       </main>
     </div>
+    </>
   );
 }
