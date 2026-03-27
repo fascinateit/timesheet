@@ -782,7 +782,7 @@ function ProjectManagement({ readOnly = false, currentUser }) {
         const receivedAmt = parseFloat(paymentAmount || 0);
         const diff = raisedAmt - receivedAmt;
         const hasShortfall = paymentAmount !== "" && diff > 0.005;
-        const hasOverpay   = paymentAmount !== "" && diff < -0.005;
+        const hasOverpay = paymentAmount !== "" && diff < -0.005;
         return (
           <Modal title="Mark Invoice as Cleared" onClose={() => setClearModal(null)}>
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -3141,7 +3141,7 @@ function MyPay({ currentUser }) {
         <>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 14 }}>
             {[["Monthly Gross", mask(selected.gross), C.green], ["Basic Salary", mask(selected.basic), C.accent],
-            ["HRA", mask(selected.hra), C.purple], ["Transport", mask(selected.transport), C.amber],
+            ["HRA", mask(selected.hra), C.purple], ["Conveyance", mask(selected.transport), C.amber],
             ["PF Deduction", mask(selected.pf_employee), C.red], ["Net Pay", mask(selected.net_pay), C.green]].map(([label, value, color]) => (
               <Card key={label} style={{ textAlign: "center", padding: "18px 12px" }}>
                 <div style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", letterSpacing: .5, marginBottom: 6 }}>{label}</div>
@@ -3160,7 +3160,7 @@ function MyPay({ currentUser }) {
                   ["Basic Salary", selected.basic], ["HRA", selected.hra],
                   ["Leave Travel Allowance", selected.leave_travel_allowance],
                   ["Special Allowance", selected.special_allowance],
-                  ["Transport Allowance", selected.transport],
+                  ["Conveyance Allowance", selected.transport],
                   ["Medical Allowance", selected.medical_allowance],
                   ["Internet & Broadband Allowance", selected.internet_allowance],
                   ["Professional Development Allowance", selected.professional_dev_allowance],
@@ -3904,7 +3904,7 @@ function CompensationDetails() {
               {[
                 ["Provident Fund (Employer)", computed.employer_pf_m > 0 ? fmtR(computed.employer_pf_m) : "—", computed.employer_pf_a > 0 ? fmtR(computed.employer_pf_a) : "NA", "12% of Basic"],
                 ["Gratuity", "—", fmtR(computed.gratuity_a), "4.81% of Basic"],
-                ["Variable Pay / Bonus*", computed.vp_m > 0 ? fmtR(computed.vp_m) : "—", computed.vp_a > 0 ? fmtR(computed.vp_a) : "—", "5% of CTC (default)"],
+                ["Variable Pay / Bonus*", "—", computed.vp_a > 0 ? fmtR(computed.vp_a) : "—", "5% of CTC (default)"],
               ].map(([label, monthly, yearly, note]) => (
                 <tr key={label} style={{ borderBottom: `1px solid ${C.border}22` }}>
                   <td style={{ padding: "10px 16px", fontSize: 13, color: C.text }}>{label}</td>
@@ -4044,7 +4044,7 @@ function printPayslipData(ps) {
                   <tr><td style="border: none;">HRA</td><td style="border: none;" class="right">${fmt(ps.hra)}</td></tr>
                   <tr><td style="border: none;">Leave Travel Allowance</td><td style="border: none;" class="right">${fmt(ps.leave_travel_allowance)}</td></tr>
                   <tr><td style="border: none;">Special Allowance</td><td style="border: none;" class="right">${fmt(ps.special_allowance)}</td></tr>
-                  <tr><td style="border: none;">Convey Allowance</td><td style="border: none;" class="right">${fmt(ps.transport)}</td></tr>
+                  <tr><td style="border: none;">Conveyance Allowance</td><td style="border: none;" class="right">${fmt(ps.transport)}</td></tr>
                   <tr><td style="border: none;">Medical Allowance</td><td style="border: none;" class="right">${fmt(ps.medical_allowance)}</td></tr>
                   <tr><td style="border: none;">Internet & Broadband<br>Allowance</td><td style="border: none;" class="right">${fmt(ps.internet_allowance)}</td></tr>
                   <tr><td style="border: none;">Professional Development<br>Allowance</td><td style="border: none;" class="right">${Number(ps.professional_dev_allowance) ? fmt(ps.professional_dev_allowance) : '-'}</td></tr>
