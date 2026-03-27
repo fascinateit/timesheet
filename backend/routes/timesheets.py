@@ -47,6 +47,9 @@ def list_timesheets():
     if user["role"] == "manager" and not emp_id:
         sql += " AND (t.employee_id = %s OR e.manager_id = %s)"
         args.extend([user["employee_id"], user["employee_id"]])
+    # Managers and admins should not see draft entries (not yet submitted by employee)
+    if user["role"] in ("manager", "admin"):
+        sql += " AND t.status != 'draft'"
     sql += " ORDER BY t.work_date DESC, t.id DESC"
 
     return jsonify([_fmt(r) for r in query(sql, args)]), 200
@@ -72,7 +75,7 @@ def create_timesheet():
         return jsonify(error=f"Project {proj_id} does not exist"), 400
 
     tid = execute(
-        "INSERT INTO timesheets (employee_id,project_id,work_date,hours,task,status) VALUES (%s,%s,%s,%s,%s,'pending')",
+        "INSERT INTO timesheets (employee_id,project_id,work_date,hours,task,status) VALUES (%s,%s,%s,%s,%s,'draft')",
         (emp_id, proj_id, date, float(hours), d.get("task", "")),
     )
     row = query(
@@ -102,8 +105,8 @@ def update_timesheet(tid):
     if not existing_timesheet:
         return jsonify(error="Timesheet not found"), 404
 
-    if existing_timesheet["status"] != "pending":
-        return jsonify(error="Only pending timesheets can be updated"), 400
+    if existing_timesheet["status"] not in ("draft", "pending"):
+        return jsonify(error="Only draft or pending timesheets can be updated"), 400
 
     # Access control
     if user["role"] in ("employee", "manager"):
@@ -161,6 +164,33 @@ def update_timesheet(tid):
         (tid,), fetch="one",
     )
     return jsonify(_fmt(row)), 200
+
+
+@timesheets_bp.route("/submit-week", methods=["POST"])
+@jwt_required()
+def submit_week():
+    """Submit all draft entries for the given week range to 'pending'."""
+    user = json.loads(get_jwt_identity())
+    d = request.get_json(silent=True) or {}
+    start_date = d.get("startDate")
+    end_date   = d.get("endDate")
+
+    if not start_date or not end_date:
+        return jsonify(error="startDate and endDate are required"), 400
+
+    emp_id = user["employee_id"]
+    count_row = query(
+        "SELECT COUNT(*) AS n FROM timesheets WHERE employee_id=%s AND work_date BETWEEN %s AND %s AND status='draft'",
+        (emp_id, start_date, end_date), fetch="one"
+    )
+    if not count_row or count_row["n"] == 0:
+        return jsonify(error="No draft entries found for this week"), 400
+
+    execute(
+        "UPDATE timesheets SET status='pending' WHERE employee_id=%s AND work_date BETWEEN %s AND %s AND status='draft'",
+        (emp_id, start_date, end_date)
+    )
+    return jsonify(submitted=count_row["n"]), 200
 
 
 @timesheets_bp.route("/<int:tid>/approve", methods=["PATCH"])

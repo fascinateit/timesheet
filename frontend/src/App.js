@@ -2164,9 +2164,21 @@ function Timesheets({ currentUser, viewOnly }) {
     if (!addRow || !addRow.projectId || !addRow.hours) return;
     setSaving(true);
     try {
-      const empId = viewOnly ? currentUser.employee_id : currentUser.employee_id;
-      await api.createTimesheet({ employeeId: empId, projectId: +addRow.projectId, date: addRow.dayIso, hours: +addRow.hours, task: "" });
+      await api.createTimesheet({ employeeId: currentUser.employee_id, projectId: +addRow.projectId, date: addRow.dayIso, hours: +addRow.hours, task: "" });
       setAddRow(null); await load();
+    } catch (e) { alert(e.message); } finally { setSaving(false); }
+  }
+
+  async function handleSubmitWeek() {
+    const startDate = isoDate(weekOf);
+    const endDate   = isoDate(addDays(weekOf, 6));
+    const draftCount = rows.filter(r => r.work_date?.slice(0, 10) >= startDate && r.work_date?.slice(0, 10) <= endDate && r.status === "draft").length;
+    if (draftCount === 0) return alert("No saved (draft) entries to submit for this week.");
+    if (!window.confirm(`Submit ${draftCount} draft entr${draftCount === 1 ? "y" : "ies"} for this week to your manager?`)) return;
+    setSaving(true);
+    try {
+      await api.submitWeekTimesheets(startDate, endDate);
+      await load();
     } catch (e) { alert(e.message); } finally { setSaving(false); }
   }
 
@@ -2208,13 +2220,24 @@ function Timesheets({ currentUser, viewOnly }) {
     return (
       <div>
         {/* Week navigation */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
           <button onClick={() => setWeekOf(d => addDays(d, -7))} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 14px", color: C.textDim, cursor: "pointer", fontSize: 16 }}>‹</button>
           <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>
             {weekDays[0].toLocaleDateString("en-US", { month: "short", day: "numeric" })} – {weekDays[6].toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
           </span>
           <button onClick={() => setWeekOf(d => addDays(d, 7))} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 14px", color: C.textDim, cursor: "pointer", fontSize: 16 }}>›</button>
           <Btn small variant="ghost" onClick={() => setWeekOf(weekStart(new Date()))}>Today</Btn>
+          {viewOnly && (() => {
+            const wStart = isoDate(weekDays[0]);
+            const wEnd   = isoDate(weekDays[6]);
+            const draftCount = rows.filter(r => r.work_date?.slice(0, 10) >= wStart && r.work_date?.slice(0, 10) <= wEnd && r.status === "draft").length;
+            return draftCount > 0 ? (
+              <Btn small onClick={handleSubmitWeek} disabled={saving}
+                style={{ background: C.accent, color: "#fff", border: "none", borderRadius: 8, padding: "6px 16px", fontWeight: 700, cursor: "pointer" }}>
+                {saving ? "Submitting…" : `Submit Week (${draftCount})`}
+              </Btn>
+            ) : null;
+          })()}
         </div>
 
         {/* Day columns */}
@@ -2241,17 +2264,14 @@ function Timesheets({ currentUser, viewOnly }) {
                   {/* Timesheet rows */}
                   <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 5 }}>
                     {dayRows.map(r => (
-                      <div key={r.id} style={{ background: C.surface, borderRadius: 6, padding: "5px 8px", display: "flex", justifyContent: "space-between", alignItems: "center", border: `1px solid ${r.status === "approved" ? C.green + "44" : r.status === "rejected" ? C.red + "44" : C.border}` }}>
+                      <div key={r.id} style={{ background: r.status === "draft" ? C.bg : C.surface, borderRadius: 6, padding: "5px 8px", display: "flex", justifyContent: "space-between", alignItems: "center", border: `1px solid ${r.status === "approved" ? C.green + "44" : r.status === "rejected" ? C.red + "44" : r.status === "draft" ? C.border : C.border}`, opacity: r.status === "draft" ? 0.75 : 1 }}>
                         <div style={{ minWidth: 0 }}>
                           <div style={{ fontSize: 11, fontWeight: 700, color: C.accent, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.project_code}</div>
                           {!viewOnly && <div style={{ fontSize: 10, color: C.textMuted }}>{r.employee_name}</div>}
-                          <div style={{ fontSize: 10, color: C.textMuted }}>{r.hours}h · <span style={{ color: r.status === "approved" ? C.green : r.status === "rejected" ? C.red : C.amber }}>{r.status}</span></div>
+                          <div style={{ fontSize: 10, color: C.textMuted }}>{r.hours}h · <span style={{ color: r.status === "approved" ? C.green : r.status === "rejected" ? C.red : r.status === "draft" ? C.textMuted : C.amber }}>{r.status === "draft" ? "saved" : r.status}</span></div>
                         </div>
                         <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-                          {!viewOnly && r.status === "pending" && (
-                            <button onClick={() => handleDelete(r.id)} title="Remove" style={{ background: "none", border: "none", cursor: "pointer", color: C.textMuted, fontSize: 13, padding: "0 2px", lineHeight: 1 }}>🗑</button>
-                          )}
-                          {viewOnly && r.status === "pending" && (
+                          {(r.status === "pending" || r.status === "draft") && (
                             <button onClick={() => handleDelete(r.id)} title="Remove" style={{ background: "none", border: "none", cursor: "pointer", color: C.textMuted, fontSize: 13, padding: "0 2px", lineHeight: 1 }}>🗑</button>
                           )}
                           {!viewOnly && r.status === "pending" && (
@@ -2271,14 +2291,14 @@ function Timesheets({ currentUser, viewOnly }) {
                       <select value={addRow.projectId || ""} onChange={e => setAddRow(r => ({ ...r, projectId: e.target.value }))}
                         style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, padding: "4px 6px", fontSize: 11, width: "100%" }}>
                         <option value="">Project…</option>
-                        {myProjs.map(p => <option key={p.id} value={p.id}>{p.code}</option>)}
+                        {myProjs.map(p => <option key={p.id} value={p.id}>{p.code} – {p.name}</option>)}
                       </select>
                       <input type="number" value={addRow.hours || ""} onChange={e => setAddRow(r => ({ ...r, hours: e.target.value }))}
                         placeholder="Hours" min="0.5" max="24" step="0.5"
                         style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, padding: "4px 6px", fontSize: 11, width: "100%" }} />
                       <div style={{ display: "flex", gap: 4 }}>
                         <button onClick={handleAdd} disabled={saving} style={{ flex: 1, background: C.accent, border: "none", borderRadius: 5, color: "#fff", fontSize: 11, fontWeight: 700, padding: "4px 0", cursor: "pointer" }}>
-                          {saving ? "…" : "Submit"}
+                          {saving ? "…" : "Save"}
                         </button>
                         <button onClick={() => setAddRow(null)} style={{ flex: 1, background: "transparent", border: `1px solid ${C.border}`, borderRadius: 5, color: C.textMuted, fontSize: 11, padding: "4px 0", cursor: "pointer" }}>✕</button>
                       </div>

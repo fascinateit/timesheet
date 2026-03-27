@@ -57,6 +57,7 @@ export const api = {
   approveTimesheet: (id) => req("PATCH", `/timesheets/${id}/approve`),
   rejectTimesheet: (id) => req("PATCH", `/timesheets/${id}/reject`),
   deleteTimesheet: (id) => req("DELETE", `/timesheets/${id}`),
+  submitWeekTimesheets: (startDate, endDate) => req("POST", "/timesheets/submit-week", { startDate, endDate }),
 
   // Leaves
   getLeaves: (params = {}) => req("GET", `/leaves/?${new URLSearchParams(params)}`),
