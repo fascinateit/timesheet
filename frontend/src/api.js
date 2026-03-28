@@ -152,6 +152,28 @@ export const api = {
   createOnboardingRecord: (d) => req("POST", "/onboarding/", d),
   updateOnboardingRecord: (id, d) => req("PUT", `/onboarding/${id}`, d),
   deleteOnboardingRecord: (id) => req("DELETE", `/onboarding/${id}`),
+
+  // Performance Management
+  getGoals: (params = {}) => req("GET", `/performance/goals?${new URLSearchParams(params)}`),
+  createGoal: (d) => req("POST", "/performance/goals", d),
+  updateGoal: (id, d) => req("PUT", `/performance/goals/${id}`, d),
+  deleteGoal: (id) => req("DELETE", `/performance/goals/${id}`),
+
+  getSelfAssessments: (params = {}) => req("GET", `/performance/self-assessments?${new URLSearchParams(params)}`),
+  saveSelfAssessment: (d) => req("POST", "/performance/self-assessments", d),
+  submitSelfAssessment: (id) => req("PATCH", `/performance/self-assessments/${id}/submit`),
+
+  getFeedback: (params = {}) => req("GET", `/performance/feedback?${new URLSearchParams(params)}`),
+  createFeedback: (d) => req("POST", "/performance/feedback", d),
+  updateFeedback: (id, d) => req("PUT", `/performance/feedback/${id}`, d),
+  deleteFeedback: (id) => req("DELETE", `/performance/feedback/${id}`),
+
+  getReviews: (params = {}) => req("GET", `/performance/reviews?${new URLSearchParams(params)}`),
+  createReview: (d) => req("POST", "/performance/reviews", d),
+  updateReview: (id, d) => req("PUT", `/performance/reviews/${id}`, d),
+  submitReview: (id) => req("PATCH", `/performance/reviews/${id}/submit`),
+  acknowledgeReview: (id) => req("PATCH", `/performance/reviews/${id}/acknowledge`),
+  deleteReview: (id) => req("DELETE", `/performance/reviews/${id}`),
   deleteOnboardingDocument: (rid, did) => req("DELETE", `/onboarding/${rid}/documents/${did}`),
   getSpStatus: () => req("GET", "/onboarding/sp-status"),
 

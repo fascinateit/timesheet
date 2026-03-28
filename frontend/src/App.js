@@ -5643,6 +5643,721 @@ function AttendanceClaims({ currentUser }) {
   );
 }
 
+// ════════════════════════════════════════════════════════
+// PERFORMANCE MANAGEMENT
+// ════════════════════════════════════════════════════════
+
+const PERF_CYCLES = ["Q1", "Q2", "Q3", "Q4", "H1", "H2", "Annual"];
+const PERF_YEARS  = [2023, 2024, 2025, 2026];
+const FEEDBACK_CATS = ["General", "Technical", "Communication", "Leadership", "Teamwork", "Delivery", "Attitude"];
+const STAR_COLORS = { 5: C.green, 4: C.accent, 3: C.amber, 2: "#F97316", 1: C.red };
+
+function StarRating({ value, onChange, disabled }) {
+  return (
+    <div style={{ display: "flex", gap: 4 }}>
+      {[1, 2, 3, 4, 5].map(n => (
+        <span key={n} onClick={() => !disabled && onChange && onChange(n)}
+          style={{ fontSize: 22, cursor: disabled ? "default" : "pointer", color: n <= (value || 0) ? C.amber : C.border, lineHeight: 1 }}>★</span>
+      ))}
+      {value ? <span style={{ fontSize: 12, color: C.textDim, alignSelf: "center", marginLeft: 4 }}>{value}/5</span> : null}
+    </div>
+  );
+}
+
+function PerfBadge({ status }) {
+  const m = { draft: [C.textMuted, "Draft"], submitted: [C.accent, "Submitted"], acknowledged: [C.green, "Acknowledged"], active: [C.green, "Active"], achieved: [C.green, "Achieved"], missed: [C.red, "Missed"], cancelled: [C.textMuted, "Cancelled"] };
+  const [color, label] = m[status] || [C.textMuted, status];
+  return <Badge color={color}>{label}</Badge>;
+}
+
+function PerformanceManagement({ currentUser }) {
+  const [tab, setTab] = useState("goals");
+  const isEmployee = currentUser.role === "employee";
+  const isAdmin    = currentUser.role === "admin";
+  const tabs = [
+    { id: "goals",      label: "🎯 Goals",            show: true },
+    { id: "self",       label: "📝 Self-Assessment",  show: true },
+    { id: "feedback",   label: "💬 Feedback",         show: true },
+    { id: "reviews",    label: "⭐ Reviews",           show: true },
+    { id: "history",    label: "📈 History",           show: true },
+  ];
+
+  return (
+    <div style={{ padding: "0 0 40px" }}>
+      <div style={{ marginBottom: 24 }}>
+        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>Performance Management</h2>
+        <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>Goals, assessments, feedback and appraisal history</p>
+      </div>
+      {/* Tab bar */}
+      <div style={{ display: "flex", gap: 4, borderBottom: `1px solid ${C.border}`, marginBottom: 28, overflowX: "auto" }}>
+        {tabs.filter(t => t.show).map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)} style={{
+            background: "none", border: "none", borderBottom: tab === t.id ? `2px solid ${C.accent}` : "2px solid transparent",
+            color: tab === t.id ? C.accent : C.textMuted, padding: "10px 18px", fontSize: 13, fontWeight: tab === t.id ? 700 : 500,
+            cursor: "pointer", whiteSpace: "nowrap", marginBottom: -1
+          }}>{t.label}</button>
+        ))}
+      </div>
+      {tab === "goals"    && <PerfGoals    currentUser={currentUser} isEmployee={isEmployee} isAdmin={isAdmin} />}
+      {tab === "self"     && <PerfSelf     currentUser={currentUser} isEmployee={isEmployee} />}
+      {tab === "feedback" && <PerfFeedback currentUser={currentUser} isEmployee={isEmployee} isAdmin={isAdmin} />}
+      {tab === "reviews"  && <PerfReviews  currentUser={currentUser} isEmployee={isEmployee} isAdmin={isAdmin} />}
+      {tab === "history"  && <PerfHistory  currentUser={currentUser} isEmployee={isEmployee} />}
+    </div>
+  );
+}
+
+// ── Goals Tab ─────────────────────────────────────────────────────────────────
+function PerfGoals({ currentUser, isEmployee, isAdmin }) {
+  const [goals, setGoals]       = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [modal, setModal]       = useState(null); // null | "new" | goal obj
+  const [saving, setSaving]     = useState(false);
+  const [filterCycle, setFilterCycle] = useState("");
+  const [filterStatus, setFilterStatus] = useState("active");
+  const EMPTY = { title: "", description: "", goalType: "OKR", reviewCycle: "Annual", dueDate: "", weight: 100, progress: 0, status: "active", employeeId: "" };
+  const [form, setForm] = useState(EMPTY);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = {};
+      if (filterCycle) params.review_cycle = filterCycle;
+      if (filterStatus) params.status = filterStatus;
+      const [g, e] = await Promise.all([api.getGoals(params), !isEmployee ? api.getEmployees() : Promise.resolve([])]);
+      setGoals(g); setEmployees(e);
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+    setLoading(false);
+  });
+  useEffect(() => { load(); }, [filterCycle, filterStatus]);
+
+  function openNew() { setForm({ ...EMPTY, employeeId: isEmployee ? currentUser.employee_id : "" }); setModal("new"); }
+  function openEdit(g) { setForm({ title: g.title, description: g.description || "", goalType: g.goal_type, reviewCycle: g.review_cycle, dueDate: g.due_date?.slice(0,10) || "", weight: g.weight, progress: g.progress, status: g.status, employeeId: g.employee_id }); setModal(g); }
+
+  async function handleSave() {
+    if (!form.title.trim()) { dialog.alert("Title is required", { title: "Validation", dtype: "warning" }); return; }
+    setSaving(true);
+    try {
+      if (modal === "new") await api.createGoal(form);
+      else await api.updateGoal(modal.id, form);
+      setModal(null); await load();
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+    setSaving(false);
+  }
+  async function handleDelete(id) {
+    if (!await dialog.confirm("Delete this goal?", { dtype: "warning" })) return;
+    try { await api.deleteGoal(id); await load(); } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+  }
+
+  const cycleYear = (c) => {
+    const yr = new Date().getFullYear();
+    const idx = PERF_CYCLES.indexOf(c);
+    return idx >= 0 ? `${c} ${yr}` : c;
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
+        <select value={filterCycle} onChange={e => setFilterCycle(e.target.value)} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "7px 12px", fontSize: 12 }}>
+          <option value="">All Cycles</option>
+          {PERF_CYCLES.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "7px 12px", fontSize: 12 }}>
+          <option value="">All Statuses</option>
+          {["active","achieved","missed","cancelled"].map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <div style={{ flex: 1 }} />
+        <Btn onClick={openNew}>+ Add Goal</Btn>
+      </div>
+
+      {loading ? <Spinner /> : goals.length === 0 ? (
+        <div style={{ textAlign: "center", color: C.textMuted, padding: 60, fontSize: 14 }}>No goals found. Add your first goal!</div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: 14 }}>
+          {goals.map(g => (
+            <div key={g.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 18 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 4, flexWrap: "wrap" }}>
+                    <Badge color={g.goal_type === "OKR" ? C.purple : C.accent}>{g.goal_type}</Badge>
+                    <PerfBadge status={g.status} />
+                    <span style={{ fontSize: 11, color: C.textMuted }}>{g.review_cycle}</span>
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.text, wordBreak: "break-word" }}>{g.title}</div>
+                  {!isEmployee && <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{g.employee_name}</div>}
+                </div>
+                <div style={{ display: "flex", gap: 6, flexShrink: 0, marginLeft: 8 }}>
+                  <button onClick={() => openEdit(g)} style={{ background: "none", border: "none", cursor: "pointer", color: C.textMuted, fontSize: 13 }}>✏</button>
+                  {(isAdmin || g.employee_id === currentUser.employee_id) && (
+                    <button onClick={() => handleDelete(g.id)} style={{ background: "none", border: "none", cursor: "pointer", color: C.red, fontSize: 13 }}>🗑</button>
+                  )}
+                </div>
+              </div>
+              {g.description && <div style={{ fontSize: 12, color: C.textDim, marginBottom: 10, lineHeight: 1.5 }}>{g.description}</div>}
+              {/* Progress bar */}
+              <div style={{ marginBottom: 6 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                  <span style={{ fontSize: 11, color: C.textMuted }}>Progress</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: g.progress >= 100 ? C.green : C.text }}>{g.progress}%</span>
+                </div>
+                <div style={{ background: C.border, borderRadius: 4, height: 6 }}>
+                  <div style={{ background: g.progress >= 100 ? C.green : g.progress >= 60 ? C.accent : C.amber, width: `${Math.min(g.progress,100)}%`, height: "100%", borderRadius: 4, transition: "width .3s" }} />
+                </div>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: C.textMuted }}>
+                <span>Weight: {g.weight}%</span>
+                {g.due_date && <span>Due: {fmtD(g.due_date)}</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {modal && (
+        <Modal title={modal === "new" ? "Add Goal" : "Edit Goal"} onClose={() => setModal(null)} maxWidth={500}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {!isEmployee && (
+              <Inp label="Employee" value={form.employeeId} onChange={v => setForm(f => ({ ...f, employeeId: v }))}
+                options={employees.map(e => ({ value: e.id, label: e.name }))} required />
+            )}
+            <Inp label="Title" value={form.title} onChange={v => setForm(f => ({ ...f, title: v }))} required placeholder="e.g. Increase customer satisfaction score" />
+            <Inp label="Description" value={form.description} onChange={v => setForm(f => ({ ...f, description: v }))} placeholder="Details about this goal…" />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <Inp label="Type" value={form.goalType} onChange={v => setForm(f => ({ ...f, goalType: v }))} options={[{value:"OKR",label:"OKR"},{value:"KPI",label:"KPI"}]} />
+              <Inp label="Review Cycle" value={form.reviewCycle} onChange={v => setForm(f => ({ ...f, reviewCycle: v }))} options={PERF_CYCLES.map(c => ({ value: c, label: c }))} />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <Inp label="Due Date" value={form.dueDate} onChange={v => setForm(f => ({ ...f, dueDate: v }))} type="date" />
+              <Inp label="Weight (%)" value={form.weight} onChange={v => setForm(f => ({ ...f, weight: v }))} type="number" placeholder="100" />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, color: C.textDim, fontWeight: 600, letterSpacing: .4, display: "block", marginBottom: 6 }}>Progress ({form.progress}%)</label>
+              <input type="range" min={0} max={100} step={5} value={form.progress} onChange={e => setForm(f => ({ ...f, progress: +e.target.value }))}
+                style={{ width: "100%", accentColor: C.accent }} />
+            </div>
+            <Inp label="Status" value={form.status} onChange={v => setForm(f => ({ ...f, status: v }))} options={["active","achieved","missed","cancelled"].map(s => ({ value: s, label: s[0].toUpperCase() + s.slice(1) }))} />
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
+              <Btn variant="ghost" onClick={() => setModal(null)}>Cancel</Btn>
+              <Btn onClick={handleSave} disabled={saving}>{saving ? "Saving…" : "Save"}</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── Self-Assessment Tab ───────────────────────────────────────────────────────
+function PerfSelf({ currentUser, isEmployee }) {
+  const [assessments, setAssessments] = useState([]);
+  const [employees, setEmployees]     = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [editing, setEditing]         = useState(null); // null | assessment obj | "new"
+  const [saving, setSaving]           = useState(false);
+  const [filterPeriod, setFilterPeriod] = useState("");
+  const EMPTY_FORM = { reviewPeriod: "", achievements: "", challenges: "", goalsNext: "", selfRating: 0, status: "draft", employeeId: "" };
+  const [form, setForm] = useState(EMPTY_FORM);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = {};
+      if (filterPeriod) params.review_period = filterPeriod;
+      const [sa, em] = await Promise.all([api.getSelfAssessments(params), !isEmployee ? api.getEmployees() : Promise.resolve([])]);
+      setAssessments(sa); setEmployees(em);
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+    setLoading(false);
+  });
+  useEffect(() => { load(); }, [filterPeriod]);
+
+  function openNew() { setForm({ ...EMPTY_FORM, employeeId: isEmployee ? currentUser.employee_id : "" }); setEditing("new"); }
+  function openEdit(sa) { setForm({ reviewPeriod: sa.review_period, achievements: sa.achievements || "", challenges: sa.challenges || "", goalsNext: sa.goals_next || "", selfRating: sa.self_rating || 0, status: sa.status, employeeId: sa.employee_id }); setEditing(sa); }
+
+  async function handleSave(submitNow = false) {
+    if (!form.reviewPeriod.trim()) { dialog.alert("Review period is required", { title: "Validation", dtype: "warning" }); return; }
+    setSaving(true);
+    try {
+      const payload = { ...form, status: submitNow ? "submitted" : form.status };
+      const saved = await api.saveSelfAssessment(payload);
+      if (submitNow && saved.status !== "submitted") await api.submitSelfAssessment(saved.id);
+      setEditing(null); await load();
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+    setSaving(false);
+  }
+
+  const yr = new Date().getFullYear();
+  const periodOptions = PERF_CYCLES.flatMap(c => PERF_YEARS.map(y => `${c} ${y}`));
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
+        <select value={filterPeriod} onChange={e => setFilterPeriod(e.target.value)} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "7px 12px", fontSize: 12 }}>
+          <option value="">All Periods</option>
+          {PERF_CYCLES.flatMap(c => PERF_YEARS.map(y => <option key={`${c}${y}`} value={`${c} ${y}`}>{c} {y}</option>))}
+        </select>
+        <div style={{ flex: 1 }} />
+        <Btn onClick={openNew}>+ New Assessment</Btn>
+      </div>
+
+      {loading ? <Spinner /> : assessments.length === 0 ? (
+        <div style={{ textAlign: "center", color: C.textMuted, padding: 60, fontSize: 14 }}>No self-assessments yet. Start one!</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {assessments.map(sa => (
+            <div key={sa.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                <div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
+                    <span style={{ fontSize: 15, fontWeight: 800, color: C.text }}>{sa.review_period}</span>
+                    <PerfBadge status={sa.status} />
+                  </div>
+                  {!isEmployee && <div style={{ fontSize: 12, color: C.textMuted }}>{sa.employee_name}</div>}
+                </div>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  {sa.self_rating > 0 && <StarRating value={Math.round(sa.self_rating)} disabled />}
+                  {sa.status === "draft" && <button onClick={() => openEdit(sa)} style={{ background: "none", border: "none", cursor: "pointer", color: C.textMuted, fontSize: 13 }}>✏</button>}
+                </div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
+                {[["Achievements", sa.achievements], ["Challenges", sa.challenges], ["Goals for Next", sa.goals_next]].map(([label, val]) => (
+                  <div key={label}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, marginBottom: 4, textTransform: "uppercase", letterSpacing: .5 }}>{label}</div>
+                    <div style={{ fontSize: 12, color: C.textDim, lineHeight: 1.6 }}>{val || "—"}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {editing && (
+        <Modal title={editing === "new" ? "New Self-Assessment" : "Edit Self-Assessment"} onClose={() => setEditing(null)} maxWidth={580}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {!isEmployee && (
+              <Inp label="Employee" value={form.employeeId} onChange={v => setForm(f => ({ ...f, employeeId: v }))} options={employees.map(e => ({ value: e.id, label: e.name }))} required />
+            )}
+            <div>
+              <label style={{ fontSize: 12, color: C.textDim, fontWeight: 600, display: "block", marginBottom: 6 }}>Review Period <span style={{ color: C.red }}>*</span></label>
+              <input list="period-list" value={form.reviewPeriod} onChange={e => setForm(f => ({ ...f, reviewPeriod: e.target.value }))}
+                placeholder="e.g. Q1 2025" style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "8px 12px", fontSize: 13, width: "100%" }} />
+              <datalist id="period-list">{periodOptions.map(p => <option key={p} value={p} />)}</datalist>
+            </div>
+            {[["Achievements", "achievements", "Key accomplishments this period…"], ["Challenges", "challenges", "Obstacles faced and how you addressed them…"], ["Goals for Next Period", "goalsNext", "What you aim to achieve next…"]].map(([label, key, ph]) => (
+              <div key={key}>
+                <label style={{ fontSize: 12, color: C.textDim, fontWeight: 600, display: "block", marginBottom: 6 }}>{label}</label>
+                <textarea value={form[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} placeholder={ph} rows={3}
+                  style={{ width: "100%", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "8px 12px", fontSize: 12, resize: "vertical", lineHeight: 1.5 }} />
+              </div>
+            ))}
+            <div>
+              <label style={{ fontSize: 12, color: C.textDim, fontWeight: 600, display: "block", marginBottom: 8 }}>Self Rating</label>
+              <StarRating value={form.selfRating} onChange={v => setForm(f => ({ ...f, selfRating: v }))} />
+            </div>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
+              <Btn variant="ghost" onClick={() => setEditing(null)}>Cancel</Btn>
+              <Btn variant="ghost" onClick={() => handleSave(false)} disabled={saving}>Save Draft</Btn>
+              <Btn onClick={() => handleSave(true)} disabled={saving}>{saving ? "Submitting…" : "Submit"}</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── Feedback Tab ──────────────────────────────────────────────────────────────
+function PerfFeedback({ currentUser, isEmployee, isAdmin }) {
+  const [feedbacks, setFeedbacks] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [modal, setModal]         = useState(null);
+  const [saving, setSaving]       = useState(false);
+  const [filterEmp, setFilterEmp] = useState("");
+  const EMPTY = { employeeId: "", reviewPeriod: "", category: "General", feedbackText: "", rating: 0 };
+  const [form, setForm] = useState(EMPTY);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = {};
+      if (filterEmp) params.employee_id = filterEmp;
+      const [fb, em] = await Promise.all([api.getFeedback(params), api.getEmployees()]);
+      setFeedbacks(fb); setEmployees(em);
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+    setLoading(false);
+  });
+  useEffect(() => { load(); }, [filterEmp]);
+
+  async function handleSave() {
+    if (!form.employeeId || !form.reviewPeriod.trim() || !form.feedbackText.trim()) {
+      dialog.alert("Employee, period and feedback text are required", { title: "Validation", dtype: "warning" }); return;
+    }
+    setSaving(true);
+    try {
+      if (modal?.id) await api.updateFeedback(modal.id, form);
+      else await api.createFeedback(form);
+      setModal(null); await load();
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+    setSaving(false);
+  }
+  async function handleDelete(id) {
+    if (!await dialog.confirm("Delete this feedback?", { dtype: "warning" })) return;
+    try { await api.deleteFeedback(id); await load(); } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+  }
+
+  const periodOptions = PERF_CYCLES.flatMap(c => PERF_YEARS.map(y => `${c} ${y}`));
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
+        {!isEmployee && (
+          <select value={filterEmp} onChange={e => setFilterEmp(e.target.value)} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "7px 12px", fontSize: 12 }}>
+            <option value="">All Employees</option>
+            {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+          </select>
+        )}
+        <div style={{ flex: 1 }} />
+        {!isEmployee && <Btn onClick={() => { setForm(EMPTY); setModal({}); }}>+ Add Feedback</Btn>}
+      </div>
+
+      {loading ? <Spinner /> : feedbacks.length === 0 ? (
+        <div style={{ textAlign: "center", color: C.textMuted, padding: 60, fontSize: 14 }}>No feedback records found.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {feedbacks.map(fb => (
+            <div key={fb.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 18 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                <div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{fb.employee_name}</span>
+                    <Badge color={C.accent}>{fb.category}</Badge>
+                    <span style={{ fontSize: 11, color: C.textMuted }}>{fb.review_period}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>by {fb.reviewer_name}</div>
+                </div>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  {fb.rating > 0 && <StarRating value={Math.round(fb.rating)} disabled />}
+                  {(isAdmin || fb.reviewer_id === currentUser.employee_id) && (
+                    <button onClick={() => handleDelete(fb.id)} style={{ background: "none", border: "none", cursor: "pointer", color: C.red, fontSize: 13 }}>🗑</button>
+                  )}
+                </div>
+              </div>
+              <div style={{ fontSize: 13, color: C.textDim, lineHeight: 1.6, borderLeft: `3px solid ${C.accent}`, paddingLeft: 12 }}>{fb.feedback_text}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {modal !== null && (
+        <Modal title="Add Feedback" onClose={() => setModal(null)} maxWidth={500}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <Inp label="Employee" value={form.employeeId} onChange={v => setForm(f => ({ ...f, employeeId: v }))} options={employees.map(e => ({ value: e.id, label: e.name }))} required />
+            <div>
+              <label style={{ fontSize: 12, color: C.textDim, fontWeight: 600, display: "block", marginBottom: 6 }}>Review Period <span style={{ color: C.red }}>*</span></label>
+              <input list="fb-period-list" value={form.reviewPeriod} onChange={e => setForm(f => ({ ...f, reviewPeriod: e.target.value }))}
+                placeholder="e.g. Q2 2025" style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "8px 12px", fontSize: 13, width: "100%" }} />
+              <datalist id="fb-period-list">{periodOptions.map(p => <option key={p} value={p} />)}</datalist>
+            </div>
+            <Inp label="Category" value={form.category} onChange={v => setForm(f => ({ ...f, category: v }))} options={FEEDBACK_CATS.map(c => ({ value: c, label: c }))} />
+            <div>
+              <label style={{ fontSize: 12, color: C.textDim, fontWeight: 600, display: "block", marginBottom: 6 }}>Feedback <span style={{ color: C.red }}>*</span></label>
+              <textarea value={form.feedbackText} onChange={e => setForm(f => ({ ...f, feedbackText: e.target.value }))} rows={4} placeholder="Provide specific, constructive feedback…"
+                style={{ width: "100%", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "8px 12px", fontSize: 12, resize: "vertical", lineHeight: 1.5 }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, color: C.textDim, fontWeight: 600, display: "block", marginBottom: 8 }}>Rating</label>
+              <StarRating value={form.rating} onChange={v => setForm(f => ({ ...f, rating: v }))} />
+            </div>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <Btn variant="ghost" onClick={() => setModal(null)}>Cancel</Btn>
+              <Btn onClick={handleSave} disabled={saving}>{saving ? "Saving…" : "Save"}</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── Reviews Tab ───────────────────────────────────────────────────────────────
+function PerfReviews({ currentUser, isEmployee, isAdmin }) {
+  const [reviews, setReviews]     = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [modal, setModal]         = useState(null); // null | "new" | review obj
+  const [saving, setSaving]       = useState(false);
+  const [expanded, setExpanded]   = useState(null);
+  const EMPTY = { employeeId: "", reviewPeriod: "", technicalRating: 0, communicationRating: 0, teamworkRating: 0, leadershipRating: 0, overallRating: 0, strengths: "", improvements: "", comments: "", status: "draft" };
+  const [form, setForm] = useState(EMPTY);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [rv, em] = await Promise.all([api.getReviews({}), !isEmployee ? api.getEmployees() : Promise.resolve([])]);
+      setReviews(rv); setEmployees(em);
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+    setLoading(false);
+  });
+  useEffect(() => { load(); }, []);
+
+  function openNew() { setForm(EMPTY); setModal("new"); }
+  function openEdit(rv) {
+    setForm({ employeeId: rv.employee_id, reviewPeriod: rv.review_period, technicalRating: rv.technical_rating || 0, communicationRating: rv.communication_rating || 0, teamworkRating: rv.teamwork_rating || 0, leadershipRating: rv.leadership_rating || 0, overallRating: rv.overall_rating || 0, strengths: rv.strengths || "", improvements: rv.improvements || "", comments: rv.comments || "", status: rv.status });
+    setModal(rv);
+  }
+
+  async function handleSave() {
+    if (!form.employeeId || !form.reviewPeriod.trim()) { dialog.alert("Employee and review period are required", { title: "Validation", dtype: "warning" }); return; }
+    setSaving(true);
+    try {
+      if (modal === "new") await api.createReview(form);
+      else await api.updateReview(modal.id, form);
+      setModal(null); await load();
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+    setSaving(false);
+  }
+  async function handleSubmit(id) {
+    if (!await dialog.confirm("Submit this review to the employee?", { title: "Submit Review", dtype: "info" })) return;
+    try { await api.submitReview(id); await load(); } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+  }
+  async function handleAcknowledge(id) {
+    if (!await dialog.confirm("Acknowledge this review?", { title: "Acknowledge", dtype: "info" })) return;
+    try { await api.acknowledgeReview(id); await load(); } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+  }
+  async function handleDelete(id) {
+    if (!await dialog.confirm("Delete this review?", { dtype: "warning" })) return;
+    try { await api.deleteReview(id); await load(); } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+  }
+
+  const RATING_FIELDS = [["Technical", "technicalRating", "technical_rating"], ["Communication", "communicationRating", "communication_rating"], ["Teamwork", "teamworkRating", "teamwork_rating"], ["Leadership", "leadershipRating", "leadership_rating"]];
+  const periodOptions = PERF_CYCLES.flatMap(c => PERF_YEARS.map(y => `${c} ${y}`));
+
+  function ratingColor(v) { return v >= 4.5 ? C.green : v >= 3.5 ? C.accent : v >= 2.5 ? C.amber : C.red; }
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 20 }}>
+        {!isEmployee && <Btn onClick={openNew}>+ New Review</Btn>}
+      </div>
+
+      {loading ? <Spinner /> : reviews.length === 0 ? (
+        <div style={{ textAlign: "center", color: C.textMuted, padding: 60, fontSize: 14 }}>No reviews yet.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {reviews.map(rv => (
+            <div key={rv.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden" }}>
+              <div style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }} onClick={() => setExpanded(expanded === rv.id ? null : rv.id)}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{rv.employee_name}</span>
+                    <span style={{ fontSize: 11, color: C.textMuted }}>{rv.review_period}</span>
+                    <PerfBadge status={rv.status} />
+                  </div>
+                  <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>Reviewed by {rv.reviewer_name}</div>
+                </div>
+                {rv.overall_rating > 0 && (
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: 22, fontWeight: 900, color: ratingColor(rv.overall_rating) }}>{rv.overall_rating}</div>
+                    <div style={{ fontSize: 10, color: C.textMuted }}>Overall</div>
+                  </div>
+                )}
+                <div style={{ display: "flex", gap: 6 }}>
+                  {!isEmployee && rv.status === "draft" && <Btn small onClick={e => { e.stopPropagation(); openEdit(rv); }}>✏ Edit</Btn>}
+                  {!isEmployee && rv.status === "draft" && <Btn small variant="success" onClick={e => { e.stopPropagation(); handleSubmit(rv.id); }}>Submit</Btn>}
+                  {isEmployee && rv.status === "submitted" && <Btn small variant="success" onClick={e => { e.stopPropagation(); handleAcknowledge(rv.id); }}>✓ Acknowledge</Btn>}
+                  {(isAdmin || rv.reviewer_id === currentUser.employee_id) && rv.status !== "acknowledged" && (
+                    <Btn small variant="danger" onClick={e => { e.stopPropagation(); handleDelete(rv.id); }}>🗑</Btn>
+                  )}
+                  <span style={{ color: C.textMuted, fontSize: 16 }}>{expanded === rv.id ? "▲" : "▼"}</span>
+                </div>
+              </div>
+              {expanded === rv.id && (
+                <div style={{ padding: "0 20px 20px", borderTop: `1px solid ${C.border}` }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(160px,1fr))", gap: 12, marginTop: 16, marginBottom: 16 }}>
+                    {RATING_FIELDS.map(([label, , key]) => rv[key] > 0 && (
+                      <div key={label} style={{ background: C.surface, borderRadius: 8, padding: 12, textAlign: "center" }}>
+                        <div style={{ fontSize: 24, fontWeight: 900, color: ratingColor(rv[key]) }}>{rv[key]}</div>
+                        <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{label}</div>
+                        <StarRating value={Math.round(rv[key])} disabled />
+                      </div>
+                    ))}
+                  </div>
+                  {[["Strengths", rv.strengths], ["Areas for Improvement", rv.improvements], ["Comments", rv.comments]].map(([label, val]) => val && (
+                    <div key={label} style={{ marginBottom: 12 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: .5, marginBottom: 6 }}>{label}</div>
+                      <div style={{ fontSize: 13, color: C.textDim, lineHeight: 1.6, background: C.surface, borderRadius: 8, padding: "10px 14px" }}>{val}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {modal && (
+        <Modal title={modal === "new" ? "New Performance Review" : "Edit Review"} onClose={() => setModal(null)} maxWidth={580}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <Inp label="Employee" value={form.employeeId} onChange={v => setForm(f => ({ ...f, employeeId: v }))} options={employees.map(e => ({ value: e.id, label: e.name }))} required disabled={modal !== "new"} />
+            <div>
+              <label style={{ fontSize: 12, color: C.textDim, fontWeight: 600, display: "block", marginBottom: 6 }}>Review Period <span style={{ color: C.red }}>*</span></label>
+              <input list="rv-period-list" value={form.reviewPeriod} onChange={e => setForm(f => ({ ...f, reviewPeriod: e.target.value }))} disabled={modal !== "new"}
+                placeholder="e.g. Annual 2025" style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "8px 12px", fontSize: 13, width: "100%", opacity: modal !== "new" ? .6 : 1 }} />
+              <datalist id="rv-period-list">{periodOptions.map(p => <option key={p} value={p} />)}</datalist>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              {RATING_FIELDS.map(([label, key]) => (
+                <div key={key}>
+                  <label style={{ fontSize: 12, color: C.textDim, fontWeight: 600, display: "block", marginBottom: 8 }}>{label}</label>
+                  <StarRating value={form[key]} onChange={v => setForm(f => ({ ...f, [key]: v }))} />
+                </div>
+              ))}
+            </div>
+            <div>
+              <label style={{ fontSize: 12, color: C.textDim, fontWeight: 600, display: "block", marginBottom: 8 }}>Overall Rating</label>
+              <StarRating value={form.overallRating} onChange={v => setForm(f => ({ ...f, overallRating: v }))} />
+            </div>
+            {[["Strengths", "strengths", "Key strengths observed…"], ["Areas for Improvement", "improvements", "Specific areas to develop…"], ["Additional Comments", "comments", "Any other observations…"]].map(([label, key, ph]) => (
+              <div key={key}>
+                <label style={{ fontSize: 12, color: C.textDim, fontWeight: 600, display: "block", marginBottom: 6 }}>{label}</label>
+                <textarea value={form[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} placeholder={ph} rows={3}
+                  style={{ width: "100%", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "8px 12px", fontSize: 12, resize: "vertical", lineHeight: 1.5 }} />
+              </div>
+            ))}
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <Btn variant="ghost" onClick={() => setModal(null)}>Cancel</Btn>
+              <Btn onClick={handleSave} disabled={saving}>{saving ? "Saving…" : "Save Draft"}</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── History Tab ───────────────────────────────────────────────────────────────
+function PerfHistory({ currentUser, isEmployee }) {
+  const [data, setData]           = useState({ goals: [], reviews: [], feedback: [] });
+  const [employees, setEmployees] = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [filterEmp, setFilterEmp] = useState(isEmployee ? String(currentUser.employee_id) : "");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = filterEmp ? { employee_id: filterEmp } : {};
+      const [goals, reviews, feedback, em] = await Promise.all([
+        api.getGoals({ ...params, status: "" }),
+        api.getReviews(params),
+        api.getFeedback(params),
+        !isEmployee ? api.getEmployees() : Promise.resolve([])
+      ]);
+      setData({ goals, reviews, feedback }); setEmployees(em);
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+    setLoading(false);
+  });
+  useEffect(() => { load(); }, [filterEmp]);
+
+  function avgRating(reviews) {
+    const rated = reviews.filter(r => r.overall_rating > 0);
+    return rated.length ? (rated.reduce((s, r) => s + +r.overall_rating, 0) / rated.length).toFixed(1) : "—";
+  }
+  function goalStats(goals) {
+    const total = goals.length;
+    const achieved = goals.filter(g => g.status === "achieved").length;
+    return total ? `${achieved}/${total} achieved` : "No goals";
+  }
+
+  const periods = [...new Set([...data.reviews.map(r => r.review_period), ...data.feedback.map(f => f.review_period)])].sort().reverse();
+
+  return (
+    <div>
+      {!isEmployee && (
+        <div style={{ marginBottom: 20 }}>
+          <select value={filterEmp} onChange={e => setFilterEmp(e.target.value)} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "7px 12px", fontSize: 12 }}>
+            <option value="">All Employees</option>
+            {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+          </select>
+        </div>
+      )}
+      {loading ? <Spinner /> : (
+        <>
+          {/* Summary cards */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 14, marginBottom: 28 }}>
+            {[
+              { label: "Total Goals",        value: data.goals.length,       color: C.purple },
+              { label: "Goals Achieved",     value: data.goals.filter(g => g.status === "achieved").length, color: C.green },
+              { label: "Reviews Completed",  value: data.reviews.filter(r => r.status !== "draft").length, color: C.accent },
+              { label: "Avg Overall Rating", value: avgRating(data.reviews), color: C.amber },
+              { label: "Feedback Received",  value: data.feedback.length,    color: C.textDim },
+            ].map(({ label, value, color }) => (
+              <div key={label} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 18, textAlign: "center" }}>
+                <div style={{ fontSize: 28, fontWeight: 900, color }}>{value}</div>
+                <div style={{ fontSize: 12, color: C.textMuted, marginTop: 4 }}>{label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Timeline by period */}
+          {periods.length === 0 ? (
+            <div style={{ textAlign: "center", color: C.textMuted, padding: 40, fontSize: 14 }}>No performance history yet.</div>
+          ) : periods.map(period => {
+            const pReviews  = data.reviews.filter(r => r.review_period === period);
+            const pFeedback = data.feedback.filter(f => f.review_period === period);
+            const pGoals    = data.goals.filter(g => g.review_cycle === period.split(" ")[0]);
+            return (
+              <div key={period} style={{ marginBottom: 24 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+                  <div style={{ flex: 1, height: 1, background: C.border }} />
+                  <span style={{ fontSize: 13, fontWeight: 800, color: C.accent, padding: "4px 14px", border: `1px solid ${C.accent}33`, borderRadius: 20, background: C.accentGlow }}>{period}</span>
+                  <div style={{ flex: 1, height: 1, background: C.border }} />
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                  {/* Reviews */}
+                  <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 14 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: .5, marginBottom: 10 }}>⭐ Reviews</div>
+                    {pReviews.length === 0 ? <div style={{ fontSize: 12, color: C.textMuted }}>—</div> : pReviews.map(rv => (
+                      <div key={rv.id} style={{ marginBottom: 8 }}>
+                        {!isEmployee && <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{rv.employee_name}</div>}
+                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                          {rv.overall_rating > 0 && <span style={{ fontSize: 18, fontWeight: 900, color: rv.overall_rating >= 4 ? C.green : rv.overall_rating >= 3 ? C.amber : C.red }}>{rv.overall_rating}</span>}
+                          <PerfBadge status={rv.status} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Feedback */}
+                  <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 14 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: .5, marginBottom: 10 }}>💬 Feedback ({pFeedback.length})</div>
+                    {pFeedback.length === 0 ? <div style={{ fontSize: 12, color: C.textMuted }}>—</div> : pFeedback.slice(0, 3).map(fb => (
+                      <div key={fb.id} style={{ marginBottom: 8, fontSize: 12, color: C.textDim, borderLeft: `2px solid ${C.accent}`, paddingLeft: 8, lineHeight: 1.5 }}>
+                        <Badge color={C.accent} style={{ marginBottom: 4 }}>{fb.category}</Badge>
+                        <div>{fb.feedback_text.slice(0, 80)}{fb.feedback_text.length > 80 ? "…" : ""}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Goals */}
+                  <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 14 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: .5, marginBottom: 10 }}>🎯 Goals ({goalStats(pGoals)})</div>
+                    {pGoals.length === 0 ? <div style={{ fontSize: 12, color: C.textMuted }}>—</div> : pGoals.slice(0, 3).map(g => (
+                      <div key={g.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                        <span style={{ fontSize: 12, color: C.textDim, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.title}</span>
+                        <PerfBadge status={g.status} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </>
+      )}
+    </div>
+  );
+}
+
 const ADMIN_NAV = [
   { id: "dashboard", label: "Dashboard", icon: "⬡" },
   { id: "project_management", label: "Project Mgmt (Client)", icon: "📊" },
@@ -5658,6 +6373,7 @@ const ADMIN_NAV = [
   { id: "onboard", label: "Onboard Employee", icon: "🧑‍💼" },
   { id: "compensation", label: "Compensation Details", icon: "🧮" },
   { id: "infra", label: "Infra / Assets", icon: "🖥" },
+  { id: "performance", label: "Performance", icon: "🏆" },
 ];
 
 // ════════════════════════════════════════════════════════
@@ -5767,6 +6483,14 @@ export default function App() {
             fontWeight: page === "resumes" ? 700 : 500, fontSize: 13,
             borderLeft: page === "resumes" ? `2px solid ${C.accent}` : "2px solid transparent"
           }}>📑 Generate Company Resume</button>
+          <button onClick={() => nav("performance")} style={{
+            width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "9px 12px",
+            borderRadius: 8, border: "none", cursor: "pointer", textAlign: "left",
+            background: page === "performance" ? C.accentGlow : "transparent",
+            color: page === "performance" ? C.accent : C.textMuted,
+            fontWeight: page === "performance" ? 700 : 500, fontSize: 13,
+            borderLeft: page === "performance" ? `2px solid ${C.accent}` : "2px solid transparent"
+          }}>🏆 Performance</button>
         </div>
         <div style={{ padding: "14px 16px", borderTop: `1px solid ${C.border}` }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 12 }}>
@@ -5780,6 +6504,7 @@ export default function App() {
       <main className="emp-main">
         {(page === "employee-home" || page === "dashboard") && <EmployeeHome currentUser={currentUser} />}
         {page === "resumes" && <AdminCompanyResume />}
+        {page === "performance" && <PerformanceManagement currentUser={currentUser} />}
       </main>
     </div>
     </>
@@ -5861,6 +6586,7 @@ export default function App() {
         {page === "onboard" && <OnboardEmployee />}
         {page === "compensation" && currentUser.role === "admin" && <CompensationDetails />}
         {page === "infra" && currentUser.role === "admin" && <AdminAssets />}
+        {page === "performance" && <PerformanceManagement currentUser={currentUser} />}
         {page === "mywork" && <EmployeeHome currentUser={currentUser} />}
       </main>
     </div>
