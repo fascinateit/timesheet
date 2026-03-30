@@ -1760,6 +1760,56 @@ function LoginPage({ onLogin }) {
   );
 }
 
+// ── TooltipCard: stat card with optional hover tooltip list ─────────────────
+function TooltipCard({ s, tooltipLines }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div
+      style={{ position: "relative" }}
+      onMouseEnter={() => setShow(true)}
+      onMouseLeave={() => setShow(false)}
+    >
+      <Card style={{ display: "flex", gap: 14, alignItems: "flex-start", cursor: tooltipLines ? "pointer" : "default" }}>
+        <div style={{ fontSize: 24 }}>{s.icon}</div>
+        <div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: s.color, letterSpacing: -.5 }}>{s.value}</div>
+          <div style={{ fontSize: 12, color: C.text, fontWeight: 600, marginTop: 2 }}>{s.label}</div>
+          <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{s.sub}</div>
+        </div>
+      </Card>
+      {tooltipLines && show && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 10px)", left: 0, zIndex: 999
+        }}>
+          {/* Pointer (Arrow) */}
+          <div style={{
+            position: "absolute", top: -6, left: 32,
+            width: 14, height: 14, background: "#2a2d3e",
+            borderLeft: `1px solid ${C.border}`, borderTop: `1px solid ${C.border}`,
+            transform: "rotate(45deg)", zIndex: 1
+          }} />
+          {/* Tooltip Body */}
+          <div style={{
+            position: "relative", zIndex: 2,
+            background: "#2a2d3e", border: `1px solid ${C.border}`, borderRadius: 10,
+            boxShadow: "0 10px 40px rgba(0,0,0,0.6)", padding: "12px 16px",
+            minWidth: 240, maxWidth: 320, maxHeight: 260, overflowY: "auto",
+          }}>
+            {tooltipLines.length === 0
+              ? <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)" }}>None</div>
+              : tooltipLines.map((line, i) => (
+                <div key={i} style={{ fontSize: 13, color: "#ffffff", fontWeight: 500, padding: "5px 0", borderBottom: i < tooltipLines.length - 1 ? "1px solid rgba(255,255,255,0.08)" : "none" }}>
+                  {line}
+                </div>
+              ))
+            }
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ════════════════════════════════════════════════════════
 // DASHBOARD
 // ════════════════════════════════════════════════════════
@@ -1785,6 +1835,7 @@ function Dashboard() {
     total_burned = 0,
     pending_timesheets = 0, pending_leaves = 0,
     invoice_total_raised = 0, invoice_cleared = 0, invoice_pending = 0,
+    pending_invoices = [],
   } = data || {};
 
   const stats = [
@@ -1807,30 +1858,26 @@ function Dashboard() {
         <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>Real-time project & budget snapshot</p></div>
       {/* ── Row 1: Budget cards ── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16 }}>
-        {stats.slice(0,4).map(s => (
-          <Card key={s.label} style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-            <div style={{ fontSize: 24 }}>{s.icon}</div>
-            <div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: s.color, letterSpacing: -.5 }}>{s.value}</div>
-              <div style={{ fontSize: 12, color: C.text, fontWeight: 600, marginTop: 2 }}>{s.label}</div>
-              <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{s.sub}</div>
-            </div>
-          </Card>
-        ))}
+        {/* Total Budget — plain */}
+        <TooltipCard s={stats[0]} />
+        {/* Active Project Budget — tooltip: active project names */}
+        <TooltipCard s={stats[1]} tooltipLines={projects.filter(p => p.status === "active").map(p => `🚀 ${p.name} — ${fmt$(p.budget)}`)} />
+        {/* Inactive Project Budget — tooltip: inactive project names + status */}
+        <TooltipCard s={stats[2]} tooltipLines={projects.filter(p => p.status !== "active").map(p => `📦 ${p.name} (${p.status}) — ${fmt$(p.budget)}`)} />
+        {/* Budget Burned — plain */}
+        <TooltipCard s={stats[3]} />
       </div>
 
       {/* ── Row 2: Invoice cards ── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16 }}>
-        {stats.slice(4).map(s => (
-          <Card key={s.label} style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-            <div style={{ fontSize: 24 }}>{s.icon}</div>
-            <div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: s.color, letterSpacing: -.5 }}>{s.value}</div>
-              <div style={{ fontSize: 12, color: C.text, fontWeight: 600, marginTop: 2 }}>{s.label}</div>
-              <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{s.sub}</div>
-            </div>
-          </Card>
-        ))}
+        {/* Total Invoiced — plain */}
+        <TooltipCard s={stats[4]} />
+        {/* Invoice Cleared — plain */}
+        <TooltipCard s={stats[5]} />
+        {/* Invoice Pending — tooltip: client + invoice no + amount */}
+        <TooltipCard s={stats[6]} tooltipLines={pending_invoices.map(inv => `${inv.client_name}${inv.invoice_number ? ` · ${inv.invoice_number}` : ""} — ${fmt$(inv.amount)}`)} />
+        {/* Pending Reviews — plain */}
+        <TooltipCard s={stats[7]} />
       </div>
 
       {/* ── Pie charts row ── */}

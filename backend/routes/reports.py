@@ -99,6 +99,22 @@ def dashboard():
         fetch="one",
     ) or {}
 
+    # Pending invoice details for tooltip
+    pending_inv_rows = query(
+        """
+        SELECT COALESCE(c.client_name, 'Unknown') AS client_name,
+               i.invoice_number, i.amount
+        FROM   invoices i
+        LEFT JOIN clients c ON c.id = i.client_id
+        WHERE  i.status != 'cleared'
+        ORDER  BY i.amount DESC
+        """
+    )
+    pending_invoices = [
+        {"client_name": r["client_name"], "invoice_number": r["invoice_number"], "amount": float(r["amount"] or 0)}
+        for r in pending_inv_rows
+    ]
+
     return jsonify(
         projects=projects,
         total_budget=total_budget,
@@ -110,5 +126,7 @@ def dashboard():
         invoice_total_raised=float(inv_row.get("total_raised") or 0),
         invoice_cleared=float(inv_row.get("total_cleared") or 0),
         invoice_pending=float(inv_row.get("total_pending") or 0),
+        pending_invoices=pending_invoices,
     ), 200
+
 
