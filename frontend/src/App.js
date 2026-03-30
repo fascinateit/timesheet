@@ -80,6 +80,32 @@ const Inp = ({ label, value, onChange, type = "text", options, required, placeho
   </div>
 );
 
+const maskStr = v => {
+  if (!v) return "—";
+  const s = String(v);
+  if (s.length <= 4) return "•".repeat(s.length);
+  return "•".repeat(s.length - 4) + s.slice(-4);
+};
+
+const SensitiveDisplay = ({ value, fontFamily }) => {
+  const [show, setShow] = useState(false);
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+      <span style={{ fontFamily: fontFamily || "monospace", fontSize: 14, color: C.text, fontWeight: 600 }}>
+        {show ? (value || "—") : maskStr(value)}
+      </span>
+      {value && (
+        <button onClick={() => setShow(s => !s)} style={{
+          background: "none", border: `1px solid ${C.border}`, borderRadius: 4, cursor: "pointer",
+          color: C.accent, fontSize: 11, padding: "1px 7px", fontWeight: 600, lineHeight: "18px"
+        }}>
+          {show ? "Hide" : "View"}
+        </button>
+      )}
+    </span>
+  );
+};
+
 const SearchableSelect = ({ label, value, onChange, options, placeholder = "Search...", disabled }) => {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -343,7 +369,7 @@ function ClientForm({ init, saving, onCancel, onSave }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <Inp label="Client Name" value={form.client_name} onChange={v => setForm(f => ({ ...f, client_name: v }))} required />
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <Inp label="Email" type="email" value={form.email} onChange={v => setForm(f => ({ ...f, email: v }))} placeholder="contact@client.com" />
         <Inp label="Phone Number" value={form.phone_number} onChange={v => setForm(f => ({ ...f, phone_number: v }))} placeholder="+91 98765 43210" />
       </div>
@@ -408,7 +434,7 @@ function ProjectDashboard({ projects, invoices }) {
           </div>
           <div style={{ fontSize: 32, fontWeight: 800, color: C.green }}>{fmt$(totalRaised)}</div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 4 }}>
+          <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 4 }}>
             <div style={{ background: C.bg, padding: "8px 12px", borderRadius: 6, border: `1px solid ${C.border}` }}>
               <div style={{ fontSize: 10, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Pending</div>
               <div style={{ fontSize: 14, fontWeight: 700, color: C.amber }}>{fmt$(pendingRaised)}</div>
@@ -489,7 +515,7 @@ function ProjectDashboard({ projects, invoices }) {
       </Card>
 
       {/* Project Bar Chart Grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+      <div className="grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
         {filtered.length === 0 ? (
           <div style={{ padding: 40, textAlign: "center", color: C.textMuted, background: C.card, borderRadius: 12 }}>No projects match your filters.</div>
         ) : (
@@ -667,7 +693,7 @@ function ProjectManagement({ readOnly = false, currentUser }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
         <div><h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>Project Management & Ledger</h2>
           <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>Monitor client budgets & track company expenses or invoices</p></div>
         {!readOnly && tab === "invoices" && <Btn onClick={() => setModal(true)}>+ Raise Invoice</Btn>}
@@ -703,7 +729,7 @@ function ProjectManagement({ readOnly = false, currentUser }) {
                       <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginTop: 4 }}>{p.name}</div>
                     </div>
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                     <div style={{ background: C.surface, borderRadius: 8, padding: "8px 12px" }}>
                       <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>Client Budget</div>
                       <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{fmt$(p.budget)}</div>
@@ -1099,7 +1125,7 @@ function CompanyExpenses({ modal, setModal, currentUser, projects }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+      <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
         <Card>
           <div style={{ fontSize: 13, color: C.textMuted, fontWeight: 700, letterSpacing: .5 }}>TOTAL EXPENSES (ALL TIME)</div>
           <div style={{ fontSize: 28, fontWeight: 800, color: C.text, marginTop: 8 }}>{fmt$(totalExpenses)}</div>
@@ -1128,7 +1154,7 @@ function CompanyExpenses({ modal, setModal, currentUser, projects }) {
 
 
       <Card>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: C.text }}>Monthly Trace</h3>
           <div style={{ display: "flex", gap: 8 }}>
             <Btn variant="ghost" small onClick={() => setChartOffset(o => o + 1)}>← Prev 6 Months</Btn>
@@ -1148,7 +1174,7 @@ function CompanyExpenses({ modal, setModal, currentUser, projects }) {
       </Card>
 
       <Card>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: C.text }}>Company Expenses Ledger</h3>
           <div style={{ display: "flex", gap: 8 }}>
             <Btn variant="outline" onClick={handleDownloadCSV} disabled={!filteredList.length}>⬇ Export Excel</Btn>
@@ -1288,19 +1314,19 @@ function CompanyExpenses({ modal, setModal, currentUser, projects }) {
           <form onSubmit={handleSave} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {err && <div style={{ color: C.red, fontSize: 13 }}>⚠ {err}</div>}
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Inp label="Expense Date *" type="date" value={form.expenseDate} onChange={v => setForm({ ...form, expenseDate: v })} required />
               <Inp label="Paid By *" value={form.paidBy} onChange={v => setForm({ ...form, paidBy: v })} placeholder="e.g. Corporate Card, Arjun" required />
             </div>
 
             <Inp label="Purpose *" value={form.purpose} onChange={v => setForm({ ...form, purpose: v })} placeholder="e.g. AWS Hosting, Office Supplies" required />
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Inp label="Net Amount *" type="number" step="0.01" value={form.amount} onChange={v => setForm({ ...form, amount: v })} required />
               <Inp label="GST Amount" type="number" step="0.01" value={form.gstAmount} onChange={v => setForm({ ...form, gstAmount: v })} />
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Inp label="ITR Type" value={form.itrType} onChange={v => setForm({ ...form, itrType: v })} placeholder="e.g. ITR-4" />
               <Inp label="Tax Type" value={form.taxType} onChange={v => setForm({ ...form, taxType: v })} placeholder="e.g. CGST, IGST" />
             </div>
@@ -1385,7 +1411,7 @@ function InvoiceForm({ projects, clients, initialData, saving, onCancel, onSave 
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <SearchableSelect label="Client *" value={form.client_id} onChange={v => setForm(f => ({ ...f, client_id: v }))}
           options={clients.map(c => ({ value: c.id, label: c.client_name }))} />
         <Inp label="Invoice Number *" value={form.invoice_number} onChange={v => setForm(f => ({ ...f, invoice_number: v }))} placeholder="e.g. FI/010/2025-26" required />
@@ -1441,7 +1467,7 @@ function InvoiceForm({ projects, clients, initialData, saving, onCancel, onSave 
 
       <Inp label="Total Amount (INR) *" type="number" step="0.01" value={form.amount} onChange={v => setForm(f => ({ ...f, amount: v }))} required />
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <Inp label="Date Raised *" type="date" value={form.raised_date} onChange={v => setForm(f => ({ ...f, raised_date: v }))} required />
         <Inp label="Payment Due Date" type="date" value={form.payment_due_date} onChange={v => setForm(f => ({ ...f, payment_due_date: v }))} />
       </div>
@@ -1852,7 +1878,7 @@ function Projects({ readOnly = false }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
         <div><h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>Projects</h2>
           <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>Manage project codes & budgets</p></div>
         {!readOnly && <Btn onClick={() => setModal("new")}>+ New Project</Btn>}
@@ -1870,7 +1896,7 @@ function Projects({ readOnly = false }) {
                 {!readOnly && <Btn small variant="ghost" onClick={() => setModal(p)}>✏</Btn>}
               </div>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               {[["Budget", fmt$(p.budget), C.text], ["Burned", fmt$(burned), pct > 85 ? C.red : C.amber]].map(([l, v, col]) => (
                 <div key={l} style={{ background: C.surface, borderRadius: 8, padding: "8px 12px" }}>
                   <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>{l}</div>
@@ -1914,7 +1940,7 @@ function ProjectForm({ init, saving, onCancel, onSave }) {
       <Inp label="Project Name" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} required placeholder="e.g. Cloud Migration" />
       <Inp label="Client Name" value={form.client} onChange={v => setForm(f => ({ ...f, client: v }))} />
       <Inp label="Budget (INR)" type="number" value={form.budget} onChange={v => setForm(f => ({ ...f, budget: v }))} required />
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <Inp label="Start Date" type="date" value={form.startDate} onChange={v => setForm(f => ({ ...f, startDate: v }))} />
         <Inp label="End Date" type="date" value={form.endDate} onChange={v => setForm(f => ({ ...f, endDate: v }))} />
       </div>
@@ -1989,7 +2015,7 @@ function Resources({ readOnly = false }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
         <div><h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>Resources</h2>
           <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>Manage employees &amp; billing groups</p></div>
         {!readOnly && (
@@ -1998,7 +2024,7 @@ function Resources({ readOnly = false }) {
           </Btn>
         )}
       </div>
-      <div style={{ display: "flex", gap: 4, background: C.surface, padding: 4, borderRadius: 10, width: "fit-content" }}>
+      <div style={{ display: "flex", gap: 4, background: C.surface, padding: 4, borderRadius: 10, width: "fit-content", maxWidth: "100%", overflowX: "auto" }}>
         {["employees", "groups"].map(t => (
           <button key={t} onClick={() => setTab(t)} style={{
             background: tab === t ? C.card : "transparent", color: tab === t ? C.text : C.textMuted,
@@ -2092,40 +2118,48 @@ function Resources({ readOnly = false }) {
 
 function EmpForm({ init, groups, employees, saving, onCancel, onSave, btnLabel }) {
   const [form, setForm] = useState(init);
+  const [showPan, setShowPan] = useState(false);
+  const [showAccount, setShowAccount] = useState(false);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <Inp label="Full Name" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} required />
         <Inp label="Email" value={form.email} onChange={v => setForm(f => ({ ...f, email: v }))} required type="email" />
       </div>
       <Inp label="Employee ID" value={form.customEmployeeId || ""} onChange={v => setForm(f => ({ ...f, customEmployeeId: v }))} placeholder="e.g. EMP-001" />
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <Inp label="Group" value={form.groupId} onChange={v => setForm(f => ({ ...f, groupId: v }))} options={groups.map(g => ({ value: g.id, label: g.name }))} />
         <SearchableSelect label="Manager" value={form.managerId} onChange={v => setForm(f => ({ ...f, managerId: v }))} options={(employees || []).map(e => ({ value: e.id, label: e.name }))} />
       </div>
       <Inp label="Hourly Rate (₹/hr)" type="number" value={form.hourlyRate ?? ""} onChange={v => setForm(f => ({ ...f, hourlyRate: v }))} placeholder="Leave blank to use group rate" />
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <Inp label="Annual CTC (₹)" type="number" value={form.ctcAnnual || ""} onChange={v => setForm(f => ({ ...f, ctcAnnual: v }))} placeholder="e.g. 1200000" />
         <Inp label="Variable Pay (₹)" type="number" value={form.variablePay || ""} onChange={v => setForm(f => ({ ...f, variablePay: v }))} placeholder="e.g. 200000" />
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <Inp label="Designation" value={form.designation || ""} onChange={v => setForm(f => ({ ...f, designation: v }))} placeholder="e.g. Software Engineer" />
         <Inp label="Location" value={form.location || ""} onChange={v => setForm(f => ({ ...f, location: v }))} placeholder="e.g. Bangalore" />
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <Inp label="PAN Number" value={form.panNumber || ""} onChange={v => setForm(f => ({ ...f, panNumber: v }))} placeholder="ABCDE1234F" />
+      <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div>
+          <Inp label="PAN Number" type={showPan ? "text" : "password"} value={form.panNumber || ""} onChange={v => setForm(f => ({ ...f, panNumber: v }))} placeholder="ABCDE1234F" />
+          <button onClick={() => setShowPan(s => !s)} style={{ marginTop: 4, background: "none", border: "none", cursor: "pointer", color: C.accent, fontSize: 11, fontWeight: 600, padding: 0 }}>{showPan ? "Hide" : "View"}</button>
+        </div>
         <Inp label="Joining Date" type="date" value={form.joiningDate || ""} onChange={v => setForm(f => ({ ...f, joiningDate: v }))} />
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <Inp label="Date of Birth" type="date" value={form.dob || ""} onChange={v => setForm(f => ({ ...f, dob: v }))} />
         <Inp label="Mobile" value={form.mobile || ""} onChange={v => setForm(f => ({ ...f, mobile: v }))} placeholder="+1 123 456 7890" />
       </div>
       <Inp label="Address" value={form.address || ""} onChange={v => setForm(f => ({ ...f, address: v }))} placeholder="Full address..." />
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <Inp label="Bank Name" value={form.bankName || ""} onChange={v => setForm(f => ({ ...f, bankName: v }))} placeholder="e.g. Chase" />
-        <Inp label="Account No" value={form.bankAccountNo || ""} onChange={v => setForm(f => ({ ...f, bankAccountNo: v }))} placeholder="1234567890" />
+        <div>
+          <Inp label="Account No" type={showAccount ? "text" : "password"} value={form.bankAccountNo || ""} onChange={v => setForm(f => ({ ...f, bankAccountNo: v }))} placeholder="1234567890" />
+          <button onClick={() => setShowAccount(s => !s)} style={{ marginTop: 4, background: "none", border: "none", cursor: "pointer", color: C.accent, fontSize: 11, fontWeight: 600, padding: 0 }}>{showAccount ? "Hide" : "View"}</button>
+        </div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <Inp label="IFSC Code" value={form.bankIfsc || ""} onChange={v => setForm(f => ({ ...f, bankIfsc: v }))} placeholder="CHAS0123456" />
         <Inp label="Skillset" value={form.skillset || ""} onChange={v => setForm(f => ({ ...f, skillset: v }))} placeholder="e.g. React, Node, SQL" />
       </div>
@@ -2481,7 +2515,7 @@ function Timesheets({ currentUser, viewOnly }) {
       {/* Admin / Manager Weekly List View */}
       {!viewOnly && (
         <Card>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
             <div>
               <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: C.text }}>Weekly Timesheet Requests</h3>
               <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>List view of the selected week's entries</p>
@@ -2568,103 +2602,317 @@ function Timesheets({ currentUser, viewOnly }) {
 // ════════════════════════════════════════════════════════
 // LEAVES
 // ════════════════════════════════════════════════════════
+// Leave types that consume from the shared balance bucket
+const BALANCE_TYPES = new Set(["Sick", "Annual"]);
+
 function Leaves({ currentUser, viewOnly }) {
   const [rows, setRows] = useState([]); const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true); const [err, setErr] = useState("");
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState({ employeeId: "", type: "Annual", startDate: "", endDate: "", reason: "" });
   const [saving, setSaving] = useState(false);
+  const [balance, setBalance] = useState(null);   // { balance, total_credited, total_used, last_credited_month }
+  const [crediting, setCrediting] = useState(false);
+  const [leaveSettings, setLeaveSettings] = useState({});   // { holiday_link: "..." }
+  const [allBalances, setAllBalances] = useState({});       // { "emp_id": { balance, ... } } for admin/manager
+  const [settingsModal, setSettingsModal] = useState(false);
+  const [settingsForm, setSettingsForm] = useState({ holiday_link: "" });
+  const [settingsSaving, setSettingsSaving] = useState(false);
+
+  // Compute days selected in the form
+  const selectedDays = (() => {
+    if (!form.startDate || !form.endDate) return 0;
+    const s = new Date(form.startDate), e = new Date(form.endDate);
+    const d = Math.round((e - s) / 86400000) + 1;
+    return d > 0 ? d : 0;
+  })();
+  const willDeduct = BALANCE_TYPES.has(form.type) && selectedDays > 0;
+  const balAfter = balance ? Math.max((parseFloat(balance.balance) || 0) - selectedDays, 0) : 0;
+  const insufficient = willDeduct && balance && selectedDays > parseFloat(balance.balance);
 
   const load = useCallback(async () => {
     setLoading(true); setErr("");
     try {
       const params = {}; if (viewOnly) params.employee_id = currentUser.employee_id;
-      const [lv, em] = await Promise.all([api.getLeaves(params), api.getEmployees()]);
-      setRows(lv); setEmployees(em);
+      const [lv, em, bal, settings, allBal] = await Promise.all([
+        api.getLeaves(params),
+        api.getEmployees(),
+        api.getLeaveBalance(viewOnly ? currentUser.employee_id : undefined).catch(() => null),
+        api.getLeaveSettings().catch(() => ({})),
+        (!viewOnly ? api.getAllLeaveBalances().catch(() => ({})) : Promise.resolve({})),
+      ]);
+      setRows(lv); setEmployees(em); setBalance(bal);
+      setLeaveSettings(settings || {});
+      setSettingsForm({ holiday_link: settings?.holiday_link || "" });
+      setAllBalances(allBal || {});
     } catch (e) { setErr(e.message); } finally { setLoading(false); }
   });
   useEffect(() => { load(); }, []);
 
+  // Refresh balance for a specific employee in the modal (admin view)
+  async function loadBalanceFor(empId) {
+    if (!empId) { setBalance(null); return; }
+    try { setBalance(await api.getLeaveBalance(empId)); } catch { setBalance(null); }
+  }
+
   async function handleCreate() {
     if (!form.startDate || !form.endDate) return;
+    if (insufficient) { dialog.alert("Insufficient leave balance.", { title: "Not enough balance", dtype: "warning" }); return; }
     setSaving(true);
     try {
       const empId = viewOnly ? currentUser.employee_id : +form.employeeId;
       await api.createLeave({ employeeId: empId, ...form });
-      setModal(false); setForm({ employeeId: "", type: "Annual", startDate: "", endDate: "", reason: "" }); await load();
+      setModal(false); setForm({ employeeId: "", type: "Annual", startDate: "", endDate: "", reason: "" });
+      await load();
     } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setSaving(false); }
   }
 
+  async function handleCreditMonthly() {
+    if (!await dialog.confirm("Credit 2 leaves to ALL employees for this month? This cannot be undone.", { dtype: "warning" })) return;
+    setCrediting(true);
+    try {
+      const res = await api.creditMonthlyLeaves();
+      dialog.alert(`✅ Credited ${res.credited} employee(s) for ${res.month}. ${res.credited === 0 ? "All already credited this month." : ""}`, { title: "Monthly Credit Done" });
+      await load();
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setCrediting(false); }
+  }
+
   const summary = { total: rows.length, pending: rows.filter(l => l.status === "pending").length, approved: rows.filter(l => l.status === "approved").length };
-  const cols = [...(!viewOnly ? ["Employee"] : []), "Type", "From", "To", "Days", "Reason", "Status", ...(!viewOnly ? ["Action"] : [])];
+  const cols = [...(!viewOnly ? ["Employee"] : []), "Type", "From", "To", "Days", "Reason", "Status", ...(!viewOnly ? ["Balance", "Action"] : [])];
+  const balNum = balance ? parseFloat(balance.balance) || 0 : 0;
+  const balColor = balNum >= 4 ? C.green : balNum >= 2 ? C.amber : C.red;
+
+  async function handleSaveSettings() {
+    setSettingsSaving(true);
+    try {
+      await api.updateLeaveSettings(settingsForm);
+      setLeaveSettings({ ...leaveSettings, ...settingsForm });
+      setSettingsModal(false);
+      dialog.alert("Holiday calendar link saved!", { title: "Settings Saved", dtype: "success" });
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setSettingsSaving(false); }
+  }
 
   if (loading) return <Spinner />;
   if (err) return <ErrBox msg={err} onRetry={load} />;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
         <div><h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>{viewOnly ? "My Leave" : "Leave Management"}</h2>
           <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>
             {viewOnly ? "View your time-off requests" : "Track all absences"}
           </p></div>
-        <Btn onClick={() => setModal(true)}>+ Request Leave</Btn>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          {!viewOnly && currentUser.role === "admin" && (
+            <Btn variant="ghost" onClick={handleCreditMonthly} disabled={crediting} small>
+              {crediting ? "Crediting…" : "🗓 Credit Monthly Leaves"}
+            </Btn>
+          )}
+          {!viewOnly && currentUser.role === "admin" && (
+            <Btn variant="ghost" onClick={() => setSettingsModal(true)} small>⚙ Holiday Link</Btn>
+          )}
+          {leaveSettings.holiday_link && (
+            <a
+              href={leaveSettings.holiday_link}
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                fontSize: 13, fontWeight: 600, color: C.accent,
+                textDecoration: "none", display: "flex", alignItems: "center", gap: 5,
+                border: `1px solid ${C.accent}44`, borderRadius: 8,
+                padding: "6px 12px", background: C.accentGlow, transition: "opacity .15s"
+              }}
+              onMouseEnter={e => e.currentTarget.style.opacity = ".8"}
+              onMouseLeave={e => e.currentTarget.style.opacity = "1"}
+            >
+              🗓 View Holiday Calendar
+            </a>
+          )}
+          <Btn onClick={() => setModal(true)}>+ Request Leave</Btn>
+        </div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16 }}>
-        {[["Total", summary.total, C.accent], ["Pending", summary.pending, C.amber], ["Approved", summary.approved, C.green]].map(([l, v, col]) => (
+
+      {/* Summary cards + Balance card */}
+      <div className="grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16 }}>
+        {[["Total Requests", summary.total, C.accent], ["Pending", summary.pending, C.amber], ["Approved", summary.approved, C.green]].map(([l, v, col]) => (
           <Card key={l} style={{ textAlign: "center" }}>
             <div style={{ fontSize: 28, fontWeight: 800, color: col }}>{v}</div>
             <div style={{ fontSize: 12, color: C.textMuted, marginTop: 4 }}>{l}</div>
           </Card>
         ))}
       </div>
+
+      {/* Leave Balance Banner */}
+      {balance !== null && (
+        <Card style={{ background: balNum === 0 ? C.red + "12" : C.surface, border: `1px solid ${balColor}44`, padding: "18px 24px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
+            <div>
+              <div style={{ fontSize: 12, color: C.textMuted, fontWeight: 700, letterSpacing: .5, textTransform: "uppercase", marginBottom: 6 }}>
+                🗂 Leave Balance (Sick &amp; Vacation)
+              </div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                <span style={{ fontSize: 40, fontWeight: 800, color: balColor, lineHeight: 1 }}>{balNum}</span>
+                <span style={{ fontSize: 14, color: C.textMuted }}>day{balNum !== 1 ? "s" : ""} available</span>
+              </div>
+              {balance.last_credited_month && (
+                <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4 }}>
+                  Last credited: <strong style={{ color: C.textDim }}>{balance.last_credited_month}</strong>
+                  &nbsp;· +2 leaves added every month-end automatically
+                </div>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 24 }}>
+              {[["Total Earned", balance.total_credited, C.green], ["Total Used", balance.total_used, C.amber]].map(([lbl, val, col]) => (
+                <div key={lbl} style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: col }}>{parseFloat(val) || 0}</div>
+                  <div style={{ fontSize: 11, color: C.textMuted }}>{lbl}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Leave table */}
       <Card style={{ padding: 0, overflow: "hidden" }}>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead style={{ background: C.surface }}><tr>{cols.map(h => <Th key={h}>{h}</Th>)}</tr></thead>
             <tbody>
-              {rows.map((l, idx) => (
-                <tr key={l.id} style={{ borderBottom: `1px solid ${C.border}22`, background: idx % 2 === 0 ? "transparent" : C.bg + "44" }}>
-                  {!viewOnly && <Td><div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <Avatar initials={l.avatar} color={l.group_color} size={28} />
-                    <span style={{ fontSize: 13, color: C.text }}>{l.employee_name}</span>
-                  </div></Td>}
-                  <Td><Badge color={l.leave_type === "Annual" ? C.accent : C.red}>{l.leave_type}</Badge></Td>
-                  <Td style={{ fontSize: 12, color: C.textDim }}>{fmtD(l.start_date)}</Td>
-                  <Td style={{ fontSize: 12, color: C.textDim }}>{fmtD(l.end_date)}</Td>
-                  <Td style={{ fontSize: 13, fontWeight: 700, color: C.accent }}>{(() => { const s = new Date(l.start_date); const e = new Date(l.end_date); const d = Math.round((e - s) / 86400000) + 1; return d > 0 ? `${d}d` : "—"; })()}</Td>
-                  <Td style={{ fontSize: 12, color: C.textDim, maxWidth: 180 }}>{l.reason}</Td>
-                  <Td><StatusBadge status={l.status} /></Td>
-                  {!viewOnly && <Td>{l.status === "pending" && (
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <Btn small variant="success" onClick={async () => { try { await api.approveLeave(l.id); await load(); } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } }}>✓</Btn>
-                      <Btn small variant="danger" onClick={async () => { try { await api.rejectLeave(l.id); await load(); } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } }}>✕</Btn>
-                    </div>
-                  )}</Td>}
-                </tr>
-              ))}
+              {rows.map((l, idx) => {
+                const s = new Date(l.start_date); const e = new Date(l.end_date);
+                const days = Math.round((e - s) / 86400000) + 1;
+                const usesBalance = BALANCE_TYPES.has(l.leave_type);
+                const empBal = !viewOnly ? (allBalances[String(l.employee_id)] || null) : null;
+                const empBalNum = empBal ? parseFloat(empBal.balance) || 0 : null;
+                const empBalColor = empBalNum === null ? C.textMuted : empBalNum >= 4 ? C.green : empBalNum >= 2 ? C.amber : C.red;
+                return (
+                  <tr key={l.id} style={{ borderBottom: `1px solid ${C.border}22`, background: idx % 2 === 0 ? "transparent" : C.bg + "44" }}>
+                    {!viewOnly && <Td><div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <Avatar initials={l.avatar} color={l.group_color} size={28} />
+                      <span style={{ fontSize: 13, color: C.text }}>{l.employee_name}</span>
+                    </div></Td>}
+                    <Td>
+                      <Badge color={l.leave_type === "Sick" ? C.red : l.leave_type === "Annual" ? C.accent : C.textMuted}>{l.leave_type}</Badge>
+                      {usesBalance && <span style={{ fontSize: 10, color: C.textMuted, marginLeft: 4 }}>(-bucket)</span>}
+                    </Td>
+                    <Td style={{ fontSize: 12, color: C.textDim }}>{fmtD(l.start_date)}</Td>
+                    <Td style={{ fontSize: 12, color: C.textDim }}>{fmtD(l.end_date)}</Td>
+                    <Td style={{ fontSize: 13, fontWeight: 700, color: C.accent }}>{days > 0 ? `${days}d` : "—"}</Td>
+                    <Td style={{ fontSize: 12, color: C.textDim, maxWidth: 180 }}>{l.reason}</Td>
+                    <Td><StatusBadge status={l.status} /></Td>
+                    {!viewOnly && <Td>
+                      {empBalNum !== null ? (
+                        <span style={{ fontWeight: 700, fontSize: 13, color: empBalColor }}>
+                          {empBalNum}d
+                        </span>
+                      ) : <span style={{ color: C.textMuted, fontSize: 12 }}>—</span>}
+                    </Td>}
+                    {!viewOnly && <Td>{l.status === "pending" && (
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <Btn small variant="success" onClick={async () => { try { await api.approveLeave(l.id); await load(); } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } }}>✓</Btn>
+                        <Btn small variant="danger" onClick={async () => { try { await api.rejectLeave(l.id); await load(); } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } }}>✕</Btn>
+                      </div>
+                    )}</Td>}
+                  </tr>
+                );
+              })}
               {rows.length === 0 && <tr><td colSpan={cols.length} style={{ padding: 40, textAlign: "center", color: C.textMuted, fontSize: 13 }}>No records found.</td></tr>}
             </tbody>
           </table>
         </div>
       </Card>
-      {modal && (
-        <Modal title="Request Leave" onClose={() => setModal(false)}>
+
+      {/* Request modal */}
+      {/* Admin: Holiday Calendar Settings Modal */}
+      {settingsModal && (
+        <Modal title="⚙ Holiday Calendar Settings" onClose={() => setSettingsModal(false)}>
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {!viewOnly && <Inp label="Employee" value={form.employeeId} onChange={v => setForm(f => ({ ...f, employeeId: v }))} required options={employees.map(e => ({ value: e.id, label: e.name }))} />}
-            {viewOnly && <div style={{ background: C.surface, borderRadius: 8, padding: "10px 14px", fontSize: 13, color: C.textDim }}>
-              Requesting as: <span style={{ color: C.text, fontWeight: 700 }}>{currentUser.emp_name}</span>
-            </div>}
+            <div style={{ fontSize: 13, color: C.textMuted }}>
+              Set a link to your company holiday calendar. This link will be shown to employees in the Request Leave form.
+            </div>
+            <Inp label="Holiday Calendar URL" value={settingsForm.holiday_link} onChange={v => setSettingsForm(f => ({ ...f, holiday_link: v }))} placeholder="https://calendar.google.com/..." />
+            {settingsForm.holiday_link && (
+              <div style={{ fontSize: 12, color: C.textMuted }}>
+                Preview: <a href={settingsForm.holiday_link} target="_blank" rel="noreferrer" style={{ color: C.accent }}>🗓 View Holiday Calendar →</a>
+              </div>
+            )}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <Btn variant="ghost" onClick={() => setSettingsModal(false)}>Cancel</Btn>
+              <Btn onClick={handleSaveSettings} disabled={settingsSaving}>{settingsSaving ? "Saving…" : "Save Link"}</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {modal && (
+        <Modal title="Request Leave" onClose={() => { setModal(false); setBalance(viewOnly ? balance : null); }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {!viewOnly && (
+              <Inp label="Employee" value={form.employeeId} onChange={v => { setForm(f => ({ ...f, employeeId: v })); loadBalanceFor(v); }} required
+                options={employees.map(e => ({ value: e.id, label: e.name }))} />
+            )}
+            {viewOnly && (
+              <div style={{ background: C.surface, borderRadius: 8, padding: "10px 14px", fontSize: 13, color: C.textDim }}>
+                Requesting as: <span style={{ color: C.text, fontWeight: 700 }}>{currentUser.emp_name}</span>
+              </div>
+            )}
+
+            {/* Leave type */}
             <Inp label="Leave Type" value={form.type} onChange={v => setForm(f => ({ ...f, type: v }))}
-              options={["Annual", "Sick", "Unpaid", "Maternity", "Paternity"].map(t => ({ value: t, label: t }))} />
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              options={[
+                { value: "Annual", label: "Annual / Vacation 🌴 (uses balance)" },
+                { value: "Sick", label: "Sick Leave 🤒 (uses balance)" },
+                { value: "Unpaid", label: "Unpaid" },
+                { value: "Maternity", label: "Maternity" },
+                { value: "Paternity", label: "Paternity" },
+              ]} />
+
+            {/* Balance indicator for bucket types */}
+            {BALANCE_TYPES.has(form.type) && balance !== null && (
+              <div style={{
+                background: insufficient ? C.red + "18" : C.green + "12",
+                border: `1px solid ${insufficient ? C.red : C.green}44`,
+                borderRadius: 10, padding: "12px 16px",
+                display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8
+              }}>
+                <div>
+                  <div style={{ fontSize: 12, color: C.textMuted, fontWeight: 700 }}>LEAVE BALANCE</div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: insufficient ? C.red : balColor }}>
+                    {balNum} <span style={{ fontSize: 13, fontWeight: 400, color: C.textMuted }}>available</span>
+                  </div>
+                </div>
+                {selectedDays > 0 && (
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 11, color: C.textMuted }}>After this request</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: insufficient ? C.red : C.textDim }}>
+                      {insufficient ? "—" : balAfter} days left
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            {insufficient && (
+              <div style={{ background: C.red + "14", border: `1px solid ${C.red}44`, borderRadius: 8, padding: "10px 14px", fontSize: 12, color: C.red }}>
+                ⚠ You only have <strong>{balNum}</strong> day(s) available but requested <strong>{selectedDays}</strong>. Please reduce the duration or choose Unpaid leave.
+              </div>
+            )}
+
+            <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Inp label="Start Date" type="date" value={form.startDate} onChange={v => setForm(f => ({ ...f, startDate: v }))} required />
               <Inp label="End Date" type="date" value={form.endDate} onChange={v => setForm(f => ({ ...f, endDate: v }))} required />
             </div>
+            {selectedDays > 0 && (
+              <div style={{ fontSize: 12, color: C.textDim, textAlign: "center" }}>
+                📅 {selectedDays} day{selectedDays !== 1 ? "s" : ""} selected
+                {willDeduct && <span style={{ color: C.amber }}> — will deduct from your balance</span>}
+              </div>
+            )}
             <Inp label="Reason" value={form.reason} onChange={v => setForm(f => ({ ...f, reason: v }))} placeholder="Brief description…" />
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
               <Btn variant="ghost" onClick={() => setModal(false)}>Cancel</Btn>
-              <Btn onClick={handleCreate} disabled={saving}>{saving ? "Saving…" : "Submit"}</Btn>
+              <Btn onClick={handleCreate} disabled={saving || insufficient}>{saving ? "Saving…" : "Submit Request"}</Btn>
             </div>
           </div>
         </Modal>
@@ -2720,12 +2968,12 @@ function UserAccounts() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
         <div><h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>User Accounts</h2>
           <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>Create and manage employee login credentials</p></div>
         <Btn onClick={() => setModal(true)}>+ Create Login</Btn>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16 }}>
+      <div className="grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16 }}>
         {[["Total Accounts", accounts.length, C.accent], ["Active", accounts.filter(a => a.active).length, C.green], ["Awaiting Setup", unlinked.length, C.amber]].map(([l, v, col]) => (
           <Card key={l} style={{ textAlign: "center" }}>
             <div style={{ fontSize: 26, fontWeight: 800, color: col }}>{v}</div>
@@ -2918,6 +3166,8 @@ function MyProfile({ currentUser }) {
   const [isEditing, setIsEditing] = useState(false);
   const [showPwModal, setShowPwModal] = useState(false);
   const [showCtc, setShowCtc] = useState(false);
+  const [showPan, setShowPan] = useState(false);
+  const [showAccount, setShowAccount] = useState(false);
 
   useEffect(() => {
     api.getEmployee(currentUser.employee_id)
@@ -2991,22 +3241,22 @@ function MyProfile({ currentUser }) {
 
       {err && <div style={{ background: C.red + "18", color: C.red, padding: "10px 14px", borderRadius: 8, fontSize: 13, border: `1px solid ${C.red}44` }}>⚠ {err}</div>}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+      <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
         <Card>
           <h4 style={{ margin: "0 0 16px", fontSize: 14, color: C.text, fontWeight: 800 }}>Organizational Details <span style={{ fontSize: 11, fontWeight: 500, color: C.textMuted, marginLeft: 8 }}>(Read-Only)</span></h4>
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <Inp label="Full Name" value={profile.name} disabled />
             <Inp label="Employee ID" value={profile.custom_employee_id || "—"} disabled />
             <Inp label="Email" value={profile.email} disabled />
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Inp label="Role / Group" value={profile.group_name || "—"} disabled />
               <Inp label="Manager" value={profile.manager_name || "—"} disabled />
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Inp label="Designation" value={profile.designation || "—"} disabled />
               <Inp label="Location" value={profile.location || "—"} disabled />
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Inp label="Joining Date" value={profile.joining_date ? fmtD(profile.joining_date) : "—"} disabled />
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 <label style={{ fontSize: 12, color: C.textMuted, fontWeight: 600, letterSpacing: .4 }}>Annual CTC</label>
@@ -3030,7 +3280,7 @@ function MyProfile({ currentUser }) {
         <Card>
           <h4 style={{ margin: "0 0 16px", fontSize: 14, color: C.text, fontWeight: 800 }}>Personal Information</h4>
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Inp disabled={!isEditing} label="Date of Birth" type="date" value={form.dob || ""} onChange={v => setForm(f => ({ ...f, dob: v }))} />
               <Inp disabled={!isEditing} label="Mobile" value={form.mobile || ""} onChange={v => setForm(f => ({ ...f, mobile: v }))} placeholder="+1 123 456 7890" />
               <Inp disabled={!isEditing} label="Emergency Contact" value={form.emergencyContact || ""} onChange={v => setForm(f => ({ ...f, emergencyContact: v }))} placeholder="+1 ... (Emergency)" />
@@ -3043,12 +3293,32 @@ function MyProfile({ currentUser }) {
 
       <Card>
         <h4 style={{ margin: "0 0 16px", fontSize: 14, color: C.text, fontWeight: 800 }}>Banking Details & Taxation</h4>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <Inp disabled={!isEditing} label="PAN Number" value={form.panNumber || profile.pan_number || ""} onChange={v => setForm(f => ({ ...f, panNumber: v }))} placeholder="ABCDE1234F" />
+        <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          {isEditing ? (
+            <div>
+              <Inp label="PAN Number" value={form.panNumber || profile.pan_number || ""} onChange={v => setForm(f => ({ ...f, panNumber: v }))} placeholder="ABCDE1234F" type={showPan ? "text" : "password"} />
+              <button onClick={() => setShowPan(s => !s)} style={{ marginTop: 4, background: "none", border: "none", cursor: "pointer", color: C.accent, fontSize: 11, fontWeight: 600, padding: 0 }}>{showPan ? "Hide" : "View"}</button>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <label style={{ fontSize: 12, color: C.textDim, fontWeight: 600, letterSpacing: .4 }}>PAN Number</label>
+              <SensitiveDisplay value={form.panNumber || profile?.pan_number} />
+            </div>
+          )}
           <Inp disabled={!isEditing} label="Bank Name" value={form.bankName || ""} onChange={v => setForm(f => ({ ...f, bankName: v }))} placeholder="e.g. Chase" />
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 12 }}>
-          <Inp disabled={!isEditing} label="Account No" value={form.bankAccountNo || ""} onChange={v => setForm(f => ({ ...f, bankAccountNo: v }))} placeholder="1234567890" />
+        <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 12 }}>
+          {isEditing ? (
+            <div>
+              <Inp label="Account No" value={form.bankAccountNo || ""} onChange={v => setForm(f => ({ ...f, bankAccountNo: v }))} placeholder="1234567890" type={showAccount ? "text" : "password"} />
+              <button onClick={() => setShowAccount(s => !s)} style={{ marginTop: 4, background: "none", border: "none", cursor: "pointer", color: C.accent, fontSize: 11, fontWeight: 600, padding: 0 }}>{showAccount ? "Hide" : "View"}</button>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <label style={{ fontSize: 12, color: C.textDim, fontWeight: 600, letterSpacing: .4 }}>Account No</label>
+              <SensitiveDisplay value={form.bankAccountNo} />
+            </div>
+          )}
           <Inp disabled={!isEditing} label="IFSC Code" value={form.bankIfsc || ""} onChange={v => setForm(f => ({ ...f, bankIfsc: v }))} placeholder="CHAS0123456" />
         </div>
       </Card>
@@ -3217,7 +3487,7 @@ function MyPay({ currentUser }) {
             <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 16 }}>
               Earnings &amp; Deductions — {SLIP_MONTHS[selected.month - 1]} {selected.year}
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+            <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
               <div>
                 <div style={{ fontSize: 12, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>Earnings</div>
                 {[
@@ -3498,7 +3768,7 @@ function ExpenseForm({ init, projects, employees, saving, onCancel, onSave, btnL
         />
       )}
       <Inp label="Title / Purpose *" value={form.title} onChange={v => setForm(f => ({ ...f, title: v }))} required placeholder="e.g. Flight to NYC" />
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <Inp label="Amount (INR) *" type="number" value={form.amount} onChange={v => setForm(f => ({ ...f, amount: v }))} required />
         <Inp label="Category" value={form.category} onChange={v => setForm(f => ({ ...f, category: v }))}
           options={EXP_CATEGORIES.map(c => ({ value: c, label: c }))} />
@@ -3565,7 +3835,7 @@ function AdminEmployees({ readOnly = false, currentUser }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>Employees</h2>
           <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>Manage employees, groups & project assignments</p>
@@ -3636,7 +3906,7 @@ function AdminEmployees({ readOnly = false, currentUser }) {
               </div>
             </div>
 
-            <div style={{ background: C.surface, padding: 16, borderRadius: 10, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="grid-2" style={{ background: C.surface, padding: 16, borderRadius: 10, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div>
                 <div style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Mobile</div>
                 <div style={{ fontSize: 14, color: C.text, fontWeight: 600 }}>{viewModal.mobile || "—"}</div>
@@ -3653,7 +3923,7 @@ function AdminEmployees({ readOnly = false, currentUser }) {
 
             <div style={{ background: C.surface, padding: 16, borderRadius: 10 }}>
               <h4 style={{ margin: "0 0 12px", fontSize: 13, color: C.text, fontWeight: 700 }}>Banking, Tax & Compensation</h4>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div>
                   <div style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Bank Name</div>
                   <div style={{ fontSize: 14, color: C.text, fontWeight: 600 }}>{viewModal.bank_name || "—"}</div>
@@ -3664,11 +3934,11 @@ function AdminEmployees({ readOnly = false, currentUser }) {
                 </div>
                 <div>
                   <div style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Account No</div>
-                  <div style={{ fontSize: 14, color: C.text, fontWeight: 600, fontFamily: "monospace" }}>{viewModal.bank_account_no || "—"}</div>
+                  <SensitiveDisplay value={viewModal.bank_account_no} />
                 </div>
                 <div>
                   <div style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>PAN Number</div>
-                  <div style={{ fontSize: 14, color: C.text, fontWeight: 600, fontFamily: "monospace" }}>{viewModal.pan_number || "—"}</div>
+                  <SensitiveDisplay value={viewModal.pan_number} />
                 </div>
                 <div>
                   <div style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Annual CTC</div>
@@ -3852,7 +4122,7 @@ function CompensationDetails() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>Compensation Details</h2>
           <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>Calculate CTC breakdown — monthly & yearly</p>
@@ -4556,13 +4826,25 @@ function AdminCompanyResume() {
   );
 
   return (
-    <div style={{ display: "flex", gap: 24, height: "calc(100vh - 64px)" }}>
-      {/* Left: Editor Panel */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 16, overflowY: "auto", paddingRight: 8 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* ── Unified page header ── */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>Generate Company Resume</h2>
           <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>Generate official Fascinate IT vendor profiles</p>
         </div>
+        <Btn variant="success" onClick={() => {
+          const oldTitle = document.title;
+          document.title = form.name ? `${form.name}_Resume` : "Company_Resume";
+          window.print();
+          document.title = oldTitle;
+        }}>🖨 Download PDF / Print</Btn>
+      </div>
+
+      {/* ── Two-panel body (form | preview) ── */}
+      <div className="resume-panels" style={{ display: "flex", gap: 24, alignItems: "flex-start" }}>
+      {/* Left: Editor Panel */}
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 16 }}>
         <Card>
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -4570,7 +4852,7 @@ function AdminCompanyResume() {
               <label htmlFor="show-logo-cb" style={{ fontSize: 13, color: C.text, fontWeight: 600, cursor: "pointer" }}>Display Company Logo on Resume</label>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Inp label="Employee Name" value={form.name} onChange={v => setForm({ ...form, name: v })} placeholder="e.g. FirstName LastName" />
               <Inp label="Technologies (Subtitle)" value={form.technologies} onChange={v => setForm({ ...form, technologies: v })} placeholder="e.g. SAP C4C, Sales Cloud..." />
             </div>
@@ -4581,7 +4863,7 @@ function AdminCompanyResume() {
                 style={{ width: "100%", background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, resize: "vertical", fontFamily: "inherit" }} />
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 <label style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Certifications (1 per line)</label>
                 <textarea value={form.certifications} onChange={e => setForm({ ...form, certifications: e.target.value })} rows={3}
@@ -4594,7 +4876,7 @@ function AdminCompanyResume() {
               </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 <label style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Industries (1 per line)</label>
                 <textarea value={form.industries} onChange={e => setForm({ ...form, industries: e.target.value })} rows={3}
@@ -4614,7 +4896,7 @@ function AdminCompanyResume() {
               </div>
               {form.experience.map((exp, i) => (
                 <div key={i} style={{ display: "flex", flexDirection: "column", gap: 12, border: `1px solid ${C.border}66`, padding: 12, borderRadius: 8, marginBottom: 12, background: C.bg }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                     <Inp label="Client" value={exp.client} onChange={v => handleExpChange(i, "client", v)} placeholder="e.g. NIR" />
                     <Inp label="Role" value={exp.role} onChange={v => handleExpChange(i, "role", v)} placeholder="e.g. SAP C4C Functional consultant" />
                     <Inp label="Start Date" value={exp.startDate} onChange={v => handleExpChange(i, "startDate", v)} placeholder="e.g. Jan 2020" />
@@ -4639,16 +4921,7 @@ function AdminCompanyResume() {
       </div>
 
       {/* Right: Live Preview Panel */}
-      <div style={{ flex: 1.2, display: "flex", flexDirection: "column", gap: 16 }}>
-        <div style={{ display: "flex", justifyContent: "flex-end", position: "sticky", top: 0, zIndex: 10 }}>
-          <Btn variant="success" onClick={() => {
-            const oldTitle = document.title;
-            document.title = form.name ? `${form.name}_Resume` : "Company_Resume";
-            window.print();
-            document.title = oldTitle;
-          }}>🖨 Download PDF / Print</Btn>
-        </div>
-
+      <div style={{ flex: 1.2, minWidth: 0, display: "flex", flexDirection: "column", gap: 16 }}>
         {/* The Capture Box */}
         <div style={{ background: "#e2e8f0", padding: "20px", borderRadius: 12, overflowY: "auto", flex: 1, display: "flex", justifyContent: "center" }}>
           <div id="capture-resume" style={{ background: "#fff", width: "210mm", minHeight: "297mm", padding: "0", boxShadow: "0 0 10px rgba(0,0,0,0.1)", color: "#000", fontFamily: "Arial, sans-serif" }}>
@@ -4760,6 +5033,7 @@ function AdminCompanyResume() {
         </div>
       </div>
     </div>
+  </div>
   );
 }
 
@@ -4826,7 +5100,7 @@ function SubscriptionManagement() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>Subscription Management</h2>
           <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>
@@ -4893,7 +5167,7 @@ function SubscriptionManagement() {
         <Modal title={modal === "new" ? "Add Subscription" : "Edit Subscription"} onClose={() => setModal(false)}>
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <Inp label="App Name" value={form.app_name} onChange={v => setForm(f => ({ ...f, app_name: v }))} required placeholder="e.g. GitHub, Jira, AWS" />
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Inp label="Start Date" type="date" value={form.start_date} onChange={v => setForm(f => ({ ...f, start_date: v }))} required />
               <Inp label="Expire Date" type="date" value={form.expire_date} onChange={v => setForm(f => ({ ...f, expire_date: v }))} required />
             </div>
@@ -5218,7 +5492,7 @@ function OnboardEmployee() {
               placeholder="Search employee…"
               disabled={!!selected}
             />
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Inp label="Joining Date" type="date" value={form.joining_date}
                 onChange={v => setForm(f => ({ ...f, joining_date: v }))} />
               <Inp label="Status" value={form.status}
@@ -5234,7 +5508,7 @@ function OnboardEmployee() {
 
         <Card>
           <h4 style={{ margin: "0 0 14px", fontSize: 13, fontWeight: 700, color: C.text }}>IT & HR Checklist</h4>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             {[
               ["Laptop Issued", "laptop_issued"],
               ["ID Card Issued", "id_card_issued"],
@@ -5268,7 +5542,7 @@ function OnboardEmployee() {
   // ── LIST view ────────────────────────────────────────────────────────────
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>Onboard Employee</h2>
           <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>
@@ -5442,7 +5716,7 @@ function AdminAssets() {
       </div>
 
       {/* Stat cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
+      <div className="grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
         {Object.entries(statCounts).map(([s, n]) => (
           <Card key={s} style={{ padding: "16px 20px", cursor: "pointer", border: filterStatus === s ? `1px solid ${ASSET_STATUS_COLOR[s]}` : `1px solid ${C.border}` }} onClick={() => setFilterStatus(filterStatus === s ? "" : s)}>
             <div style={{ fontSize: 22, fontWeight: 800, color: ASSET_STATUS_COLOR[s] }}>{n}</div>
@@ -5522,7 +5796,7 @@ function AdminAssets() {
       {/* Add / Edit Modal */}
       {(modal === "add" || modal === "edit") && (
         <Modal title={modal === "add" ? "Add Asset" : "Edit Asset"} onClose={() => setModal(null)} maxWidth={560}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+          <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
             <Inp label="Asset Tag *" value={form.asset_tag} onChange={v => setForm(f => ({ ...f, asset_tag: v }))} />
             <Inp label="Asset Type *" value={form.asset_type} onChange={v => setForm(f => ({ ...f, asset_type: v }))} placeholder="Laptop, Headphone, Monitor…" />
             <Inp label="Brand" value={form.brand} onChange={v => setForm(f => ({ ...f, brand: v }))} />
@@ -5588,7 +5862,7 @@ function PeopleHub({ readOnly, currentUser }) {
         <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>Employees & Resources</h2>
         <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>Manage employees, groups, project assignments and resources</p>
       </div>
-      <div style={{ display: "flex", gap: 4, background: C.surface, padding: 4, borderRadius: 10, width: "fit-content" }}>
+      <div style={{ display: "flex", gap: 4, background: C.surface, padding: 4, borderRadius: 10, width: "fit-content", maxWidth: "100%", overflowX: "auto" }}>
         {TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
             background: tab === t.id ? C.card : "transparent",
@@ -5623,7 +5897,7 @@ function AttendanceClaims({ currentUser }) {
         <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>Attendance & Claims</h2>
         <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>Manage timesheets, leave requests and expense claims</p>
       </div>
-      <div style={{ display: "flex", gap: 4, background: C.surface, padding: 4, borderRadius: 10, width: "fit-content" }}>
+      <div style={{ display: "flex", gap: 4, background: C.surface, padding: 4, borderRadius: 10, width: "fit-content", maxWidth: "100%", overflowX: "auto" }}>
         {TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
             background: tab === t.id ? C.card : "transparent",
@@ -5682,9 +5956,41 @@ const STYLE = [
   ".main-content { flex: 1; padding: 32px 36px; overflow-y: auto; max-width: calc(100vw - 224px); }",
   ".emp-main { flex: 1; padding: 32px 36px; overflow-y: auto; }",
   ".resp-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }",
-  ".mobile-top-bar { display: none; height: 52px; align-items: center; padding: 0 16px; position: sticky; top: 0; z-index: 100; }",
+  ".mobile-top-bar { display: none; height: 52px; align-items: center; padding: 0 16px; z-index: 150; }",
   "@media (max-width: 1023px) { .app-nav { width: 200px; } .emp-nav { width: 180px; } .main-content { padding: 24px 20px; max-width: calc(100vw - 200px); } .emp-main { padding: 24px 20px; } }",
-  "@media (max-width: 767px) { .hamburger-btn { display: block; } .mobile-top-bar { display: flex; } .app-nav { position: fixed; top: 0; left: 0; height: 100vh; width: 240px !important; transform: translateX(-100%); box-shadow: 4px 0 24px rgba(0,0,0,0.5); } .app-nav.nav-open { transform: translateX(0); } .main-content { padding: 70px 14px 24px; max-width: 100vw; width: 100%; } .emp-main { padding: 70px 14px 24px; } }",
+  "@media (max-width: 767px) { .hamburger-btn { display: block; } .mobile-top-bar { display: flex; position: fixed; top: 0; left: 0; right: 0; width: 100%; } .app-nav { position: fixed; top: 0; left: 0; height: 100vh; width: 240px !important; transform: translateX(-100%); box-shadow: 4px 0 24px rgba(0,0,0,0.5); } .app-nav.nav-open { transform: translateX(0); } .main-content { padding: 70px 14px 24px; max-width: 100vw; width: 100%; } .emp-main { padding: 70px 14px 24px; } }",
+  /* ── Responsive utility classes ─────────────────────────────── */
+  ".grid-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }",
+  ".grid-4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; }",
+  ".grid-2 { display: grid; grid-template-columns: 1fr 1fr; }",
+  ".page-header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; }",
+  ".tab-bar { display: flex; gap: 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; }",
+  /* Tablet (≤1199px) */
+  "@media (max-width: 1199px) { .grid-4 { grid-template-columns: repeat(2,1fr) !important; } }",
+  /* Large tablet (≤1023px) */
+  "@media (max-width: 1023px) { .grid-3 { grid-template-columns: repeat(2,1fr) !important; } }",
+  /* Mobile (≤767px) */
+  "@media (max-width: 767px) {",
+  "  .grid-3 { grid-template-columns: 1fr !important; }",
+  "  .grid-4 { grid-template-columns: repeat(2,1fr) !important; }",
+  "  .grid-2 { grid-template-columns: 1fr !important; }",
+  "  .page-header { flex-direction: column; align-items: flex-start; }",
+  "  .page-header > * { width: 100%; }",
+  "  .page-header > button, .page-header > div > button { width: auto !important; }",
+  "  .mobile-top-bar-title { font-size: 15px !important; }",
+  "  .resp-table-wrap table { min-width: 600px; }",
+  /* Nav close button inside mobile sidebar */
+  "  .nav-close-btn { display: flex !important; }",
+  /* Reduce font sizes slightly for very small screens */
+  "  h2 { font-size: 18px !important; }",
+  "  .recharts-wrapper { font-size: 11px; }",
+  /* Make modal padding smaller on mobile */
+  "  .modal-body { padding: 20px 16px !important; }",
+  /* Make tab bar wrap on tiny screens */
+  "  .tab-bar { flex-wrap: wrap !important; }",
+  /* Ensure inputs are full-width on mobile */
+  "  input[type='text'], input[type='email'], input[type='password'], input[type='number'], input[type='date'], select, textarea { width: 100% !important; box-sizing: border-box !important; }",
+  "}",
   "@media print { ",
   "  body * { visibility: hidden; }",
   "  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }",
@@ -5739,14 +6045,27 @@ export default function App() {
       <style>{STYLE}</style>
       {/* Hamburger button */}
       <button className="hamburger-btn" onClick={() => setNavOpen(v => !v)}>☰</button>
+      {/* Mobile top bar */}
+      <div className="mobile-top-bar" style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, gap: 10 }}>
+        <div style={{ width: 36 }} />
+        <div style={{ flex: 1, textAlign: "center", fontSize: 15, fontWeight: 700, color: C.text, className: "mobile-top-bar-title" }}>
+          {currentUser.emp_name || currentUser.username}
+        </div>
+        <Avatar initials={currentUser.avatar || mkAvi(currentUser.emp_name || "")} color={C.accent} size={26} />
+      </div>
       {/* Overlay */}
       <div className={`nav-overlay${navOpen ? " open" : ""}`} onClick={() => setNavOpen(false)} />
       <nav className={`app-nav emp-nav${navOpen ? " nav-open" : ""}`} style={{
         background: C.surface, borderRight: `1px solid ${C.border}`, padding: "24px 0"
       }}>
         <div style={{ padding: "0 16px 22px", borderBottom: `1px solid ${C.border}` }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
             <img src="/image.png" alt="Logo" style={{ height: 60, objectFit: "contain" }} />
+            <button className="nav-close-btn" onClick={() => setNavOpen(false)} style={{
+              display: "none", position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)",
+              background: "none", border: `1px solid ${C.border}`, borderRadius: 6, color: C.textMuted,
+              fontSize: 16, cursor: "pointer", padding: "2px 8px", lineHeight: 1
+            }}>✕</button>
           </div>
         </div>
         <div style={{ padding: "14px 10px", flex: 1 }}>
@@ -5791,14 +6110,27 @@ export default function App() {
       <style>{STYLE}</style>
       {/* Hamburger button */}
       <button className="hamburger-btn" onClick={() => setNavOpen(v => !v)}>☰</button>
+      {/* Mobile top bar */}
+      <div className="mobile-top-bar" style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, gap: 10 }}>
+        <div style={{ width: 36 }} />
+        <div style={{ flex: 1, textAlign: "center", fontSize: 15, fontWeight: 700, color: C.text }}>
+          {currentUser.role === "admin" ? "Admin Panel" : currentUser.role === "manager" ? "Manager Panel" : currentUser.emp_name || currentUser.username}
+        </div>
+        <Avatar initials={currentUser.avatar || mkAvi(currentUser.emp_name || "")} color={currentUser.role === "manager" ? C.green : C.purple} size={26} />
+      </div>
       {/* Overlay */}
       <div className={`nav-overlay${navOpen ? " open" : ""}`} onClick={() => setNavOpen(false)} />
       <nav className={`app-nav${navOpen ? " nav-open" : ""}`} style={{
         background: C.surface, borderRight: `1px solid ${C.border}`, padding: "24px 0"
       }}>
         <div style={{ padding: "0 20px 22px", borderBottom: `1px solid ${C.border}` }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
             <img src="/image.png" alt="Logo" style={{ height: 60, objectFit: "contain" }} />
+            <button className="nav-close-btn" onClick={() => setNavOpen(false)} style={{
+              display: "none", position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)",
+              background: "none", border: `1px solid ${C.border}`, borderRadius: 6, color: C.textMuted,
+              fontSize: 16, cursor: "pointer", padding: "2px 8px", lineHeight: 1
+            }}>✕</button>
           </div>
         </div>
         {currentUser.role === "admin" && (

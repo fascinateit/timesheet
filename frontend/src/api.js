@@ -61,10 +61,17 @@ export const api = {
 
   // Leaves
   getLeaves: (params = {}) => req("GET", `/leaves/?${new URLSearchParams(params)}`),
+  getLeaveBalance: (empId) => req("GET", `/leaves/balance${empId ? `?employee_id=${empId}` : ""}`),
+  getAllLeaveBalances: () => req("GET", "/leaves/all-balances"),
   createLeave: (d) => req("POST", "/leaves/", d),
   approveLeave: (id) => req("PATCH", `/leaves/${id}/approve`),
   rejectLeave: (id) => req("PATCH", `/leaves/${id}/reject`),
   deleteLeave: (id) => req("DELETE", `/leaves/${id}`),
+  creditMonthlyLeaves: () => req("POST", "/leaves/credit-monthly"),
+
+  // Leave / App Settings
+  getLeaveSettings: () => req("GET", "/settings/leave"),
+  updateLeaveSettings: (d) => req("PUT", "/settings/leave", d),
 
   // User Accounts
   getAccounts: () => req("GET", "/accounts/"),
