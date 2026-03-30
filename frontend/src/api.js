@@ -107,6 +107,28 @@ export const api = {
   approvePayslip: (id) => req("POST", `/payslips/${id}/approve`),
   deletePayslip: (id) => req("DELETE", `/payslips/${id}`),
 
+  // Performance
+  getGoals: (params = {}) => req("GET", `/performance/goals?${new URLSearchParams(params)}`),
+  createGoal: (d) => req("POST", "/performance/goals", d),
+  updateGoal: (id, d) => req("PUT", `/performance/goals/${id}`, d),
+  deleteGoal: (id) => req("DELETE", `/performance/goals/${id}`),
+
+  getSelfAssessments: (params = {}) => req("GET", `/performance/self-assessments?${new URLSearchParams(params)}`),
+  createSelfAssessment: (d) => req("POST", "/performance/self-assessments", d),
+  updateSelfAssessment: (id, d) => req("PUT", `/performance/self-assessments/${id}`, d),
+  submitSelfAssessment: (id) => req("PATCH", `/performance/self-assessments/${id}/submit`),
+
+  getFeedback: (params = {}) => req("GET", `/performance/feedback?${new URLSearchParams(params)}`),
+  createFeedback: (d) => req("POST", "/performance/feedback", d),
+  deleteFeedback: (id) => req("DELETE", `/performance/feedback/${id}`),
+
+  getReviews: (params = {}) => req("GET", `/performance/reviews?${new URLSearchParams(params)}`),
+  createReview: (d) => req("POST", "/performance/reviews", d),
+  updateReview: (id, d) => req("PUT", `/performance/reviews/${id}`, d),
+  submitReview: (id) => req("PATCH", `/performance/reviews/${id}/submit`),
+  acknowledgeReview: (id) => req("PATCH", `/performance/reviews/${id}/acknowledge`),
+  deleteReview: (id) => req("DELETE", `/performance/reviews/${id}`),
+
   // Documents
   getDocuments: (params = {}) => req("GET", `/documents/?${new URLSearchParams(params)}`),
   createDocument: (d) => req("POST", "/documents/", d),
@@ -168,5 +190,35 @@ export const api = {
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
     return data;
   },
+
+  // Helpdesk / Ticketing
+  getHelpdeskStats: () => req("GET", "/helpdesk/stats"),
+  getTickets: (params = {}) => req("GET", `/helpdesk/tickets?${new URLSearchParams(params)}`),
+  getTicket: (id) => req("GET", `/helpdesk/tickets/${id}`),
+  createTicket: (d) => req("POST", "/helpdesk/tickets", d),
+  updateTicket: (id, d) => req("PUT", `/helpdesk/tickets/${id}`, d),
+  deleteTicket: (id) => req("DELETE", `/helpdesk/tickets/${id}`),
+  addTicketComment: (id, d) => req("POST", `/helpdesk/tickets/${id}/comments`, d),
+
+  getDocumentRequests: (params = {}) => req("GET", `/helpdesk/document-requests?${new URLSearchParams(params)}`),
+  createDocumentRequest: (d) => req("POST", "/helpdesk/document-requests", d),
+  approveDocumentRequest: (id, d) => req("PATCH", `/helpdesk/document-requests/${id}/approve`, d),
+  rejectDocumentRequest: (id, d) => req("PATCH", `/helpdesk/document-requests/${id}/reject`, d),
+  deleteDocumentRequest: (id) => req("DELETE", `/helpdesk/document-requests/${id}`),
+
+  uploadHelpdeskDocument: async (rid, file) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch(`${BASE}/helpdesk/document-requests/${rid}/upload`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token()}` },
+      body: fd,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    return data;
+  },
+
+  getDocumentDownloadUrl: (rid) => `${BASE}/helpdesk/document-requests/${rid}/download`,
 
 };

@@ -41,6 +41,8 @@ def create_app():
     from routes.subscriptions import subscriptions_bp
     from routes.onboarding import onboarding_bp
     from routes.assets import assets_bp
+    from routes.performance import performance_bp
+    from routes.helpdesk import helpdesk_bp
 
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(employees_bp, url_prefix='/api/employees')
@@ -59,6 +61,8 @@ def create_app():
     app.register_blueprint(subscriptions_bp, url_prefix='/api/subscriptions')
     app.register_blueprint(onboarding_bp, url_prefix='/api/onboarding')
     app.register_blueprint(assets_bp, url_prefix='/api/assets')
+    app.register_blueprint(performance_bp, url_prefix='/api/performance')
+    app.register_blueprint(helpdesk_bp, url_prefix='/api/helpdesk')
     
     @app.route("/api/health")
     def health():
