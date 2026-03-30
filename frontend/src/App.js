@@ -1,6 +1,6 @@
 // src/App.js  –  ProjectPulse (API-connected)
 import { useState, useEffect, useCallback, useRef } from "react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RTooltip } from "recharts";
 import { api } from "./api";
 
 // ── Design Tokens ────────────────────────────────────────────────────────────
@@ -1779,26 +1779,104 @@ function Dashboard() {
   useEffect(() => { load(); }, []);
   if (loading) return <Spinner />;
   if (err) return <ErrBox msg={err} onRetry={load} />;
-  const { projects = [], total_budget = 0, total_burned = 0, pending_timesheets = 0, pending_leaves = 0 } = data || {};
+  const {
+    projects = [],
+    total_budget = 0, active_budget = 0, inactive_budget = 0,
+    total_burned = 0,
+    pending_timesheets = 0, pending_leaves = 0,
+    invoice_total_raised = 0, invoice_cleared = 0, invoice_pending = 0,
+  } = data || {};
+
   const stats = [
-    { label: "Total Budget", value: fmt$(total_budget), sub: "Across all projects", icon: "💰", color: C.accent },
-    { label: "Budget Burned", value: fmt$(total_burned), sub: `${total_budget ? ((total_burned / total_budget) * 100).toFixed(1) : 0}% utilized`, icon: "🔥", color: C.amber },
-    { label: "Active Projects", value: projects.filter(p => p.status === "active").length, sub: `${projects.length} total`, icon: "🚀", color: C.green },
-    { label: "Pending Reviews", value: pending_timesheets + pending_leaves, sub: `${pending_timesheets} ts · ${pending_leaves} leaves`, icon: "⏳", color: C.purple },
+    // ── Budget ───────────────────────────────────────────
+    { label: "Total Budget",           value: fmt$(total_budget),        sub: `${projects.length} projects (active + inactive)`, icon: "💰", color: C.accent },
+    { label: "Active Project Budget",  value: fmt$(active_budget),       sub: `${projects.filter(p => p.status === "active").length} active projects`,   icon: "🚀", color: C.green },
+    { label: "Inactive Project Budget",value: fmt$(inactive_budget),     sub: `${projects.filter(p => p.status !== "active").length} inactive projects`,  icon: "📦", color: C.textMuted },
+    { label: "Budget Burned",          value: fmt$(total_burned),        sub: `${total_budget ? ((total_burned / total_budget) * 100).toFixed(1) : 0}% utilized`, icon: "🔥", color: C.amber },
+    // ── Invoices ─────────────────────────────────────────
+    { label: "Total Invoiced",         value: fmt$(invoice_total_raised), sub: "All raised invoices",    icon: "🧾", color: C.purple },
+    { label: "Invoice Cleared",        value: fmt$(invoice_cleared),      sub: "Received / settled",     icon: "✅", color: C.green },
+    { label: "Invoice Pending",        value: fmt$(invoice_pending),      sub: "Awaiting payment",       icon: "⏳", color: C.red },
+    // ── Operations ───────────────────────────────────────
+    { label: "Pending Reviews",        value: pending_timesheets + pending_leaves, sub: `${pending_timesheets} ts · ${pending_leaves} leaves`, icon: "🕐", color: C.purple },
   ];
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
       <div><h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>Overview</h2>
         <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>Real-time project & budget snapshot</p></div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16 }}>
-        {stats.map(s => (
-          <Card key={s.label} style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
-            <div style={{ fontSize: 26 }}>{s.icon}</div>
-            <div><div style={{ fontSize: 22, fontWeight: 800, color: s.color, letterSpacing: -.5 }}>{s.value}</div>
+      {/* ── Row 1: Budget cards ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16 }}>
+        {stats.slice(0,4).map(s => (
+          <Card key={s.label} style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+            <div style={{ fontSize: 24 }}>{s.icon}</div>
+            <div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: s.color, letterSpacing: -.5 }}>{s.value}</div>
               <div style={{ fontSize: 12, color: C.text, fontWeight: 600, marginTop: 2 }}>{s.label}</div>
-              <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{s.sub}</div></div>
+              <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{s.sub}</div>
+            </div>
           </Card>
         ))}
+      </div>
+
+      {/* ── Row 2: Invoice cards ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16 }}>
+        {stats.slice(4).map(s => (
+          <Card key={s.label} style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+            <div style={{ fontSize: 24 }}>{s.icon}</div>
+            <div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: s.color, letterSpacing: -.5 }}>{s.value}</div>
+              <div style={{ fontSize: 12, color: C.text, fontWeight: 600, marginTop: 2 }}>{s.label}</div>
+              <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{s.sub}</div>
+            </div>
+          </Card>
+        ))}
+      </div>
+
+      {/* ── Pie charts row ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        {/* Budget Pie */}
+        <Card>
+          <h3 style={{ margin: "0 0 16px", fontSize: 14, fontWeight: 700, color: C.text }}>💰 Budget Breakdown</h3>
+          <ResponsiveContainer width="100%" height={220}>
+            <PieChart>
+              <Pie
+                data={[
+                  { name: "Active",   value: active_budget   },
+                  { name: "Inactive", value: inactive_budget  },
+                  { name: "Burned",   value: total_burned     },
+                ]}
+                cx="50%" cy="50%" outerRadius={80} innerRadius={44}
+                dataKey="value" paddingAngle={3}
+              >
+                {[C.green, C.textMuted, C.amber].map((col, i) => <Cell key={i} fill={col} />)}
+              </Pie>
+              <Tooltip formatter={(v) => fmt$(v)} contentStyle={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12 }} />
+              <Legend iconType="circle" iconSize={10} formatter={(v, e) => <span style={{ color: C.textMuted, fontSize: 12 }}>{v}: {fmt$(e.payload.value)}</span>} />
+            </PieChart>
+          </ResponsiveContainer>
+        </Card>
+
+        {/* Invoice Pie */}
+        <Card>
+          <h3 style={{ margin: "0 0 16px", fontSize: 14, fontWeight: 700, color: C.text }}>🧾 Invoice Breakdown</h3>
+          <ResponsiveContainer width="100%" height={220}>
+            <PieChart>
+              <Pie
+                data={[
+                  { name: "Cleared", value: invoice_cleared },
+                  { name: "Pending", value: invoice_pending },
+                ]}
+                cx="50%" cy="50%" outerRadius={80} innerRadius={44}
+                dataKey="value" paddingAngle={3}
+              >
+                {[C.green, C.red].map((col, i) => <Cell key={i} fill={col} />)}
+              </Pie>
+              <Tooltip formatter={(v) => fmt$(v)} contentStyle={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12 }} />
+              <Legend iconType="circle" iconSize={10} formatter={(v, e) => <span style={{ color: C.textMuted, fontSize: 12 }}>{v}: {fmt$(e.payload.value)}</span>} />
+            </PieChart>
+          </ResponsiveContainer>
+        </Card>
       </div>
       <Card>
         <h3 style={{ margin: "0 0 20px", fontSize: 14, fontWeight: 700, color: C.text }}>Project Budget Burn Rate</h3>

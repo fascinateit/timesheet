@@ -79,16 +79,36 @@ def dashboard():
             if p.get(k) and hasattr(p[k],"isoformat"):
                 p[k] = p[k].isoformat()
 
-    total_budget = sum(float(p["budget"]) for p in projects)
-    total_burned = sum(p["burned"] for p in projects)
+    total_budget        = sum(float(p["budget"]) for p in projects)
+    active_budget       = sum(float(p["budget"]) for p in projects if p.get("status") == "active")
+    inactive_budget     = sum(float(p["budget"]) for p in projects if p.get("status") != "active")
+    total_burned        = sum(p["burned"] for p in projects)
 
     pending_ts = query("SELECT COUNT(*) AS n FROM timesheets WHERE status='pending'", fetch="one")["n"]
     pending_lv = query("SELECT COUNT(*) AS n FROM leaves    WHERE status='pending'", fetch="one")["n"]
 
+    # Invoice summary
+    inv_row = query(
+        """
+        SELECT
+            COALESCE(SUM(amount), 0)                                           AS total_raised,
+            COALESCE(SUM(CASE WHEN status='cleared' THEN COALESCE(payment_received, amount) ELSE 0 END), 0) AS total_cleared,
+            COALESCE(SUM(CASE WHEN status!='cleared' THEN amount ELSE 0 END), 0) AS total_pending
+        FROM invoices
+        """,
+        fetch="one",
+    ) or {}
+
     return jsonify(
         projects=projects,
         total_budget=total_budget,
+        active_budget=active_budget,
+        inactive_budget=inactive_budget,
         total_burned=total_burned,
         pending_timesheets=pending_ts,
         pending_leaves=pending_lv,
+        invoice_total_raised=float(inv_row.get("total_raised") or 0),
+        invoice_cleared=float(inv_row.get("total_cleared") or 0),
+        invoice_pending=float(inv_row.get("total_pending") or 0),
     ), 200
+
