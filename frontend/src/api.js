@@ -62,6 +62,7 @@ export const api = {
   // Leaves
   getLeaves: (params = {}) => req("GET", `/leaves/?${new URLSearchParams(params)}`),
   getLeaveBalance: (empId) => req("GET", `/leaves/balance${empId ? `?employee_id=${empId}` : ""}`),
+  updateLeaveBalance: (empId, d) => req("PUT", `/leaves/balance/${empId}`, d),
   getAllLeaveBalances: () => req("GET", "/leaves/all-balances"),
   createLeave: (d) => req("POST", "/leaves/", d),
   approveLeave: (id) => req("PATCH", `/leaves/${id}/approve`),

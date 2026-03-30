@@ -221,7 +221,57 @@ def delete_leave(lid):
     return jsonify(deleted=True), 200
 
 
-# ── All balances (admin / manager) ───────────────────────────────────────────
+# ── Update balance (admin only) ───────────────────────────────────────────────
+
+@leaves_bp.route("/balance/<int:emp_id>", methods=["PUT"])
+@jwt_required()
+def update_balance(emp_id):
+    """Admin: set leave balance for a specific employee."""
+    user = json.loads(get_jwt_identity())
+    if user["role"] != "admin":
+        return jsonify(error="Admin only"), 403
+
+    d = request.get_json(silent=True) or {}
+
+    # Validate employee exists
+    emp = query("SELECT id FROM employees WHERE id=%s", (emp_id,), fetch="one")
+    if not emp:
+        return jsonify(error="Employee not found"), 404
+
+    _ensure_balance_row(emp_id)
+
+    new_balance       = d.get("balance")
+    new_total_credited = d.get("total_credited")
+    new_total_used    = d.get("total_used")
+
+    if new_balance is None:
+        return jsonify(error="balance is required"), 400
+
+    # Build dynamic update
+    fields = ["balance = %s"]
+    args   = [float(new_balance)]
+
+    if new_total_credited is not None:
+        fields.append("total_credited = %s")
+        args.append(float(new_total_credited))
+    if new_total_used is not None:
+        fields.append("total_used = %s")
+        args.append(float(new_total_used))
+
+    args.append(emp_id)
+    execute(
+        f"UPDATE leave_balance SET {', '.join(fields)} WHERE employee_id = %s",
+        args,
+    )
+
+    row = query(
+        "SELECT balance, total_credited, total_used, last_credited_month FROM leave_balance WHERE employee_id=%s",
+        (emp_id,), fetch="one",
+    )
+    return jsonify(row or {}), 200
+
+
+
 
 @leaves_bp.route("/all-balances", methods=["GET"])
 @jwt_required()

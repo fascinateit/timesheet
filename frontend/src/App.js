@@ -2599,6 +2599,48 @@ function Timesheets({ currentUser, viewOnly }) {
   );
 }
 
+// ── AmendRow: self-contained editable row for a single employee's balance ────
+function AmendRow({ emp, initialBal, idx, onSaved }) {
+  const [bal, setBal] = useState({
+    balance: String(parseFloat(initialBal.balance) || 0),
+    total_credited: String(parseFloat(initialBal.total_credited) || 0),
+    total_used: String(parseFloat(initialBal.total_used) || 0),
+  });
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  async function save() {
+    setSaving(true); setSaved(false);
+    try {
+      const updated = await api.updateLeaveBalance(emp.id, {
+        balance: parseFloat(bal.balance) || 0,
+        total_credited: parseFloat(bal.total_credited) || 0,
+        total_used: parseFloat(bal.total_used) || 0,
+      });
+      onSaved({ balance: parseFloat(updated.balance) || 0, total_credited: parseFloat(updated.total_credited) || 0, total_used: parseFloat(updated.total_used) || 0 });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setSaving(false); }
+  }
+
+  const inputStyle = { background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, padding: "5px 8px", fontSize: 13, width: 72, outline: "none" };
+
+  return (
+    <tr style={{ borderBottom: `1px solid ${C.border}22`, background: idx % 2 === 0 ? "transparent" : C.bg + "44" }}>
+      <Td><span style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>{emp.name}</span></Td>
+      <Td><input type="number" min={0} step={0.5} value={bal.balance} onChange={e => setBal(b => ({ ...b, balance: e.target.value }))} style={{ ...inputStyle, color: C.accent, fontWeight: 700 }} /></Td>
+      <Td><input type="number" min={0} step={0.5} value={bal.total_credited} onChange={e => setBal(b => ({ ...b, total_credited: e.target.value }))} style={inputStyle} /></Td>
+      <Td><input type="number" min={0} step={0.5} value={bal.total_used} onChange={e => setBal(b => ({ ...b, total_used: e.target.value }))} style={inputStyle} /></Td>
+      <Td>
+        <button onClick={save} disabled={saving}
+          style={{ background: saved ? C.green : C.accent, color: "#fff", border: "none", borderRadius: 6, padding: "5px 14px", fontSize: 12, fontWeight: 700, cursor: saving ? "wait" : "pointer", transition: "background .2s" }}>
+          {saving ? "Saving…" : saved ? "✓ Saved" : "Save"}
+        </button>
+      </Td>
+    </tr>
+  );
+}
+
 // ════════════════════════════════════════════════════════
 // LEAVES
 // ════════════════════════════════════════════════════════
@@ -2618,6 +2660,9 @@ function Leaves({ currentUser, viewOnly }) {
   const [settingsModal, setSettingsModal] = useState(false);
   const [settingsForm, setSettingsForm] = useState({ holiday_link: "" });
   const [settingsSaving, setSettingsSaving] = useState(false);
+  // { employeeId, employeeName, balance, total_credited, total_used }
+  const [editBalanceTarget, setEditBalanceTarget] = useState(null);
+  const [editBalanceSaving, setEditBalanceSaving] = useState(false);
 
   // Compute days selected in the form
   const selectedDays = (() => {
@@ -2629,6 +2674,10 @@ function Leaves({ currentUser, viewOnly }) {
   const willDeduct = BALANCE_TYPES.has(form.type) && selectedDays > 0;
   const balAfter = balance ? Math.max((parseFloat(balance.balance) || 0) - selectedDays, 0) : 0;
   const insufficient = willDeduct && balance && selectedDays > parseFloat(balance.balance);
+  const isIntern = (() => {
+    const me = employees.find(e => e.id === currentUser.employee_id);
+    return me ? /intern/i.test(me.group_name || "") : false;
+  })();
 
   const load = useCallback(async () => {
     setLoading(true); setErr("");
@@ -2692,6 +2741,28 @@ function Leaves({ currentUser, viewOnly }) {
     } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setSettingsSaving(false); }
   }
 
+  async function handleSaveBalance() {
+    if (!editBalanceTarget) return;
+    setEditBalanceSaving(true);
+    try {
+      const updated = await api.updateLeaveBalance(editBalanceTarget.employeeId, {
+        balance: parseFloat(editBalanceTarget.balance) || 0,
+        total_credited: parseFloat(editBalanceTarget.total_credited) || 0,
+        total_used: parseFloat(editBalanceTarget.total_used) || 0,
+      });
+      setAllBalances(prev => ({
+        ...prev,
+        [String(editBalanceTarget.employeeId)]: {
+          balance: parseFloat(updated.balance) || 0,
+          total_credited: parseFloat(updated.total_credited) || 0,
+          total_used: parseFloat(updated.total_used) || 0,
+        },
+      }));
+      setEditBalanceTarget(null);
+      dialog.alert("Leave balance updated!", { title: "Updated", dtype: "success" });
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setEditBalanceSaving(false); }
+  }
+
   if (loading) return <Spinner />;
   if (err) return <ErrBox msg={err} onRetry={load} />;
 
@@ -2708,6 +2779,9 @@ function Leaves({ currentUser, viewOnly }) {
             <Btn variant="ghost" onClick={handleCreditMonthly} disabled={crediting} small>
               {crediting ? "Crediting…" : "🗓 Credit Monthly Leaves"}
             </Btn>
+          )}
+          {!viewOnly && currentUser.role === "admin" && (
+            <Btn variant="ghost" onClick={() => setEditBalanceTarget("open")} small>🧹 Amend Bucket of Leave</Btn>
           )}
           {!viewOnly && currentUser.role === "admin" && (
             <Btn variant="ghost" onClick={() => setSettingsModal(true)} small>⚙ Holiday Link</Btn>
@@ -2744,7 +2818,7 @@ function Leaves({ currentUser, viewOnly }) {
       </div>
 
       {/* Leave Balance Banner */}
-      {balance !== null && (
+      {balance !== null && !isIntern && (
         <Card style={{ background: balNum === 0 ? C.red + "12" : C.surface, border: `1px solid ${balColor}44`, padding: "18px 24px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
             <div>
@@ -2804,9 +2878,7 @@ function Leaves({ currentUser, viewOnly }) {
                     <Td><StatusBadge status={l.status} /></Td>
                     {!viewOnly && <Td>
                       {empBalNum !== null ? (
-                        <span style={{ fontWeight: 700, fontSize: 13, color: empBalColor }}>
-                          {empBalNum}d
-                        </span>
+                        <span style={{ fontWeight: 700, fontSize: 13, color: empBalColor }}>{empBalNum}d</span>
                       ) : <span style={{ color: C.textMuted, fontSize: 12 }}>—</span>}
                     </Td>}
                     {!viewOnly && <Td>{l.status === "pending" && (
@@ -2824,7 +2896,48 @@ function Leaves({ currentUser, viewOnly }) {
         </div>
       </Card>
 
-      {/* Request modal */}
+      {/* Admin: Amend Bucket of Leave Modal */}
+      {editBalanceTarget === "open" && (() => {
+        // Build one editable row per unique employee from allBalances + employees list
+        return (
+          <Modal title="🧹 Amend Bucket of Leave" onClose={() => setEditBalanceTarget(null)} maxWidth={860}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div style={{ fontSize: 13, color: C.textMuted }}>
+                Edit leave balances for all employees. Click ❯❯ Save on each row to apply changes.
+              </div>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead style={{ background: C.surface }}><tr>
+                    {["Employee", "Available Balance", "Total Credited", "Total Used", "Action"].map(h => <Th key={h}>{h}</Th>)}
+                  </tr></thead>
+                  <tbody>
+                    {employees.filter(e => e.id).map((emp, idx) => {
+                      const key = String(emp.id);
+                      const bal = allBalances[key] || { balance: 0, total_credited: 0, total_used: 0 };
+                      return (
+                        <AmendRow
+                          key={emp.id}
+                          emp={emp}
+                          initialBal={bal}
+                          idx={idx}
+                          onSaved={(updated) => {
+                            setAllBalances(prev => ({ ...prev, [key]: updated }));
+                          }}
+                        />
+                      );
+                    })}
+                    {employees.length === 0 && <tr><td colSpan={5} style={{ padding: 40, textAlign: "center", color: C.textMuted }}>No employees found.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <Btn variant="ghost" onClick={() => setEditBalanceTarget(null)}>Close</Btn>
+              </div>
+            </div>
+          </Modal>
+        );
+      })()}
+
       {/* Admin: Holiday Calendar Settings Modal */}
       {settingsModal && (
         <Modal title="⚙ Holiday Calendar Settings" onClose={() => setSettingsModal(false)}>
@@ -2870,7 +2983,7 @@ function Leaves({ currentUser, viewOnly }) {
               ]} />
 
             {/* Balance indicator for bucket types */}
-            {BALANCE_TYPES.has(form.type) && balance !== null && (
+            {BALANCE_TYPES.has(form.type) && balance !== null && !isIntern && (
               <div style={{
                 background: insufficient ? C.red + "18" : C.green + "12",
                 border: `1px solid ${insufficient ? C.red : C.green}44`,
