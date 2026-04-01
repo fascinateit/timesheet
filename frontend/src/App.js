@@ -4155,8 +4155,329 @@ function MyProfile({ currentUser }) {
 // ════════════════════════════════════════════════════════
 // EMPLOYEE HOME
 // ════════════════════════════════════════════════════════
-function EmployeeHome({ currentUser }) {
+// ── Employee / Manager Dashboard ─────────────────────────────────────────────
+const PIE_COLORS = ["#3B82F6", "#10B981", "#8B5CF6", "#F59E0B", "#EF4444", "#06B6D4", "#F97316", "#EC4899"];
+
+function EmployeeDashboard({ currentUser, navFn }) {
+  const [loading, setLoading] = useState(true);
+  const [bal, setBal] = useState(null);
+  const [leaves, setLeaves] = useState([]);
+  const [timesheets, setTimesheets] = useState([]);
+  const [expenses, setExpenses] = useState([]);
+  const [teamPending, setTeamPending] = useState({ timesheets: 0, leaves: 0 });
+
+  useEffect(() => {
+    async function load() {
+      const empId = currentUser.employee_id;
+      const isMgr = currentUser.role === "manager";
+      const results = await Promise.allSettled([
+        api.getLeaveBalance(empId),
+        api.getLeaves({ employee_id: empId }),
+        api.getTimesheets({ employee_id: empId }),
+        api.getExpenses({ employee_id: empId }),
+        ...(isMgr ? [api.getTimesheets(), api.getLeaves()] : []),
+      ]);
+      const [balR, lvR, tsR, expR, allTsR, allLvR] = results;
+      setBal(balR.status === "fulfilled" ? balR.value : null);
+      setLeaves(lvR.status === "fulfilled" ? (lvR.value || []) : []);
+      setTimesheets(tsR.status === "fulfilled" ? (tsR.value || []) : []);
+      setExpenses(expR.status === "fulfilled" ? (expR.value || []) : []);
+      if (isMgr && allTsR && allLvR) {
+        const allTs = allTsR.status === "fulfilled" ? (allTsR.value || []) : [];
+        const allLv = allLvR.status === "fulfilled" ? (allLvR.value || []) : [];
+        setTeamPending({
+          timesheets: allTs.filter(t => t.status === "pending" && t.employee_id !== empId).length,
+          leaves: allLv.filter(l => l.status === "pending" && l.employee_id !== empId).length,
+        });
+      }
+      setLoading(false);
+    }
+    load();
+  }, []);
+
+  const now = new Date();
+  const weekStart = new Date(now);
+  weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  weekStart.setHours(0, 0, 0, 0);
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  // Parse date strings as local time (avoid UTC offset shifting date by 1 day)
+  const parseLocalDate = d => { if (!d) return new Date(0); const [y, m, day] = String(d).split("-"); return new Date(+y, +m - 1, +day); };
+
+  const tsDate = t => (t.work_date || t.date || "").slice(0, 10);
+  const weekTs = timesheets.filter(t => parseLocalDate(tsDate(t)) >= weekStart);
+  const weekHours = weekTs.reduce((s, t) => s + (+t.hours || 0), 0);
+  const pendingTsCount = timesheets.filter(t => t.status === "pending").length;
+  const pendingExp = expenses.filter(e => e.status === "pending");
+  const pendingExpAmt = pendingExp.reduce((s, e) => s + (+e.amount || 0), 0);
+  const balNum = bal ? parseFloat(bal.balance) || 0 : 0;
+  const balColor = balNum >= 4 ? C.green : balNum >= 2 ? C.amber : C.red;
+
+  // Monthly utilization
+  const getWorkdaysInMonth = (year, month) => {
+    let workdays = 0;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    for (let i = 1; i <= daysInMonth; i++) {
+      const day = new Date(year, month, i).getDay();
+      if (day !== 0 && day !== 6) workdays++;
+    }
+    return workdays;
+  };
+  const monthBaseHours = getWorkdaysInMonth(now.getFullYear(), now.getMonth()) * 9;
+  
+  const monthTs = timesheets.filter(t => parseLocalDate(tsDate(t)) >= monthStart && t.status === "approved");
+  const utilizedHours = monthTs.reduce((s, t) => s + (+t.hours || 0), 0);
+  const unutilizedHours = Math.max(0, monthBaseHours - utilizedHours);
+
+  const utilizationData = [
+    ...(utilizedHours > 0 ? [{ name: "Utilized", hours: utilizedHours, color: C.green }] : []),
+    ...(unutilizedHours > 0 ? [{ name: "Unutilized", hours: unutilizedHours, color: C.border }] : [])
+  ];
+  
+  const totalMonthHours = utilizedHours;
+
+  const recentTs = [...timesheets].sort((a, b) => parseLocalDate(tsDate(b)) - parseLocalDate(tsDate(a))).slice(0, 6);
+  const recentLeaves = [...leaves].sort((a, b) => parseLocalDate(b.start_date) - parseLocalDate(a.start_date)).slice(0, 5);
+
+  const greet = now.getHours() < 12 ? "Good Morning" : now.getHours() < 17 ? "Good Afternoon" : "Good Evening";
+  const fullDate = now.toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const monthName = now.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const firstName = (currentUser.emp_name || currentUser.username || "").split(" ")[0];
+
+  const scol = s => s === "approved" ? C.green : s === "rejected" ? C.red : s === "draft" ? C.textMuted : C.amber;
+  const slbl = s => ({ approved: "Approved", rejected: "Rejected", draft: "Draft", pending: "Pending" }[s] || s);
+  const fmtD2 = d => { try { return new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }); } catch { return d || "—"; } };
+
+  const portalPage = currentUser.role === "manager" ? "mywork" : "employee-home";
+
+  const kpis = [
+    { label: "Leave Balance", value: `${balNum}d`, sub: `${parseFloat(bal?.total_used || 0)}d used`, icon: "🌴", color: balColor },
+    { label: "Hours This Week", value: `${weekHours}h`, sub: `${weekTs.length} entries`, icon: "⏱", color: C.accent },
+    { label: "Pending Timesheets", value: pendingTsCount, sub: pendingTsCount === 0 ? "All up to date" : "Awaiting approval", icon: "📋", color: pendingTsCount > 0 ? C.amber : C.green },
+    { label: "Expense Claims", value: fmt$(pendingExpAmt), sub: `${pendingExp.length} pending`, icon: "💳", color: pendingExp.length > 0 ? C.purple : C.textDim },
+  ];
+
+  const quickActions = [
+    { icon: "⏱", label: "Log Time", sub: "Add timesheet entry", color: C.accent, page: portalPage, tab: "timesheets" },
+    { icon: "🌴", label: "Request Leave", sub: "Apply for time off", color: C.green, page: portalPage, tab: "leave" },
+    { icon: "💳", label: "Claim Expense", sub: "Submit reimbursement", color: C.purple, page: portalPage, tab: "expenses" },
+    { icon: "💰", label: "My Payslip", sub: "View your earnings", color: C.amber, page: portalPage, tab: "pay" },
+    { icon: "👤", label: "My Profile", sub: "Update your details", color: C.textDim, page: portalPage, tab: "profile" },
+  ].filter(a => a.label !== "My Payslip" || currentUser.role !== "intras");
+
+  if (loading) return <Spinner />;
+
+  return (
+    <>
+      <style>{`
+        .db-kpi { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 16px; padding: 20px 22px; display: flex; align-items: center; gap: 16px; transition: transform 0.15s, box-shadow 0.15s; }
+        .db-kpi:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
+        .db-section { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+        .db-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-radius: 10px; background: ${C.surface}; border: 1px solid ${C.border}44; gap: 10px; transition: background 0.15s; }
+        .db-row:hover { background: ${C.bg}; }
+        .db-qa { flex: 1; min-width: 110px; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 18px 10px; border: 1px solid ${C.border}; border-radius: 14px; background: ${C.card}; cursor: pointer; transition: all 0.18s; outline: none; }
+        .db-qa:hover { border-color: ${C.accent}55; background: ${C.accentGlow}; transform: translateY(-2px); box-shadow: 0 6px 20px rgba(59,130,246,0.15); }
+        .db-kpi-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; }
+        .db-3col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+        @media (max-width: 1100px) { .db-3col { grid-template-columns: 1fr 1fr !important; } }
+        @media (max-width: 900px) { .db-kpi-grid { grid-template-columns: 1fr 1fr !important; } }
+        @media (max-width: 700px) { .db-3col { grid-template-columns: 1fr !important; } }
+        @media (max-width: 480px) { .db-kpi-grid { grid-template-columns: 1fr !important; } }
+      `}</style>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+
+        {/* ── Greeting banner ── */}
+        <div style={{
+          background: "linear-gradient(135deg,#0D1525 0%,#111D30 60%,#0F1820 100%)",
+          border: `1px solid ${C.border}`, borderRadius: 20,
+          padding: "26px 32px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16,
+          position: "relative", overflow: "hidden",
+        }}>
+          <div style={{ position: "absolute", top: -50, right: 80, width: 180, height: 180, borderRadius: "50%", background: C.accent + "09", pointerEvents: "none" }} />
+          <div style={{ position: "absolute", bottom: -40, right: -10, width: 140, height: 140, borderRadius: "50%", background: C.purple + "07", pointerEvents: "none" }} />
+          <div style={{ position: "relative" }}>
+            <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>{fullDate}</div>
+            <div style={{ fontSize: 28, fontWeight: 900, color: C.text, letterSpacing: -0.5, lineHeight: 1.15 }}>{greet}, {firstName} 👋</div>
+            <div style={{ fontSize: 13, color: C.textMuted, marginTop: 8, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span style={{ background: (currentUser.role === "manager" ? C.amber : C.green) + "22", color: currentUser.role === "manager" ? C.amber : C.green, border: `1px solid ${(currentUser.role === "manager" ? C.amber : C.green)}44`, fontSize: 11, fontWeight: 700, padding: "3px 12px", borderRadius: 20, textTransform: "uppercase", letterSpacing: .5 }}>
+                {currentUser.role === "manager" ? "Manager" : currentUser.role === "intras" ? "Intern" : "Employee"}
+              </span>
+              {currentUser.group_name && <span style={{ color: C.textDim, fontWeight: 500 }}>{currentUser.group_name}</span>}
+              {currentUser.emp_id && <span style={{ color: C.textMuted }}>ID: {currentUser.emp_id}</span>}
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 10, position: "relative" }}>
+            <div style={{ background: C.accent + "18", border: `1px solid ${C.accent}30`, borderRadius: 16, padding: "14px 22px", textAlign: "center", minWidth: 86 }}>
+              <div style={{ fontSize: 26, fontWeight: 900, color: C.accent, lineHeight: 1 }}>{weekHours}h</div>
+              <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 700, letterSpacing: .5, marginTop: 5 }}>THIS WEEK</div>
+            </div>
+            {bal && (
+              <div style={{ background: balColor + "18", border: `1px solid ${balColor}30`, borderRadius: 16, padding: "14px 22px", textAlign: "center", minWidth: 86 }}>
+                <div style={{ fontSize: 26, fontWeight: 900, color: balColor, lineHeight: 1 }}>{balNum}d</div>
+                <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 700, letterSpacing: .5, marginTop: 5 }}>LEAVE LEFT</div>
+              </div>
+            )}
+            <div style={{ background: C.purple + "18", border: `1px solid ${C.purple}30`, borderRadius: 16, padding: "14px 22px", textAlign: "center", minWidth: 86 }}>
+              <div style={{ fontSize: 26, fontWeight: 900, color: C.purple, lineHeight: 1 }}>{totalMonthHours}h</div>
+              <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 700, letterSpacing: .5, marginTop: 5 }}>THIS MONTH</div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── KPI cards ── */}
+        <div className="db-kpi-grid">
+          {kpis.map(k => (
+            <div key={k.label} className="db-kpi" style={{ borderTop: `3px solid ${k.color}55` }}>
+              <div style={{ width: 46, height: 46, borderRadius: 13, background: k.color + "1a", border: `1px solid ${k.color}28`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>{k.icon}</div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 22, fontWeight: 900, color: k.color, letterSpacing: -0.5, lineHeight: 1.1 }}>{k.value}</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginTop: 3 }}>{k.label}</div>
+                <div style={{ fontSize: 11, color: C.textMuted, marginTop: 1 }}>{k.sub}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* ── Manager team pending alert ── */}
+        {currentUser.role === "manager" && (teamPending.timesheets > 0 || teamPending.leaves > 0) && (
+          <div style={{ background: C.amber + "10", border: `1px solid ${C.amber}30`, borderRadius: 14, padding: "14px 22px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 20 }}>⏳</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: C.amber }}>Team Reviews Pending</span>
+            {teamPending.timesheets > 0 && <span style={{ background: C.amber + "20", border: `1px solid ${C.amber}40`, borderRadius: 8, padding: "4px 12px", fontSize: 12, fontWeight: 700, color: C.amber }}>{teamPending.timesheets} timesheet{teamPending.timesheets !== 1 ? "s" : ""}</span>}
+            {teamPending.leaves > 0 && <span style={{ background: C.amber + "20", border: `1px solid ${C.amber}40`, borderRadius: 8, padding: "4px 12px", fontSize: 12, fontWeight: 700, color: C.amber }}>{teamPending.leaves} leave request{teamPending.leaves !== 1 ? "s" : ""}</span>}
+          </div>
+        )}
+
+        {/* ── Three columns: Timesheets | Leaves | Utilization Pie ── */}
+        <div className="db-3col">
+
+          {/* Recent Timesheets */}
+          <div className="db-section">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 13, fontWeight: 800, color: C.text }}>⏱ Recent Timesheets</span>
+              <button onClick={() => navFn(portalPage, "timesheets")} style={{ background: "none", border: "none", color: C.accent, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>View all →</button>
+            </div>
+            {recentTs.length === 0 ? (
+              <div style={{ textAlign: "center", color: C.textMuted, fontSize: 13, padding: "28px 0" }}>No timesheets yet</div>
+            ) : recentTs.map(t => (
+              <div key={t.id} className="db-row">
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.project_name || "—"}</div>
+                  <div style={{ fontSize: 11, color: C.textMuted, marginTop: 1 }}>{fmtD2(tsDate(t))}{t.task ? ` · ${t.task.slice(0, 22)}` : ""}</div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: C.accent }}>{t.hours}h</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: scol(t.status), background: scol(t.status) + "18", padding: "2px 7px", borderRadius: 7, border: `1px solid ${scol(t.status)}28` }}>{slbl(t.status)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Leave status */}
+          <div className="db-section">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 13, fontWeight: 800, color: C.text }}>🌴 Leave</span>
+              <button onClick={() => navFn(portalPage, "leave")} style={{ background: "none", border: "none", color: C.accent, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>View all →</button>
+            </div>
+            {bal && (
+              <div style={{ background: C.surface, borderRadius: 12, padding: "12px 14px", border: `1px solid ${C.border}44` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 7 }}>
+                  <span style={{ fontSize: 12, color: C.textMuted, fontWeight: 600 }}>Balance</span>
+                  <span style={{ fontSize: 15, fontWeight: 900, color: balColor }}>{balNum}d remaining</span>
+                </div>
+                <div style={{ height: 6, background: C.border, borderRadius: 6, overflow: "hidden" }}>
+                  <div style={{ height: "100%", borderRadius: 6, background: `linear-gradient(90deg,${balColor},${balColor}99)`, width: `${Math.min(100, (balNum / Math.max(parseFloat(bal.total_credited) || 1, balNum)) * 100)}%`, transition: "width 0.6s ease" }} />
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5 }}>
+                  <span style={{ fontSize: 10, color: C.textMuted }}>{parseFloat(bal.total_used) || 0}d used</span>
+                  <span style={{ fontSize: 10, color: C.textMuted }}>{parseFloat(bal.total_credited) || 0}d credited</span>
+                </div>
+              </div>
+            )}
+            {recentLeaves.length === 0 ? (
+              <div style={{ textAlign: "center", color: C.textMuted, fontSize: 13, padding: "16px 0" }}>No leave requests yet</div>
+            ) : recentLeaves.map(l => {
+              const days = Math.round((new Date(l.end_date) - new Date(l.start_date)) / 86400000) + 1;
+              const typeIcon = { Annual: "🌴", Sick: "🤒", Unpaid: "⏸", Maternity: "🤰", Paternity: "👶", Reserve: "🗓️" }[l.leave_type] || "📋";
+              return (
+                <div key={l.id} className="db-row">
+                  <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0, flex: 1 }}>
+                    <span style={{ fontSize: 17, flexShrink: 0 }}>{typeIcon}</span>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{l.leave_type}</div>
+                      <div style={{ fontSize: 11, color: C.textMuted }}>{fmtD2(l.start_date)} → {fmtD2(l.end_date)} · {days}d</div>
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: scol(l.status), background: scol(l.status) + "18", padding: "2px 7px", borderRadius: 7, border: `1px solid ${scol(l.status)}28`, flexShrink: 0 }}>{slbl(l.status)}</span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Monthly Utilization Pie Chart */}
+          <div className="db-section">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 13, fontWeight: 800, color: C.text }}>📊 {monthName} Utilization</span>
+              <span style={{ fontSize: 11, color: C.textMuted, fontWeight: 600 }}>{monthBaseHours}h base</span>
+            </div>
+            {utilizationData.length === 0 ? (
+              <div style={{ textAlign: "center", color: C.textMuted, fontSize: 13, padding: "40px 0", display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 32 }}>📭</span>
+                No hours logged this month
+              </div>
+            ) : (
+              <>
+                <div style={{ display: "flex", justifyContent: "center", alignItems: "center", width: "100%", padding: "10px 0" }}>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <PieChart>
+                      <Pie data={utilizationData} dataKey="hours" cx="50%" cy="50%" outerRadius={105} innerRadius={65} paddingAngle={2} strokeWidth={0}>
+                        {utilizationData.map((d) => <Cell key={d.name} fill={d.color} />)}
+                      </Pie>
+                      <Tooltip
+                        formatter={(v, n) => [`${v}h (${monthBaseHours > 0 ? ((v / monthBaseHours) * 100).toFixed(0) : 0}%)`, n]}
+                        contentStyle={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 12, color: C.text }}
+                        itemStyle={{ color: C.text }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
+                  {utilizationData.map((d) => (
+                    <div key={d.name} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ width: 10, height: 10, borderRadius: 3, background: d.color, flexShrink: 0 }} />
+                      <div style={{ flex: 1, minWidth: 0, fontSize: 12, color: C.text, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{d.name}</div>
+                      <div style={{ fontSize: 11, color: C.textMuted, flexShrink: 0 }}>{d.hours}h · {monthBaseHours > 0 ? ((d.hours / monthBaseHours) * 100).toFixed(0) : 0}%</div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* ── Quick Actions ── */}
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, letterSpacing: .8, textTransform: "uppercase", marginBottom: 12 }}>Quick Actions</div>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            {quickActions.map(a => (
+              <button key={a.label} className="db-qa" onClick={() => navFn(a.page, a.tab)}>
+                <div style={{ width: 44, height: 44, borderRadius: 13, background: a.color + "18", border: `1px solid ${a.color}28`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>{a.icon}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{a.label}</div>
+                <div style={{ fontSize: 11, color: C.textMuted, textAlign: "center" }}>{a.sub}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+      </div>
+    </>
+  );
+}
+
+function EmployeeHome({ currentUser, defaultTab }) {
   const [tab, setTab] = useState("profile");
+  useEffect(() => { if (defaultTab) setTab(defaultTab); }, [defaultTab]);
 
   const roleLabel = currentUser.role === "manager" ? "Manager"
     : currentUser.role === "admin" ? "Admin"
@@ -7182,8 +7503,10 @@ export default function App() {
     } catch { return null; }
   });
   const [page, setPage] = useState("dashboard");
-  const [navOpen, setNavOpen] = useState(true);
+  const [navOpen, setNavOpen] = useState(false);
+  const [portalTab, setPortalTab] = useState(null);
   const nav = (p) => { setPage(p); setNavOpen(false); };
+  const navWithTab = (p, tab) => { if (tab) setPortalTab(tab); nav(p); };
 
   useEffect(() => {
     function onSessionExpired() { setCurrentUser(null); setPage("dashboard"); }
@@ -7196,7 +7519,7 @@ export default function App() {
     localStorage.setItem("pp_token", data.access_token);
     localStorage.setItem("pp_user", JSON.stringify(data.user));
     setCurrentUser(data.user);
-    setPage(data.user.role === "admin" ? "dashboard" : data.user.role === "manager" ? "mywork" : "employee-home");
+    setPage(data.user.role === "admin" ? "dashboard" : "emp-dashboard");
   }
 
   function handleLogout() {
@@ -7234,9 +7557,15 @@ export default function App() {
           {/* Sidebar */}
           <nav className={`app-nav${navOpen ? "" : " nav-closed"}`}>
             <div className="nav-items-wrap" style={{ paddingTop: 10 }}>
-              <div className="nav-section">Menu</div>
+              <div className="nav-section">Overview</div>
+              <button onClick={() => nav("emp-dashboard")} title="Dashboard"
+                className={`nav-item${page === "emp-dashboard" ? " active" : ""}`}>
+                <span className="nav-icon">⊞</span>
+                <span className="nav-label">Dashboard</span>
+              </button>
+              <div className="nav-section">My Portal</div>
               <button onClick={() => nav("employee-home")} title="My Portal"
-                className={`nav-item${(page === "employee-home" || page === "dashboard") ? " active" : ""}`}>
+                className={`nav-item${page === "employee-home" ? " active" : ""}`}>
                 <span className="nav-icon">🏠</span>
                 <span className="nav-label">My Portal</span>
               </button>
@@ -7249,7 +7578,8 @@ export default function App() {
           </nav>
           {/* Main */}
           <main className={`main-content${navOpen ? "" : " nav-closed"}`}>
-            {(page === "employee-home" || page === "dashboard") && <EmployeeHome currentUser={currentUser} />}
+            {page === "emp-dashboard" && <EmployeeDashboard currentUser={currentUser} navFn={navWithTab} />}
+            {page === "employee-home" && <EmployeeHome currentUser={currentUser} defaultTab={portalTab} />}
             {page === "resumes" && <AdminCompanyResume />}
           </main>
         </div>
@@ -7305,11 +7635,15 @@ export default function App() {
             </div>
             {/* Nav items */}
             <div className="nav-items-wrap">
-              {currentUser.role === "manager" && (
+              {isManager && (
                 <>
-                  <div className="nav-section">My Space</div>
+                  <div className="nav-section">Overview</div>
+                  <button onClick={() => nav("emp-dashboard")} title="Dashboard" className={`nav-item${page === "emp-dashboard" ? " active" : ""}`}>
+                    <span className="nav-icon">⊞</span><span className="nav-label">Dashboard</span>
+                  </button>
+                  <div className="nav-section">My Portal</div>
                   <button onClick={() => nav("mywork")} title="My Work" className={`nav-item${page === "mywork" ? " active" : ""}`}>
-                    <span className="nav-icon">👤</span><span className="nav-label">My Work</span>
+                    <span className="nav-icon">🏠</span><span className="nav-label">My Work</span>
                   </button>
                 </>
               )}
@@ -7340,7 +7674,8 @@ export default function App() {
             {page === "onboard" && <OnboardEmployee />}
             {page === "compensation" && currentUser.role === "admin" && <CompensationDetails />}
             {page === "infra" && currentUser.role === "admin" && <AdminAssets />}
-            {page === "mywork" && <EmployeeHome currentUser={currentUser} />}
+            {page === "emp-dashboard" && isManager && <EmployeeDashboard currentUser={currentUser} navFn={navWithTab} />}
+            {page === "mywork" && <EmployeeHome currentUser={currentUser} defaultTab={portalTab} />}
           </main>
         </div>
         {/* ── Footer ── */}
