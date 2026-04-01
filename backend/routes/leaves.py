@@ -189,6 +189,73 @@ def reject_leave(lid):
     return jsonify(updated=True), 200
 
 
+# ── Update leave (only if still pending) ─────────────────────────────────────
+
+@leaves_bp.route("/<int:lid>", methods=["PUT"])
+@jwt_required()
+def update_leave(lid):
+    user = json.loads(get_jwt_identity())
+    d = request.get_json(silent=True) or {}
+
+    lv = query(
+        "SELECT employee_id, leave_type, start_date, end_date, status FROM leaves WHERE id=%s",
+        (lid,), fetch="one",
+    )
+    if not lv: return jsonify(error="Not found"), 404
+    if lv["status"] != "pending":
+        return jsonify(error="Only pending leaves can be edited"), 400
+    # Employees can only edit their own leaves
+    if user["role"] == "employee" and lv["employee_id"] != user["employee_id"]:
+        return jsonify(error="Forbidden"), 403
+
+    new_type  = d.get("type", lv["leave_type"])
+    new_start = d.get("startDate", str(lv["start_date"])[:10])
+    new_end   = d.get("endDate",   str(lv["end_date"])[:10])
+    new_reason = d.get("reason", "")
+
+    old_days = _day_count(lv["start_date"], lv["end_date"])
+    new_days = _day_count(new_start, new_end)
+
+    emp_id = lv["employee_id"]
+    _ensure_balance_row(emp_id)
+
+    # Refund old balance deduction if old type used balance
+    if lv["leave_type"] in BALANCE_TYPES and old_days > 0:
+        execute(
+            "UPDATE leave_balance SET balance=balance+%s, total_used=GREATEST(total_used-%s,0) WHERE employee_id=%s",
+            (old_days, old_days, emp_id),
+        )
+
+    # Deduct new balance if new type uses balance
+    if new_type in BALANCE_TYPES and new_days > 0:
+        bal_row = query("SELECT balance FROM leave_balance WHERE employee_id=%s", (emp_id,), fetch="one")
+        current = float(bal_row["balance"]) if bal_row else 0.0
+        if current < new_days:
+            # Restore old deduction before returning error
+            if lv["leave_type"] in BALANCE_TYPES and old_days > 0:
+                execute(
+                    "UPDATE leave_balance SET balance=balance-%s, total_used=total_used+%s WHERE employee_id=%s",
+                    (old_days, old_days, emp_id),
+                )
+            return jsonify(error=f"Insufficient balance. Available: {current:.0f}d, requested: {new_days}d."), 400
+        execute(
+            "UPDATE leave_balance SET balance=balance-%s, total_used=total_used+%s WHERE employee_id=%s",
+            (new_days, new_days, emp_id),
+        )
+
+    execute(
+        "UPDATE leaves SET leave_type=%s, start_date=%s, end_date=%s, reason=%s WHERE id=%s",
+        (new_type, new_start, new_end, new_reason, lid),
+    )
+    row = query(
+        """SELECT l.*, e.name AS employee_name, e.avatar, e.group_id, g.color AS group_color
+           FROM leaves l JOIN employees e ON e.id=l.employee_id LEFT JOIN `groups` g ON g.id=e.group_id
+           WHERE l.id=%s""",
+        (lid,), fetch="one",
+    )
+    return jsonify(_fmt(row)), 200
+
+
 # ── Delete leave (refund balance if pending) ──────────────────────────────────
 
 @leaves_bp.route("/<int:lid>", methods=["DELETE"])

@@ -58,9 +58,9 @@ def create_project():
     year = datetime.date.today().year
     code = f"PRJ-{year}-{random.randint(10000,99999)}"
     pid  = execute(
-        "INSERT INTO projects (code,name,client,budget,status,start_date,end_date) VALUES (%s,%s,%s,%s,%s,%s,%s)",
-        (code, name, d.get("client"), float(d.get("budget",0)), d.get("status","active"),
-         d.get("startDate") or None, d.get("endDate") or None),
+        "INSERT INTO projects (code,name,client,budget,received_amount,status,start_date,end_date) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+        (code, name, d.get("client"), float(d.get("budget",0)), float(d.get("receivedAmount",0)),
+         d.get("status","active"), d.get("startDate") or None, d.get("endDate") or None),
     )
     _sync_assignments(pid, d)
     return jsonify(_enrich(pid)), 201
@@ -71,8 +71,8 @@ def create_project():
 def update_project(pid):
     d = request.get_json(silent=True) or {}
     execute(
-        "UPDATE projects SET name=%s,client=%s,budget=%s,status=%s,start_date=%s,end_date=%s WHERE id=%s",
-        (d.get("name"), d.get("client"), float(d.get("budget",0)),
+        "UPDATE projects SET name=%s,client=%s,budget=%s,received_amount=%s,status=%s,start_date=%s,end_date=%s WHERE id=%s",
+        (d.get("name"), d.get("client"), float(d.get("budget",0)), float(d.get("receivedAmount",0)),
          d.get("status","active"), d.get("startDate") or None, d.get("endDate") or None, pid),
     )
     _sync_assignments(pid, d)

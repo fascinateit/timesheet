@@ -178,7 +178,7 @@ const dialog = {
     new Promise(resolve => {
       _setDialogState({
         kind: "confirm", title, message, dtype,
-        onOk:     () => { _setDialogState(null); resolve(true); },
+        onOk: () => { _setDialogState(null); resolve(true); },
         onCancel: () => { _setDialogState(null); resolve(false); },
       });
     }),
@@ -1810,6 +1810,78 @@ function TooltipCard({ s, tooltipLines }) {
   );
 }
 
+// ── KpiCard: modern stat card with icon, value, optional bar & tooltip ──────
+function KpiCard({ item }) {
+  const [show, setShow] = useState(false);
+  const barPct = item.bar ? (item.bar.value / (item.bar.max || 1)) : 0;
+  return (
+    // Outer wrapper owns hover — tooltip is a DOM sibling of the card div, not nested inside it.
+    // This prevents onMouseLeave from firing when the mouse moves into the tooltip.
+    <div
+      style={{ position: "relative" }}
+      onMouseEnter={() => item.tooltipLines && setShow(true)}
+      onMouseLeave={() => setShow(false)}
+    >
+      <div className="ov-kpi-card">
+        <div className="ov-card-glow" style={{ background: item.color }} />
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div style={{
+            width: 42, height: 42, borderRadius: 10,
+            background: item.color + "22", border: `1px solid ${item.color}33`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 20, flexShrink: 0,
+          }}>{item.icon}</div>
+          {item.bar && (
+            <span style={{
+              fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 20,
+              background: barPct > 0.85 ? C.red + "22" : C.amber + "22",
+              color: barPct > 0.85 ? C.red : C.amber,
+              border: `1px solid ${barPct > 0.85 ? C.red : C.amber}44`,
+            }}>{(barPct * 100).toFixed(0)}%</span>
+          )}
+          {item.tooltipLines && !item.bar && (
+            <span style={{ fontSize: 10, color: C.textMuted, padding: "3px 7px", borderRadius: 20, background: C.surface, border: `1px solid ${C.border}` }}>
+              {item.tooltipLines.length} ↑
+            </span>
+          )}
+        </div>
+        <div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: item.color, letterSpacing: -0.5, lineHeight: 1.2 }}>{item.value}</div>
+          <div style={{ fontSize: 13, color: C.text, fontWeight: 600, marginTop: 4 }}>{item.label}</div>
+          <div style={{ fontSize: 11, color: C.textMuted, marginTop: 3 }}>{item.sub}</div>
+        </div>
+        {item.bar && <ProgressBar value={item.bar.value} max={item.bar.max} color={item.color} />}
+      </div>
+
+      {show && item.tooltipLines && item.tooltipLines.length > 0 && (
+        <div style={{ position: "absolute", top: "calc(100% + 10px)", left: 0, zIndex: 999 }}>
+          {/* Arrow */}
+          <div style={{
+            position: "absolute", top: -6, left: 22,
+            width: 14, height: 14, background: "#2a2d3e",
+            borderLeft: `1px solid ${C.border}`, borderTop: `1px solid ${C.border}`,
+            transform: "rotate(45deg)", zIndex: 1,
+          }} />
+          {/* Body */}
+          <div style={{
+            position: "relative", zIndex: 2,
+            background: "#2a2d3e", border: `1px solid ${C.border}`, borderRadius: 10,
+            boxShadow: "0 10px 40px rgba(0,0,0,0.6)", padding: "12px 16px",
+            minWidth: 240, maxWidth: 320, maxHeight: 260, overflowY: "auto",
+          }}>
+            {item.tooltipLines.map((line, i) => (
+              <div key={i} style={{
+                fontSize: 13, color: "#fff", fontWeight: 500, padding: "5px 0",
+                borderBottom: i < item.tooltipLines.length - 1 ? "1px solid rgba(255,255,255,0.08)" : "none",
+              }}>{line}</div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ════════════════════════════════════════════════════════
 // DASHBOARD
 // ════════════════════════════════════════════════════════
@@ -1829,6 +1901,7 @@ function Dashboard() {
   useEffect(() => { load(); }, []);
   if (loading) return <Spinner />;
   if (err) return <ErrBox msg={err} onRetry={load} />;
+
   const {
     projects = [],
     total_budget = 0, active_budget = 0, inactive_budget = 0,
@@ -1838,152 +1911,214 @@ function Dashboard() {
     pending_invoices = [],
   } = data || {};
 
-  const stats = [
-    // ── Budget ───────────────────────────────────────────
-    { label: "Total Budget",           value: fmt$(total_budget),        sub: `${projects.length} projects (active + inactive)`, icon: "💰", color: C.accent },
-    { label: "Active Project Budget",  value: fmt$(active_budget),       sub: `${projects.filter(p => p.status === "active").length} active projects`,   icon: "🚀", color: C.green },
-    { label: "Inactive Project Budget",value: fmt$(inactive_budget),     sub: `${projects.filter(p => p.status !== "active").length} inactive projects`,  icon: "📦", color: C.textMuted },
-    { label: "Budget Burned",          value: fmt$(total_burned),        sub: `${total_budget ? ((total_burned / total_budget) * 100).toFixed(1) : 0}% utilized`, icon: "🔥", color: C.amber },
-    // ── Invoices ─────────────────────────────────────────
-    { label: "Total Invoiced",         value: fmt$(invoice_total_raised), sub: "All raised invoices",    icon: "🧾", color: C.purple },
-    { label: "Invoice Cleared",        value: fmt$(invoice_cleared),      sub: "Received / settled",     icon: "✅", color: C.green },
-    { label: "Invoice Pending",        value: fmt$(invoice_pending),      sub: "Awaiting payment",       icon: "⏳", color: C.red },
-    // ── Operations ───────────────────────────────────────
-    { label: "Pending Reviews",        value: pending_timesheets + pending_leaves, sub: `${pending_timesheets} ts · ${pending_leaves} leaves`, icon: "🕐", color: C.purple },
+  const burnPct = total_budget ? ((total_burned / total_budget) * 100).toFixed(1) : 0;
+  const remainingBudget = Math.max(0, total_budget - total_burned);
+  const collectionRate = invoice_total_raised ? ((invoice_cleared / invoice_total_raised) * 100).toFixed(1) : 0;
+
+  const inactiveProjects = projects.filter(p => p.status !== "active");
+
+  const budgetCards = [
+    { label: "Total Budget", value: fmt$(total_budget), sub: `${projects.length} projects total`, icon: "💰", color: C.accent },
+    { label: "Active Budget", value: fmt$(active_budget), sub: `${projects.filter(p => p.status === "active").length} active projects`, icon: "🚀", color: C.green, tooltipLines: projects.filter(p => p.status === "active").map(p => `🚀 ${p.name} — ${fmt$(p.budget)}`) },
+    { label: "Inactive Budget", value: fmt$(inactive_budget), sub: `${inactiveProjects.length} inactive projects`, icon: "📦", color: C.textMuted, tooltipLines: inactiveProjects.map(p => `📦 ${p.name} (${p.status}) — ${fmt$(p.budget)}`) },
+    { label: "Budget Burned", value: fmt$(total_burned), sub: `${burnPct}% of total utilized`, icon: "🔥", color: C.amber, bar: { value: total_burned, max: total_budget } },
+    { label: "Remaining Budget", value: fmt$(remainingBudget), sub: `${(100 - +burnPct).toFixed(1)}% still available`, icon: "💎", color: "#06B6D4" },
   ];
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <div><h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>Overview</h2>
-        <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>Real-time project & budget snapshot</p></div>
-      {/* ── Row 1: Budget cards ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16 }}>
-        {/* Total Budget — plain */}
-        <TooltipCard s={stats[0]} />
-        {/* Active Project Budget — tooltip: active project names */}
-        <TooltipCard s={stats[1]} tooltipLines={projects.filter(p => p.status === "active").map(p => `🚀 ${p.name} — ${fmt$(p.budget)}`)} />
-        {/* Inactive Project Budget — tooltip: inactive project names + status */}
-        <TooltipCard s={stats[2]} tooltipLines={projects.filter(p => p.status !== "active").map(p => `📦 ${p.name} (${p.status}) — ${fmt$(p.budget)}`)} />
-        {/* Budget Burned — plain */}
-        <TooltipCard s={stats[3]} />
-      </div>
+  const invoiceCards = [
+    { label: "Total Invoiced", value: fmt$(invoice_total_raised), sub: "All raised invoices", icon: "🧾", color: C.purple },
+    { label: "Collected", value: fmt$(invoice_cleared), sub: `${collectionRate}% collection rate`, icon: "✅", color: C.green },
+    { label: "Outstanding", value: fmt$(invoice_pending), sub: `${pending_invoices.length} invoices pending`, icon: "⏳", color: C.red, tooltipLines: pending_invoices.map(inv => `${inv.client_name}${inv.invoice_number ? ` · ${inv.invoice_number}` : ""} — ${fmt$(inv.amount)}`) },
+    { label: "Pending Reviews", value: pending_timesheets + pending_leaves, sub: `${pending_timesheets} timesheets · ${pending_leaves} leaves`, icon: "🕐", color: C.purple },
+  ];
 
-      {/* ── Row 2: Invoice cards ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16 }}>
-        {/* Total Invoiced — plain */}
-        <TooltipCard s={stats[4]} />
-        {/* Invoice Cleared — plain */}
-        <TooltipCard s={stats[5]} />
-        {/* Invoice Pending — tooltip: client + invoice no + amount */}
-        <TooltipCard s={stats[6]} tooltipLines={pending_invoices.map(inv => `${inv.client_name}${inv.invoice_number ? ` · ${inv.invoice_number}` : ""} — ${fmt$(inv.amount)}`)} />
-        {/* Pending Reviews — plain */}
-        <TooltipCard s={stats[7]} />
-      </div>
-
-      {/* ── Pie charts row ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        {/* Budget Pie */}
-        <Card>
-          <h3 style={{ margin: "0 0 16px", fontSize: 14, fontWeight: 700, color: C.text }}>💰 Budget Breakdown</h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <PieChart>
-              <Pie
-                data={[
-                  { name: "Active",   value: active_budget   },
-                  { name: "Inactive", value: inactive_budget  },
-                  { name: "Burned",   value: total_burned     },
-                ]}
-                cx="50%" cy="50%" outerRadius={80} innerRadius={44}
-                dataKey="value" paddingAngle={3}
-              >
-                {[C.green, C.textMuted, C.amber].map((col, i) => <Cell key={i} fill={col} />)}
-              </Pie>
-              <Tooltip formatter={(v) => fmt$(v)} contentStyle={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12 }} />
-              <Legend iconType="circle" iconSize={10} formatter={(v, e) => <span style={{ color: C.textMuted, fontSize: 12 }}>{v}: {fmt$(e.payload.value)}</span>} />
-            </PieChart>
-          </ResponsiveContainer>
-        </Card>
-
-        {/* Invoice Pie */}
-        <Card>
-          <h3 style={{ margin: "0 0 16px", fontSize: 14, fontWeight: 700, color: C.text }}>🧾 Invoice Breakdown</h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <PieChart>
-              <Pie
-                data={[
-                  { name: "Cleared", value: invoice_cleared },
-                  { name: "Pending", value: invoice_pending },
-                ]}
-                cx="50%" cy="50%" outerRadius={80} innerRadius={44}
-                dataKey="value" paddingAngle={3}
-              >
-                {[C.green, C.red].map((col, i) => <Cell key={i} fill={col} />)}
-              </Pie>
-              <Tooltip formatter={(v) => fmt$(v)} contentStyle={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12 }} />
-              <Legend iconType="circle" iconSize={10} formatter={(v, e) => <span style={{ color: C.textMuted, fontSize: 12 }}>{v}: {fmt$(e.payload.value)}</span>} />
-            </PieChart>
-          </ResponsiveContainer>
-        </Card>
-      </div>
-      <Card>
-        <h3 style={{ margin: "0 0 20px", fontSize: 14, fontWeight: 700, color: C.text }}>Project Budget Burn Rate</h3>
-        {projects.map(p => {
-          const pct = (((p.burned || 0) / p.budget) * 100).toFixed(1);
-          return (<div key={p.id} style={{ marginBottom: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{p.name}</span>
-                <StatusBadge status={p.status} />
-              </div>
-              <span style={{ fontSize: 12, color: C.textMuted }}>{fmt$(p.burned || 0)} / {fmt$(p.budget)} ({pct}%)</span>
-            </div>
-            <ProgressBar value={p.burned || 0} max={p.budget} />
-          </div>);
-        })}
-      </Card>
-
-      {/* Clients quick-view */}
-      <Card style={{ padding: 0, overflow: "hidden" }}>
-        <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}` }}>
-          <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: C.text }}>
-            🏢 Clients <span style={{ fontSize: 12, color: C.textMuted, fontWeight: 400, marginLeft: 6 }}>{clients.length} total</span>
-          </h3>
-        </div>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead style={{ background: C.surface }}>
-              <tr>
-                {["Client Name", "Email", "Phone", "GST Number", "Pay Day"].map(h => (
-                  <th key={h} style={{ padding: "10px 16px", fontSize: 11, fontWeight: 700, color: C.textMuted, letterSpacing: .5, textAlign: "left", textTransform: "uppercase", whiteSpace: "nowrap", borderBottom: `1px solid ${C.border}` }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {clients.length === 0 && (
-                <tr><td colSpan={5} style={{ padding: 32, textAlign: "center", color: C.textMuted, fontSize: 13 }}>No clients yet.</td></tr>
-              )}
-              {clients.map((c, idx) => (
-                <tr key={c.id} style={{ borderBottom: `1px solid ${C.border}22`, background: idx % 2 === 0 ? "transparent" : C.bg + "44" }}>
-                  <td style={{ padding: "11px 16px", fontWeight: 700, color: C.text, fontSize: 13 }}>{c.client_name}</td>
-                  <td style={{ padding: "11px 16px", fontSize: 12 }}>
-                    {c.email
-                      ? <a href={`mailto:${c.email}`} style={{ color: C.accent, textDecoration: "none" }}>{c.email}</a>
-                      : <span style={{ color: C.textMuted }}>—</span>}
-                  </td>
-                  <td style={{ padding: "11px 16px", fontSize: 12 }}>
-                    {c.phone_number
-                      ? <a href={`tel:${c.phone_number}`} style={{ color: C.text, textDecoration: "none" }}>{c.phone_number}</a>
-                      : <span style={{ color: C.textMuted }}>—</span>}
-                  </td>
-                  <td style={{ padding: "11px 16px", fontSize: 12, color: C.textMuted }}>{c.gst_number || "—"}</td>
-                  <td style={{ padding: "11px 16px", fontSize: 12, color: C.textMuted }}>{c.pay_day ? `Day ${c.pay_day}` : "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+  const SectionLabel = ({ text }) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <span style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, letterSpacing: 1.2, textTransform: "uppercase", whiteSpace: "nowrap" }}>{text}</span>
+      <div style={{ flex: 1, height: 1, background: C.border }} />
     </div>
+  );
+
+  return (
+    <>
+      <style>{`
+        .ov-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+        .ov-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .ov-kpi-card {
+          position: relative; background: ${C.card}; border: 1px solid ${C.border};
+          border-radius: 14px; padding: 20px; display: flex; flex-direction: column;
+          gap: 14px; transition: transform .2s, box-shadow .2s; overflow: visible;
+        }
+        .ov-kpi-card:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.45); }
+        .ov-card-glow {
+          position: absolute; top: 0; right: 0; width: 90px; height: 90px;
+          border-radius: 50%; opacity: 0.07; transform: translate(25px, -25px); pointer-events: none;
+        }
+        .ov-tr-hover { transition: background .15s; }
+        .ov-tr-hover:hover { background: ${C.surface}99 !important; }
+        @media (max-width: 1100px) { .ov-grid-4 { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 640px)  { .ov-grid-4 { grid-template-columns: 1fr; } .ov-grid-2 { grid-template-columns: 1fr; } }
+      `}</style>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+
+        {/* ── Page Header ── */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: -0.5 }}>Overview</h2>
+            <p style={{ margin: "5px 0 0", color: C.textMuted, fontSize: 13 }}>
+              Real-time project & financial snapshot &nbsp;·&nbsp;
+              {new Date().toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+            </p>
+          </div>
+          <Btn variant="ghost" small onClick={load}>↻ Refresh</Btn>
+        </div>
+
+        {/* ── Budget KPIs ── */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <SectionLabel text="Budget" />
+          <div className="ov-grid-4">
+            {budgetCards.map((item, i) => <KpiCard key={i} item={item} />)}
+          </div>
+        </div>
+
+        {/* ── Invoice & Operations KPIs ── */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <SectionLabel text="Invoices & Operations" />
+          <div className="ov-grid-4">
+            {invoiceCards.map((item, i) => <KpiCard key={i} item={item} />)}
+          </div>
+        </div>
+
+        {/* ── Charts ── */}
+        <div className="ov-grid-2">
+          <Card>
+            <h3 style={{ margin: "0 0 16px", fontSize: 11, fontWeight: 700, color: C.textMuted, letterSpacing: 1.2, textTransform: "uppercase" }}>Budget Breakdown</h3>
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie
+                  data={[
+                    { name: "Active", value: active_budget },
+                    { name: "Inactive", value: inactive_budget },
+                    { name: "Burned", value: total_burned },
+                  ]}
+                  cx="50%" cy="50%" outerRadius={82} innerRadius={52} dataKey="value" paddingAngle={3}
+                >
+                  {[C.green, C.textMuted, C.amber].map((col, i) => <Cell key={i} fill={col} />)}
+                </Pie>
+                <Tooltip formatter={(v) => fmt$(v)} contentStyle={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12 }} />
+                <Legend iconType="circle" iconSize={8} formatter={(v, e) => <span style={{ color: C.textDim, fontSize: 12 }}>{v}: {fmt$(e.payload.value)}</span>} />
+              </PieChart>
+            </ResponsiveContainer>
+          </Card>
+
+          <Card>
+            <h3 style={{ margin: "0 0 16px", fontSize: 11, fontWeight: 700, color: C.textMuted, letterSpacing: 1.2, textTransform: "uppercase" }}>Invoice Breakdown</h3>
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie
+                  data={[
+                    { name: "Collected", value: invoice_cleared },
+                    { name: "Outstanding", value: invoice_pending },
+                  ]}
+                  cx="50%" cy="50%" outerRadius={82} innerRadius={52} dataKey="value" paddingAngle={3}
+                >
+                  {[C.green, C.red].map((col, i) => <Cell key={i} fill={col} />)}
+                </Pie>
+                <Tooltip formatter={(v) => fmt$(v)} contentStyle={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12 }} />
+                <Legend iconType="circle" iconSize={8} formatter={(v, e) => <span style={{ color: C.textDim, fontSize: 12 }}>{v}: {fmt$(e.payload.value)}</span>} />
+              </PieChart>
+            </ResponsiveContainer>
+          </Card>
+        </div>
+
+        {/* ── Project Burn Rates ── */}
+        <Card>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
+            <h3 style={{ margin: 0, fontSize: 11, fontWeight: 700, color: C.textMuted, letterSpacing: 1.2, textTransform: "uppercase" }}>Project Burn Rate</h3>
+            <span style={{ fontSize: 11, color: C.textMuted, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 20, padding: "3px 10px", fontWeight: 600 }}>
+              {projects.length} projects
+            </span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+            {projects.map(p => {
+              const pct = (((p.burned || 0) / p.budget) * 100).toFixed(1);
+              const statusColor = +pct > 85 ? C.red : +pct > 65 ? C.amber : C.green;
+              return (
+                <div key={p.id}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: statusColor, flexShrink: 0, boxShadow: `0 0 6px ${statusColor}88` }} />
+                      <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{p.name}</span>
+                      <StatusBadge status={p.status} />
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+                      <span style={{ fontSize: 11, color: C.textMuted }}>{fmt$(p.burned || 0)} / {fmt$(p.budget)}</span>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: statusColor, minWidth: 42, textAlign: "right" }}>{pct}%</span>
+                    </div>
+                  </div>
+                  <ProgressBar value={p.burned || 0} max={p.budget} />
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+
+        {/* ── Clients ── */}
+        <Card style={{ padding: 0, overflow: "hidden" }}>
+          <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <h3 style={{ margin: 0, fontSize: 11, fontWeight: 700, color: C.textMuted, letterSpacing: 1.2, textTransform: "uppercase" }}>Clients</h3>
+            <span style={{ fontSize: 11, color: C.textMuted, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 20, padding: "3px 10px", fontWeight: 600 }}>
+              {clients.length} total
+            </span>
+          </div>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead style={{ background: C.surface }}>
+                <tr>
+                  {["Client", "Email", "Phone", "GST Number", "Pay Day"].map(h => (
+                    <th key={h} style={{ padding: "10px 16px", fontSize: 11, fontWeight: 700, color: C.textMuted, letterSpacing: .5, textAlign: "left", textTransform: "uppercase", whiteSpace: "nowrap", borderBottom: `1px solid ${C.border}` }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {clients.length === 0 && (
+                  <tr><td colSpan={5} style={{ padding: 40, textAlign: "center", color: C.textMuted, fontSize: 13 }}>No clients yet.</td></tr>
+                )}
+                {clients.map((c) => (
+                  <tr key={c.id} className="ov-tr-hover" style={{ borderBottom: `1px solid ${C.border}22` }}>
+                    <td style={{ padding: "12px 16px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{
+                          width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                          background: C.accent + "22", border: `1px solid ${C.accent}33`,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontSize: 12, fontWeight: 700, color: C.accent,
+                        }}>{mkAvi(c.client_name)}</div>
+                        <span style={{ fontWeight: 700, color: C.text, fontSize: 13 }}>{c.client_name}</span>
+                      </div>
+                    </td>
+                    <td style={{ padding: "12px 16px", fontSize: 12 }}>
+                      {c.email ? <a href={`mailto:${c.email}`} style={{ color: C.accent, textDecoration: "none" }}>{c.email}</a> : <span style={{ color: C.textMuted }}>—</span>}
+                    </td>
+                    <td style={{ padding: "12px 16px", fontSize: 12 }}>
+                      {c.phone_number ? <a href={`tel:${c.phone_number}`} style={{ color: C.text, textDecoration: "none" }}>{c.phone_number}</a> : <span style={{ color: C.textMuted }}>—</span>}
+                    </td>
+                    <td style={{ padding: "12px 16px", fontSize: 12, color: C.textMuted, fontFamily: "monospace" }}>{c.gst_number || "—"}</td>
+                    <td style={{ padding: "12px 16px" }}>
+                      {c.pay_day
+                        ? <span style={{ background: C.accent + "22", color: C.accent, padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600 }}>Day {c.pay_day}</span>
+                        : <span style={{ color: C.textMuted, fontSize: 12 }}>—</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+
+      </div>
+    </>
   );
 }
 
@@ -1991,81 +2126,196 @@ function Dashboard() {
 // PROJECTS
 // ════════════════════════════════════════════════════════
 function Projects({ readOnly = false }) {
-  const [projects, setProjects] = useState([]); const [loading, setLoading] = useState(true); const [err, setErr] = useState("");
+  const [projects, setProjects] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
   const [modal, setModal] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async () => { setLoading(true); setErr(""); try { setProjects(await api.getProjects()); } catch (e) { setErr(e.message); } finally { setLoading(false); } });
+  const load = useCallback(async () => {
+    setLoading(true); setErr("");
+    try { setProjects(await api.getProjects()); } catch (e) { setErr(e.message); } finally { setLoading(false); }
+  });
   useEffect(() => { load(); }, []);
 
   if (loading) return <Spinner />;
   if (err) return <ErrBox msg={err} onRetry={load} />;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
-        <div><h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>Projects</h2>
-          <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>Manage project codes & budgets</p></div>
-        {!readOnly && <Btn onClick={() => setModal("new")}>+ New Project</Btn>}
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(340px,1fr))", gap: 16 }}>
-        {projects.map(p => {
-          const burned = p.burned || 0; const pct = ((burned / p.budget) * 100).toFixed(1);
-          return (<Card key={p.id} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <div><div style={{ fontSize: 11, color: C.accent, fontWeight: 700, letterSpacing: .5, marginBottom: 4 }}>{p.code}</div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>{p.name}</div>
-                <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>{p.client}</div></div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <StatusBadge status={p.status} />
-                {!readOnly && <Btn small variant="ghost" onClick={() => setModal(p)}>✏</Btn>}
-              </div>
-            </div>
-            <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              {[["Budget", fmt$(p.budget), C.text], ["Burned", fmt$(burned), pct > 85 ? C.red : C.amber]].map(([l, v, col]) => (
-                <div key={l} style={{ background: C.surface, borderRadius: 8, padding: "8px 12px" }}>
-                  <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>{l}</div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: col }}>{v}</div>
+    <>
+      <style>{`
+        .prj-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 20px; }
+        .prj-card {
+          background: ${C.card}; border: 1px solid ${C.border}; border-radius: 16px;
+          display: flex; flex-direction: column; gap: 0; overflow: hidden;
+          transition: transform .2s, box-shadow .2s;
+        }
+        .prj-card:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(0,0,0,0.45); }
+        .prj-stat { background: ${C.surface}; border-radius: 10px; padding: 12px 14px; }
+        .prj-stat-label { font-size: 11px; color: ${C.textMuted}; font-weight: 600; letter-spacing: .4px; text-transform: uppercase; margin-bottom: 5px; }
+        .prj-stat-value { font-size: 15px; font-weight: 800; letter-spacing: -0.3px; }
+        .prj-bar-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+        .prj-bar-label { font-size: 11px; color: ${C.textMuted}; font-weight: 600; letter-spacing: .4px; }
+        .prj-bar-pct { font-size: 11px; font-weight: 700; }
+        @media (max-width: 760px) { .prj-grid { grid-template-columns: 1fr; } }
+      `}</style>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: -0.5 }}>Projects</h2>
+            <p style={{ margin: "5px 0 0", color: C.textMuted, fontSize: 13 }}>
+              Manage project codes, budgets & receivables &nbsp;·&nbsp; {projects.length} total
+            </p>
+          </div>
+          {!readOnly && <Btn onClick={() => setModal("new")}>+ New Project</Btn>}
+        </div>
+
+        {/* Cards */}
+        <div className="prj-grid">
+          {projects.map(p => {
+            const burned = p.burned || 0;
+            const received = p.received_amount || 0;
+            const balance = p.budget - received;
+            const burnPct = p.budget ? ((burned / p.budget) * 100).toFixed(1) : 0;
+            const collPct = p.budget ? ((received / p.budget) * 100).toFixed(1) : 0;
+            const burnColor = +burnPct > 85 ? C.red : +burnPct > 65 ? C.amber : C.accent;
+            const balColor = balance < 0 ? C.red : balance === 0 ? C.green : C.amber;
+            const collColor = +collPct >= 100 ? C.green : +collPct > 50 ? C.accent : C.amber;
+
+            return (
+              <div key={p.id} className="prj-card">
+                {/* Card Header */}
+                <div style={{ padding: "18px 20px 16px", borderBottom: `1px solid ${C.border}` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                    <span style={{
+                      fontSize: 11, fontWeight: 700, color: C.accent, letterSpacing: .8,
+                      background: C.accent + "18", border: `1px solid ${C.accent}33`,
+                      padding: "3px 8px", borderRadius: 6,
+                    }}>{p.code}</span>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <StatusBadge status={p.status} />
+                      {!readOnly && (
+                        <button onClick={() => setModal(p)} style={{
+                          background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8,
+                          color: C.textDim, cursor: "pointer", fontSize: 13, padding: "4px 10px",
+                          transition: "border-color .15s, color .15s",
+                        }}
+                          onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
+                          onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.textDim; }}
+                        >✏ Edit</button>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 17, fontWeight: 700, color: C.text, lineHeight: 1.3 }}>{p.name}</div>
+                  {p.client && (
+                    <div style={{ fontSize: 12, color: C.textMuted, marginTop: 4, display: "flex", alignItems: "center", gap: 5 }}>
+                      <span style={{ fontSize: 10 }}>🏢</span>{p.client}
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
-            <ProgressBar value={burned} max={p.budget} />
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: C.textMuted }}>
-              <span>{fmtD(p.start_date)}</span><span>→</span><span>{fmtD(p.end_date)}</span>
-            </div>
-          </Card>);
-        })}
+
+                {/* Stats Grid */}
+                <div style={{ padding: "16px 20px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <div className="prj-stat">
+                    <div className="prj-stat-label">Budget</div>
+                    <div className="prj-stat-value" style={{ color: C.text }}>{fmt$(p.budget)}</div>
+                  </div>
+                  <div className="prj-stat">
+                    <div className="prj-stat-label">Received</div>
+                    <div className="prj-stat-value" style={{ color: C.green }}>{fmt$(received)}</div>
+                  </div>
+                  <div className="prj-stat">
+                    <div className="prj-stat-label">Balance Pending</div>
+                    <div className="prj-stat-value" style={{ color: balColor }}>{fmt$(Math.abs(balance))}{balance < 0 && <span style={{ fontSize: 10, marginLeft: 4 }}>over</span>}</div>
+                  </div>
+                  <div className="prj-stat">
+                    <div className="prj-stat-label">Cost Burned</div>
+                    <div className="prj-stat-value" style={{ color: burnColor }}>{fmt$(burned)}</div>
+                  </div>
+                </div>
+
+                {/* Progress Bars */}
+                <div style={{ padding: "0 20px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div>
+                    <div className="prj-bar-row">
+                      <span className="prj-bar-label">Burn Rate</span>
+                      <span className="prj-bar-pct" style={{ color: burnColor }}>{burnPct}%</span>
+                    </div>
+                    <ProgressBar value={burned} max={p.budget} />
+                  </div>
+                  <div>
+                    <div className="prj-bar-row">
+                      <span className="prj-bar-label">Collection Rate</span>
+                      <span className="prj-bar-pct" style={{ color: collColor }}>{collPct}%</span>
+                    </div>
+                    <ProgressBar value={received} max={p.budget} color={collColor} />
+                  </div>
+                </div>
+
+                {/* Footer — dates */}
+                <div style={{
+                  padding: "10px 20px", borderTop: `1px solid ${C.border}`,
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  fontSize: 11, color: C.textMuted,
+                }}>
+                  <span>📅 {fmtD(p.start_date)}</span>
+                  <span style={{ color: C.border }}>→</span>
+                  <span>{fmtD(p.end_date)}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Modal */}
+        {modal && (
+          <Modal title={modal === "new" ? "New Project" : "Edit Project"} onClose={() => setModal(false)}>
+            <ProjectForm
+              init={modal === "new"
+                ? { name: "", client: "", budget: "", receivedAmount: "0", startDate: "", endDate: "", status: "active" }
+                : { name: modal.name, client: modal.client || "", budget: modal.budget, receivedAmount: modal.received_amount || 0, startDate: modal.start_date?.slice(0, 10) || "", endDate: modal.end_date?.slice(0, 10) || "", status: modal.status }}
+              saving={saving}
+              onCancel={() => setModal(false)}
+              onSave={async (form) => {
+                setSaving(true);
+                try {
+                  if (modal === "new") await api.createProject({ ...form, budget: +form.budget, receivedAmount: +form.receivedAmount, assignedGroups: [], assignedEmployees: [] });
+                  else await api.updateProject(modal.id, { ...form, budget: +form.budget, receivedAmount: +form.receivedAmount });
+                  setModal(false); await load();
+                } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setSaving(false); }
+              }}
+            />
+          </Modal>
+        )}
       </div>
-      {modal && (
-        <Modal title={modal === "new" ? "Create New Project" : "Edit Project"} onClose={() => setModal(false)}>
-          <ProjectForm
-            init={modal === "new" ? { name: "", client: "", budget: "", startDate: "", endDate: "", status: "active" } :
-              { name: modal.name, client: modal.client || "", budget: modal.budget, startDate: modal.start_date?.slice(0, 10) || "", endDate: modal.end_date?.slice(0, 10) || "", status: modal.status }}
-            saving={saving}
-            onCancel={() => setModal(false)}
-            onSave={async (form) => {
-              setSaving(true);
-              try {
-                if (modal === "new") await api.createProject({ ...form, budget: +form.budget, assignedGroups: [], assignedEmployees: [] });
-                else await api.updateProject(modal.id, { ...form, budget: +form.budget });
-                setModal(false); await load();
-              } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setSaving(false); }
-            }}
-          />
-        </Modal>
-      )}
-    </div>
+    </>
   );
 }
 
 function ProjectForm({ init, saving, onCancel, onSave }) {
   const [form, setForm] = useState(init);
+  const balance = (+form.budget || 0) - (+form.receivedAmount || 0);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <Inp label="Project Name" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} required placeholder="e.g. Cloud Migration" />
       <Inp label="Client Name" value={form.client} onChange={v => setForm(f => ({ ...f, client: v }))} />
-      <Inp label="Budget (INR)" type="number" value={form.budget} onChange={v => setForm(f => ({ ...f, budget: v }))} required />
-      <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Inp label="Budget (INR)" type="number" value={form.budget} onChange={v => setForm(f => ({ ...f, budget: v }))} required />
+        <Inp label="Received Amount (INR)" type="number" value={form.receivedAmount} onChange={v => setForm(f => ({ ...f, receivedAmount: v }))} />
+      </div>
+      {/* Live balance preview */}
+      <div style={{
+        background: C.surface, border: `1px solid ${balance < 0 ? C.red : balance === 0 ? C.green : C.amber}44`,
+        borderRadius: 8, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center",
+      }}>
+        <span style={{ fontSize: 12, color: C.textMuted, fontWeight: 600 }}>Balance Pending</span>
+        <span style={{ fontSize: 15, fontWeight: 800, color: balance < 0 ? C.red : balance === 0 ? C.green : C.amber }}>
+          {fmt$(Math.abs(balance))}{balance < 0 ? " (over-received)" : balance === 0 ? " (fully paid)" : ""}
+        </span>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <Inp label="Start Date" type="date" value={form.startDate} onChange={v => setForm(f => ({ ...f, startDate: v }))} />
         <Inp label="End Date" type="date" value={form.endDate} onChange={v => setForm(f => ({ ...f, endDate: v }))} />
       </div>
@@ -2374,7 +2624,7 @@ function Timesheets({ currentUser, viewOnly }) {
 
   async function handleSubmitWeek() {
     const startDate = isoDate(weekOf);
-    const endDate   = isoDate(addDays(weekOf, 6));
+    const endDate = isoDate(addDays(weekOf, 6));
     const draftCount = rows.filter(r => r.work_date?.slice(0, 10) >= startDate && r.work_date?.slice(0, 10) <= endDate && r.status === "draft").length;
     if (draftCount === 0) { dialog.alert("No saved (draft) entries to submit for this week."); return; }
     if (!await dialog.confirm(`Submit ${draftCount} draft entr${draftCount === 1 ? "y" : "ies"} for this week to your manager?`, { title: "Submit Timesheet", dtype: "info" })) return;
@@ -2420,69 +2670,109 @@ function Timesheets({ currentUser, viewOnly }) {
 
   function WeekView() {
     const todayIso = isoDate(new Date());
+    const wStart = isoDate(weekDays[0]);
+    const wEnd = isoDate(weekDays[6]);
+    const draftCount = rows.filter(r => r.work_date?.slice(0, 10) >= wStart && r.work_date?.slice(0, 10) <= wEnd && r.status === "draft").length;
+
+    const statusColor = s => s === "approved" ? C.green : s === "rejected" ? C.red : s === "draft" ? C.border : C.amber;
+
     return (
-      <div>
-        {/* Week navigation */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
-          <button onClick={() => setWeekOf(d => addDays(d, -7))} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 14px", color: C.textDim, cursor: "pointer", fontSize: 16 }}>‹</button>
-          <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>
-            {weekDays[0].toLocaleDateString("en-US", { month: "short", day: "numeric" })} – {weekDays[6].toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-          </span>
-          <button onClick={() => setWeekOf(d => addDays(d, 7))} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 14px", color: C.textDim, cursor: "pointer", fontSize: 16 }}>›</button>
-          <Btn small variant="ghost" onClick={() => setWeekOf(weekStart(new Date()))}>Today</Btn>
-          {viewOnly && (() => {
-            const wStart = isoDate(weekDays[0]);
-            const wEnd   = isoDate(weekDays[6]);
-            const draftCount = rows.filter(r => r.work_date?.slice(0, 10) >= wStart && r.work_date?.slice(0, 10) <= wEnd && r.status === "draft").length;
-            return draftCount > 0 ? (
-              <Btn small onClick={handleSubmitWeek} disabled={saving}
-                style={{ background: C.accent, color: "#fff", border: "none", borderRadius: 8, padding: "6px 16px", fontWeight: 700, cursor: "pointer" }}>
-                {saving ? "Submitting…" : `Submit Week (${draftCount})`}
-              </Btn>
-            ) : null;
-          })()}
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {/* Week Nav */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: "4px 6px" }}>
+            <button onClick={() => setWeekOf(d => addDays(d, -7))}
+              style={{ background: "transparent", border: "none", borderRadius: 8, padding: "5px 12px", color: C.textMuted, cursor: "pointer", fontSize: 17, lineHeight: 1, transition: "color .15s" }}
+              onMouseEnter={e => e.currentTarget.style.color = C.text}
+              onMouseLeave={e => e.currentTarget.style.color = C.textMuted}>‹</button>
+            <span style={{ fontSize: 14, fontWeight: 700, color: C.text, minWidth: 200, textAlign: "center" }}>
+              {weekDays[0].toLocaleDateString("en-US", { month: "short", day: "numeric" })} — {weekDays[6].toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+            </span>
+            <button onClick={() => setWeekOf(d => addDays(d, 7))}
+              style={{ background: "transparent", border: "none", borderRadius: 8, padding: "5px 12px", color: C.textMuted, cursor: "pointer", fontSize: 17, lineHeight: 1, transition: "color .15s" }}
+              onMouseEnter={e => e.currentTarget.style.color = C.text}
+              onMouseLeave={e => e.currentTarget.style.color = C.textMuted}>›</button>
+          </div>
+          <button onClick={() => setWeekOf(weekStart(new Date()))}
+            style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: "7px 14px", color: C.textMuted, fontSize: 12, fontWeight: 700, cursor: "pointer", letterSpacing: .3 }}>
+            Today
+          </button>
+          {viewOnly && draftCount > 0 && (
+            <button onClick={handleSubmitWeek} disabled={saving}
+              style={{ background: C.accent, border: "none", borderRadius: 10, padding: "7px 18px", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 7, boxShadow: `0 4px 14px ${C.accent}44` }}>
+              <span>📤</span>{saving ? "Submitting…" : `Submit Week (${draftCount})`}
+            </button>
+          )}
         </div>
 
         {/* Day columns */}
-        <div className="resp-table-wrap">
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 8, minWidth: 560 }}>
+        <div style={{ overflowX: "auto" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(120px, 1fr))", gap: 8, minWidth: 600 }}>
             {weekDays.map((day, i) => {
               const iso = isoDate(day);
               const isToday = iso === todayIso;
+              const isWeekend = i >= 5;
               const dayRows = rows.filter(r => r.work_date?.slice(0, 10) === iso);
               const totalHrs = dayRows.reduce((s, r) => s + (+r.hours || 0), 0);
               const isAdding = addRow && addRow.dayIso === iso;
 
               return (
-                <div key={iso} style={{ background: isToday ? C.accentGlow : C.card, border: `1px solid ${isToday ? C.accent : C.border}`, borderRadius: 10, padding: 12, minHeight: 160, display: "flex", flexDirection: "column", gap: 6 }}>
-                  {/* Header */}
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                <div key={iso} style={{
+                  background: isToday ? `linear-gradient(160deg, ${C.accent}14, ${C.accent}06)` : isWeekend ? C.bg + "88" : C.card,
+                  border: `1px solid ${isToday ? C.accent + "66" : C.border}`,
+                  borderRadius: 14, padding: "12px 10px", minHeight: 180,
+                  display: "flex", flexDirection: "column", gap: 6,
+                  transition: "box-shadow .2s",
+                }}>
+                  {/* Day header */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
                     <div>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: .5 }}>{DAY_NAMES[i]}</div>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: isToday ? C.accent : C.text }}>{day.getDate()}</div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: isWeekend ? C.textMuted : C.textMuted, textTransform: "uppercase", letterSpacing: .8 }}>{DAY_NAMES[i]}</div>
+                      <div style={{
+                        marginTop: 3, width: 30, height: 30, borderRadius: "50%",
+                        background: isToday ? C.accent : "transparent",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 15, fontWeight: 800,
+                        color: isToday ? "#fff" : isWeekend ? C.textMuted : C.text,
+                      }}>{day.getDate()}</div>
                     </div>
-                    {totalHrs > 0 && <div style={{ fontSize: 11, fontWeight: 700, color: C.green, background: C.green + "18", borderRadius: 4, padding: "2px 6px" }}>{totalHrs}h</div>}
+                    {totalHrs > 0 && (
+                      <div style={{ background: C.green + "20", border: `1px solid ${C.green}44`, borderRadius: 8, padding: "2px 8px", fontSize: 11, fontWeight: 800, color: C.green }}>{totalHrs}h</div>
+                    )}
                   </div>
 
-                  {/* Timesheet rows */}
+                  {/* Entry chips */}
                   <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 5 }}>
                     {dayRows.map(r => (
-                      <div key={r.id} style={{ background: r.status === "draft" ? C.bg : C.surface, borderRadius: 6, padding: "5px 8px", display: "flex", justifyContent: "space-between", alignItems: "center", border: `1px solid ${r.status === "approved" ? C.green + "44" : r.status === "rejected" ? C.red + "44" : r.status === "draft" ? C.border : C.border}`, opacity: r.status === "draft" ? 0.75 : 1 }}>
-                        <div style={{ minWidth: 0 }}>
+                      <div key={r.id} style={{
+                        background: C.surface, borderRadius: 8,
+                        padding: "6px 8px",
+                        borderLeft: `3px solid ${statusColor(r.status)}`,
+                        border: `1px solid ${C.border}22`,
+                        borderLeftWidth: 3, borderLeftStyle: "solid", borderLeftColor: statusColor(r.status),
+                        display: "flex", justifyContent: "space-between", alignItems: "center",
+                        opacity: r.status === "draft" ? 0.7 : 1,
+                      }}>
+                        <div style={{ minWidth: 0, flex: 1 }}>
                           <div style={{ fontSize: 11, fontWeight: 700, color: C.accent, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.project_code}</div>
-                          {!viewOnly && <div style={{ fontSize: 10, color: C.textMuted }}>{r.employee_name}</div>}
-                          <div style={{ fontSize: 10, color: C.textMuted }}>{r.hours}h · <span style={{ color: r.status === "approved" ? C.green : r.status === "rejected" ? C.red : r.status === "draft" ? C.textMuted : C.amber }}>{r.status === "draft" ? "saved" : r.status}</span></div>
+                          {!viewOnly && <div style={{ fontSize: 10, color: C.textMuted, marginTop: 1 }}>{r.employee_name}</div>}
+                          <div style={{ fontSize: 10, color: C.textMuted, marginTop: 1 }}>
+                            {r.hours}h · <span style={{ color: statusColor(r.status), fontWeight: 600 }}>{r.status === "draft" ? "saved" : r.status}</span>
+                          </div>
                         </div>
-                        <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                        <div style={{ display: "flex", gap: 3, flexShrink: 0, marginLeft: 4 }}>
                           {(r.status === "pending" || r.status === "draft") && (
-                            <button onClick={() => handleDelete(r.id)} title="Remove" style={{ background: "none", border: "none", cursor: "pointer", color: C.textMuted, fontSize: 13, padding: "0 2px", lineHeight: 1 }}>🗑</button>
+                            <button onClick={() => handleDelete(r.id)} title="Remove"
+                              style={{ background: "none", border: "none", cursor: "pointer", color: C.textMuted, fontSize: 13, padding: "1px 3px", borderRadius: 4, lineHeight: 1, transition: "color .15s" }}
+                              onMouseEnter={e => e.currentTarget.style.color = C.red}
+                              onMouseLeave={e => e.currentTarget.style.color = C.textMuted}>🗑</button>
                           )}
-                          {!viewOnly && r.status === "pending" && (
-                            <button onClick={() => handleApprove(r.id)} title="Approve" style={{ background: "none", border: "none", cursor: "pointer", color: C.green, fontSize: 13, padding: "0 2px", lineHeight: 1 }}>✓</button>
-                          )}
-                          {!viewOnly && r.status === "pending" && (
-                            <button onClick={() => handleReject(r.id)} title="Reject" style={{ background: "none", border: "none", cursor: "pointer", color: C.red, fontSize: 13, padding: "0 2px", lineHeight: 1 }}>✕</button>
-                          )}
+                          {!viewOnly && r.status === "pending" && (<>
+                            <button onClick={() => handleApprove(r.id)} title="Approve"
+                              style={{ background: C.green + "18", border: `1px solid ${C.green}44`, cursor: "pointer", color: C.green, fontSize: 11, padding: "2px 5px", borderRadius: 5, fontWeight: 700, lineHeight: 1 }}>✓</button>
+                            <button onClick={() => handleReject(r.id)} title="Reject"
+                              style={{ background: C.red + "18", border: `1px solid ${C.red}44`, cursor: "pointer", color: C.red, fontSize: 11, padding: "2px 5px", borderRadius: 5, fontWeight: 700, lineHeight: 1 }}>✕</button>
+                          </>)}
                         </div>
                       </div>
                     ))}
@@ -2490,31 +2780,33 @@ function Timesheets({ currentUser, viewOnly }) {
 
                   {/* Inline add form */}
                   {isAdding ? (
-                    <div style={{ background: C.surface, borderRadius: 6, padding: 8, border: `1px solid ${C.accent}44`, display: "flex", flexDirection: "column", gap: 6 }}>
+                    <div style={{ background: C.surface, borderRadius: 10, padding: 10, border: `1px solid ${C.accent}44`, display: "flex", flexDirection: "column", gap: 7 }}>
                       <select value={addRow.projectId || ""} onChange={e => setAddRow(r => ({ ...r, projectId: e.target.value }))}
-                        style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, padding: "4px 6px", fontSize: 11, width: "100%" }}>
-                        <option value="">Project…</option>
+                        style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "5px 8px", fontSize: 11, width: "100%", outline: "none" }}>
+                        <option value="">Select project…</option>
                         {myProjs.map(p => <option key={p.id} value={p.id}>{p.code} – {p.name}</option>)}
                       </select>
                       <input type="number" value={addRow.hours || ""} onChange={e => setAddRow(r => ({ ...r, hours: e.target.value }))}
-                        placeholder="Hours" min="0.5" max="24" step="0.5"
-                        style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, padding: "4px 6px", fontSize: 11, width: "100%" }} />
-                      <div style={{ display: "flex", gap: 4 }}>
-                        <button onClick={handleAdd} disabled={saving} style={{ flex: 1, background: C.accent, border: "none", borderRadius: 5, color: "#fff", fontSize: 11, fontWeight: 700, padding: "4px 0", cursor: "pointer" }}>
+                        placeholder="Hours (e.g. 4)" min="0.5" max="24" step="0.5"
+                        style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "5px 8px", fontSize: 11, width: "100%", outline: "none", boxSizing: "border-box" }} />
+                      <div style={{ display: "flex", gap: 5 }}>
+                        <button onClick={handleAdd} disabled={saving}
+                          style={{ flex: 1, background: C.accent, border: "none", borderRadius: 8, color: "#fff", fontSize: 11, fontWeight: 700, padding: "5px 0", cursor: "pointer" }}>
                           {saving ? "…" : "Save"}
                         </button>
-                        <button onClick={() => setAddRow(null)} style={{ flex: 1, background: "transparent", border: `1px solid ${C.border}`, borderRadius: 5, color: C.textMuted, fontSize: 11, padding: "4px 0", cursor: "pointer" }}>✕</button>
+                        <button onClick={() => setAddRow(null)}
+                          style={{ flex: 1, background: "transparent", border: `1px solid ${C.border}`, borderRadius: 8, color: C.textMuted, fontSize: 11, padding: "5px 0", cursor: "pointer" }}>Cancel</button>
                       </div>
                     </div>
-                  ) : (
+                  ) : viewOnly ? (
                     <button onClick={() => setAddRow({ dayIso: iso, projectId: "", hours: "" })}
-                      style={{ background: "transparent", border: `1px dashed ${C.border}`, borderRadius: 6, color: C.textMuted, fontSize: 20, padding: "4px 0", cursor: "pointer", lineHeight: 1, transition: "all .15s" }}
-                      title="Add project hours"
-                      onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.textMuted; }}>
+                      style={{ background: "transparent", border: `1px dashed ${C.border}`, borderRadius: 8, color: C.textMuted, fontSize: 18, padding: "5px 0", cursor: "pointer", lineHeight: 1, transition: "all .15s", marginTop: "auto" }}
+                      title="Log hours"
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; e.currentTarget.style.background = C.accent + "0a"; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.textMuted; e.currentTarget.style.background = "transparent"; }}>
                       ＋
                     </button>
-                  )}
+                  ) : null}
                 </div>
               );
             })}
@@ -2524,203 +2816,299 @@ function Timesheets({ currentUser, viewOnly }) {
     );
   }
 
-  // ── Month view (read-only summary tiles) ─────────────────
+  // ── Month view ─────────────────────────────────────────
   function MonthView() {
     const { y, m } = monthOf;
     const firstDay = new Date(y, m, 1);
     const lastDay = new Date(y, m + 1, 0);
-    // pad to start on Monday
     let startPad = (firstDay.getDay() + 6) % 7;
     const grid = [];
-    for (let i = 0; i < startPad; i++)grid.push(null);
-    for (let d = 1; d <= lastDay.getDate(); d++)grid.push(new Date(y, m, d));
+    for (let i = 0; i < startPad; i++) grid.push(null);
+    for (let d = 1; d <= lastDay.getDate(); d++) grid.push(new Date(y, m, d));
     while (grid.length % 7 !== 0) grid.push(null);
     const todayIso = isoDate(new Date());
 
+    // Monthly summary
+    const monthRows = rows.filter(r => {
+      const d = new Date(r.work_date);
+      return d.getFullYear() === y && d.getMonth() === m;
+    });
+    const totalMonthHrs = monthRows.reduce((s, r) => s + (+r.hours || 0), 0);
+    const approvedHrs = monthRows.filter(r => r.status === "approved").reduce((s, r) => s + (+r.hours || 0), 0);
+
     return (
-      <div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-          <button onClick={() => setMonthOf(({ y, m }) => m === 0 ? { y: y - 1, m: 11 } : { y, m: m - 1 })} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 14px", color: C.textDim, cursor: "pointer", fontSize: 16 }}>‹</button>
-          <span style={{ fontSize: 15, fontWeight: 800, color: C.text }}>{MONTH_NAMES[m]} {y}</span>
-          <button onClick={() => setMonthOf(({ y, m }) => m === 11 ? { y: y + 1, m: 0 } : { y, m: m + 1 })} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 14px", color: C.textDim, cursor: "pointer", fontSize: 16 }}>›</button>
-          <Btn small variant="ghost" onClick={() => { const n = new Date(); setMonthOf({ y: n.getFullYear(), m: n.getMonth() }); }}>Today</Btn>
-        </div>
-        <div className="resp-table-wrap">
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 2, marginBottom: 4, minWidth: 480 }}>
-            {DAY_NAMES.map(d => <div key={d} style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: C.textMuted, padding: "4px 0", textTransform: "uppercase" }}>{d}</div>)}
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {/* Month Nav */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: "4px 6px" }}>
+            <button onClick={() => setMonthOf(({ y, m }) => m === 0 ? { y: y - 1, m: 11 } : { y, m: m - 1 })}
+              style={{ background: "transparent", border: "none", borderRadius: 8, padding: "5px 12px", color: C.textMuted, cursor: "pointer", fontSize: 17, lineHeight: 1 }}>‹</button>
+            <span style={{ fontSize: 15, fontWeight: 800, color: C.text, minWidth: 150, textAlign: "center" }}>{MONTH_NAMES[m]} {y}</span>
+            <button onClick={() => setMonthOf(({ y, m }) => m === 11 ? { y: y + 1, m: 0 } : { y, m: m + 1 })}
+              style={{ background: "transparent", border: "none", borderRadius: 8, padding: "5px 12px", color: C.textMuted, cursor: "pointer", fontSize: 17, lineHeight: 1 }}>›</button>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4, minWidth: 480 }}>
+          <button onClick={() => { const n = new Date(); setMonthOf({ y: n.getFullYear(), m: n.getMonth() }); }}
+            style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: "7px 14px", color: C.textMuted, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Today</button>
+
+          {/* Month summary chips */}
+          <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+            <div style={{ background: C.accent + "18", border: `1px solid ${C.accent}33`, borderRadius: 10, padding: "6px 14px", fontSize: 12, fontWeight: 700, color: C.accent }}>{totalMonthHrs}h logged</div>
+            <div style={{ background: C.green + "18", border: `1px solid ${C.green}33`, borderRadius: 10, padding: "6px 14px", fontSize: 12, fontWeight: 700, color: C.green }}>{approvedHrs}h approved</div>
+          </div>
+        </div>
+
+        {/* Calendar grid */}
+        <div style={{ overflowX: "auto" }}>
+          {/* Day headers */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4, marginBottom: 6, minWidth: 420 }}>
+            {DAY_NAMES.map((d, i) => (
+              <div key={d} style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: i >= 5 ? C.textMuted + "88" : C.textMuted, padding: "4px 0", textTransform: "uppercase", letterSpacing: .6 }}>{d}</div>
+            ))}
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 5, minWidth: 420 }}>
             {grid.map((day, idx) => {
               if (!day) return <div key={idx} />;
               const iso = isoDate(day);
               const isToday = iso === todayIso;
+              const isWeekend = [0, 6].includes(day.getDay());
               const dayRows = rows.filter(r => r.work_date?.slice(0, 10) === iso);
               const totalHrs = dayRows.reduce((s, r) => s + (+r.hours || 0), 0);
               const hasApproved = dayRows.some(r => r.status === "approved");
               const hasPending = dayRows.some(r => r.status === "pending");
-              const dotColor = hasApproved ? C.green : hasPending ? C.amber : "transparent";
+              const dotColor = hasApproved ? C.green : hasPending ? C.amber : null;
+
               return (
-                <div key={iso} onClick={() => { if (dayRows.length) setDayPanel({ iso, dayRows }); }}
-                  style={{ background: isToday ? C.accentGlow : C.card, border: `1px solid ${isToday ? C.accent : C.border}`, borderRadius: 8, padding: "8px 4px", minHeight: 60, cursor: dayRows.length ? "pointer" : "default", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, transition: "opacity .15s" }}
-                  onMouseEnter={e => { if (dayRows.length) e.currentTarget.style.opacity = ".8"; }}
-                  onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}>
-                  <div style={{ fontSize: 13, fontWeight: isToday ? 800 : 500, color: isToday ? C.accent : C.text }}>{day.getDate()}</div>
-                  {totalHrs > 0 && <div style={{ fontSize: 10, fontWeight: 700, color: C.green }}>{totalHrs}h</div>}
-                  {dotColor !== "transparent" && <div style={{ width: 6, height: 6, borderRadius: "50%", background: dotColor }} />}
+                <div key={iso}
+                  onClick={() => dayRows.length && setDayPanel({ iso, dayRows })}
+                  style={{
+                    background: isToday ? `linear-gradient(135deg, ${C.accent}18, ${C.accent}08)` : isWeekend ? C.bg + "66" : C.card,
+                    border: `1px solid ${isToday ? C.accent + "55" : C.border}`,
+                    borderRadius: 10, padding: "8px 6px", minHeight: 68,
+                    cursor: dayRows.length ? "pointer" : "default",
+                    display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+                    transition: "box-shadow .15s, transform .15s",
+                  }}
+                  onMouseEnter={e => { if (dayRows.length) { e.currentTarget.style.boxShadow = `0 4px 16px rgba(0,0,0,0.3)`; e.currentTarget.style.transform = "translateY(-1px)"; } }}
+                  onMouseLeave={e => { e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.transform = "none"; }}>
+                  <div style={{
+                    width: 26, height: 26, borderRadius: "50%",
+                    background: isToday ? C.accent : "transparent",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 12, fontWeight: isToday ? 800 : 500,
+                    color: isToday ? "#fff" : isWeekend ? C.textMuted : C.text,
+                  }}>{day.getDate()}</div>
+                  {totalHrs > 0 && <div style={{ fontSize: 10, fontWeight: 800, color: C.green }}>{totalHrs}h</div>}
+                  {dotColor && <div style={{ width: 5, height: 5, borderRadius: "50%", background: dotColor }} />}
                 </div>
               );
             })}
           </div>
         </div>
+
+        {/* Legend */}
+        <div style={{ display: "flex", gap: 16, fontSize: 11, color: C.textMuted, flexWrap: "wrap" }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: C.green, display: "inline-block" }} />Approved</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: C.amber, display: "inline-block" }} />Pending</span>
+          <span style={{ color: C.textMuted }}>Click a day to see entries</span>
+        </div>
       </div>
     );
   }
 
+  // ── Summary KPIs for the selected week ─────────────────
+  const wStart = isoDate(weekDays[0]);
+  const wEnd = isoDate(weekDays[6]);
+  const weekRowsAll = rows.filter(r => r.work_date?.slice(0, 10) >= wStart && r.work_date?.slice(0, 10) <= wEnd);
+  const weekTotalHrs = weekRowsAll.reduce((s, r) => s + (+r.hours || 0), 0);
+  const weekApproved = weekRowsAll.filter(r => r.status === "approved").reduce((s, r) => s + (+r.hours || 0), 0);
+  const weekPending = weekRowsAll.filter(r => r.status === "pending").length;
+  const weekDraft = weekRowsAll.filter(r => r.status === "draft").length;
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 10 }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>{viewOnly ? "My Timesheets" : "Timesheets"}</h2>
-          <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>{viewOnly ? "Click ＋ on any day to log hours" : "Work-week view — approve pending entries"}</p>
-        </div>
-        {/* View toggle */}
-        <div style={{ display: "flex", gap: 4, background: C.surface, padding: 4, borderRadius: 10 }}>
-          {[["week", "📅 Work Week"], ["month", "🗓 Month"]].map(([v, label]) => (
-            <button key={v} onClick={() => setCalView(v)} style={{
-              background: calView === v ? C.card : "transparent", color: calView === v ? C.text : C.textMuted,
-              border: calView === v ? `1px solid ${C.border}` : "1px solid transparent",
-              borderRadius: 8, padding: "6px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer"
-            }}>{label}</button>
-          ))}
-        </div>
-      </div>
+    <>
+      <style>{`
+        .ts-kpi-row { display: flex; gap: 12px; flex-wrap: wrap; }
+        .ts-kpi-card { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 14px; padding: 14px 18px; display: flex; align-items: center; gap: 12px; flex: 1 1 150px; transition: box-shadow .2s; }
+        .ts-kpi-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+        .ts-list-row { display: grid; grid-template-columns: 1.5fr 1fr 1fr 0.7fr 1.5fr 0.8fr 1fr; align-items: center; gap: 0; padding: 11px 20px; border-bottom: 1px solid ${C.border}22; transition: background .15s; }
+        .ts-list-row:hover { background: ${C.accentGlow}; }
+        .ts-list-row:last-child { border-bottom: none; }
+        @media (max-width: 900px) {
+          .ts-list-row { grid-template-columns: 1fr 1fr 1fr 0.6fr auto auto auto; font-size: 12px; padding: 10px 14px; }
+        }
+        @media (max-width: 640px) {
+          .ts-kpi-card { flex: 1 1 130px; padding: 12px 14px; }
+        }
+      `}</style>
 
-      {/* Calendar */}
-      <Card style={{ padding: 20 }}>
-        {calView === "week" ? <WeekView /> : <MonthView />}
-      </Card>
+      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
-      {/* Admin legend */}
-      {!viewOnly && (
-        <div style={{ display: "flex", gap: 16, fontSize: 12, color: C.textMuted }}>
-          <span>✓ = Approve &nbsp; ✕ = Reject &nbsp; 🗑 = Delete</span>
-          <span style={{ color: C.green }}>● Approved</span>
-          <span style={{ color: C.amber }}>● Pending</span>
-          <span style={{ color: C.red }}>● Rejected</span>
+        {/* ── Header ── */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: -0.5 }}>
+              {viewOnly ? "My Timesheets" : "Timesheets"}
+            </h2>
+            <p style={{ margin: "5px 0 0", color: C.textMuted, fontSize: 13 }}>
+              {viewOnly ? "Log hours by clicking ＋ on any day" : "Review and approve team timesheet entries"}
+            </p>
+          </div>
+          {/* View toggle */}
+          <div style={{ display: "flex", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 3, gap: 2 }}>
+            {[["week", "📅", "Week"], ["month", "🗓", "Month"]].map(([v, icon, label]) => (
+              <button key={v} onClick={() => setCalView(v)} style={{
+                background: calView === v ? C.card : "transparent",
+                color: calView === v ? C.text : C.textMuted,
+                border: calView === v ? `1px solid ${C.border}` : "1px solid transparent",
+                borderRadius: 10, padding: "7px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer",
+                display: "flex", alignItems: "center", gap: 6, transition: "all .18s",
+              }}>{icon} {label}</button>
+            ))}
+          </div>
         </div>
-      )}
 
-      {/* Day detail panel (month view click / admin) */}
-      {dayPanel && (
-        <Modal title={`Entries for ${new Date(dayPanel.iso + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}`} onClose={() => setDayPanel(null)}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {dayPanel.dayRows.map(r => (
-              <div key={r.id} style={{ background: C.surface, borderRadius: 8, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        {/* ── KPI Summary Row (week view) ── */}
+        {calView === "week" && (
+          <div className="ts-kpi-row">
+            {[
+              { label: "Total Hours", value: `${weekTotalHrs}h`, color: C.accent, icon: "⏱" },
+              { label: "Approved Hrs", value: `${weekApproved}h`, color: C.green, icon: "✅" },
+              { label: "Pending Entries", value: weekPending, color: C.amber, icon: "⏳" },
+              { label: "Draft Entries", value: weekDraft, color: C.textMuted, icon: "📝" },
+            ].map(s => (
+              <div key={s.label} className="ts-kpi-card">
+                <div style={{ width: 38, height: 38, borderRadius: 10, background: s.color + "22", border: `1px solid ${s.color}33`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, flexShrink: 0 }}>{s.icon}</div>
                 <div>
-                  {!viewOnly && <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{r.employee_name}</div>}
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.accent }}>{r.project_code} · {r.hours}h</div>
-                  {r.task && <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{r.task}</div>}
-                </div>
-                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  <StatusBadge status={r.status} />
-                  {!viewOnly && r.status === "pending" && (
-                    <>
-                      <Btn small variant="success" onClick={async () => { await handleApprove(r.id); setDayPanel(null); }}>✓ Approve</Btn>
-                      <Btn small variant="danger" onClick={async () => { await handleReject(r.id); setDayPanel(null); }}>✕ Reject</Btn>
-                    </>
-                  )}
+                  <div style={{ fontSize: 18, fontWeight: 800, color: s.color, lineHeight: 1 }}>{s.value}</div>
+                  <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 600, marginTop: 3, letterSpacing: .3 }}>{s.label}</div>
                 </div>
               </div>
             ))}
           </div>
-        </Modal>
-      )}
+        )}
 
-      {/* Admin / Manager Weekly List View */}
-      {!viewOnly && (
-        <Card>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
-            <div>
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: C.text }}>Weekly Timesheet Requests</h3>
-              <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>List view of the selected week's entries</p>
-            </div>
-            <div style={{ display: "flex", gap: 12 }}>
-              <select value={filterEmp} onChange={e => setFilterEmp(e.target.value)}
-                style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: filterEmp ? C.text : C.textMuted, padding: "8px 12px", fontSize: 13, outline: "none", cursor: "pointer" }}>
-                <option value="">All Employees</option>
-                {Array.from(new Set(rows.map(r => r.employee_name))).map(name => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </select>
-              <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-                style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: filterStatus !== "all" ? C.text : C.textMuted, padding: "8px 12px", fontSize: 13, outline: "none", cursor: "pointer" }}>
-                <option value="all">All Statuses</option>
-                <option value="pending">Pending</option>
-                <option value="approved">Approved</option>
-                <option value="rejected">Rejected</option>
-              </select>
-              <Btn onClick={() => {
-                const start = isoDate(weekDays[0]);
-                const end = isoDate(weekDays[6]);
-                const weekRows = rows.filter(r => r.work_date?.split("T")[0] >= start && r.work_date?.split("T")[0] <= end);
-                const listFiltered = weekRows.filter(r => {
-                  if (filterEmp && r.employee_name !== filterEmp) return false;
-                  if (filterStatus !== "all" && r.status !== filterStatus) return false;
-                  return true;
-                });
-                handleDownloadCSV(listFiltered);
-              }} variant="secondary" style={{ border: `1px solid ${C.accent}`, background: "transparent", color: C.accent }}>
-                📥 Download CSV
-              </Btn>
-            </div>
-          </div>
+        {/* ── Calendar Card ── */}
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "20px 18px" }}>
+          {calView === "week" ? <WeekView /> : <MonthView />}
+        </div>
 
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead style={{ background: C.surface }}><tr>
-                {["Employee", "Project", "Date", "Hours", "Task", "Status", "Action"].map(h => <Th key={h}>{h}</Th>)}
-              </tr></thead>
-              <tbody>
-                {(() => {
-                  const start = isoDate(weekDays[0]);
-                  const end = isoDate(weekDays[6]);
-                  const weekRows = rows.filter(r => r.work_date?.split("T")[0] >= start && r.work_date?.split("T")[0] <= end);
-                  const listFiltered = weekRows.filter(r => {
+        {/* ── Day Detail Modal ── */}
+        {dayPanel && (
+          <Modal title={`${new Date(dayPanel.iso + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}`} onClose={() => setDayPanel(null)}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {dayPanel.dayRows.map(r => (
+                <div key={r.id} style={{ background: C.surface, borderRadius: 12, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, borderLeft: `3px solid ${r.status === "approved" ? C.green : r.status === "rejected" ? C.red : C.amber}` }}>
+                  <div>
+                    {!viewOnly && <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 2 }}>{r.employee_name}</div>}
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.accent }}>{r.project_code} · <span style={{ color: C.green }}>{r.hours}h</span></div>
+                    {r.task && <div style={{ fontSize: 11, color: C.textMuted, marginTop: 3 }}>{r.task}</div>}
+                  </div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <StatusBadge status={r.status} />
+                    {!viewOnly && r.status === "pending" && (<>
+                      <Btn small variant="success" onClick={async () => { await handleApprove(r.id); setDayPanel(null); }}>✓ Approve</Btn>
+                      <Btn small variant="danger" onClick={async () => { await handleReject(r.id); setDayPanel(null); }}>✕ Reject</Btn>
+                    </>)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Modal>
+        )}
+
+        {/* ── Admin Weekly List View ── */}
+        {!viewOnly && (
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, overflow: "hidden" }}>
+            {/* List header */}
+            <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 34, height: 34, borderRadius: 9, background: C.accent + "22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>📋</div>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Weekly Timesheet Requests</div>
+                  <div style={{ fontSize: 12, color: C.textMuted }}>List view for the selected week</div>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <select value={filterEmp} onChange={e => setFilterEmp(e.target.value)}
+                  style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, color: filterEmp ? C.text : C.textMuted, padding: "8px 12px", fontSize: 13, outline: "none", cursor: "pointer" }}>
+                  <option value="">All Employees</option>
+                  {Array.from(new Set(rows.map(r => r.employee_name))).map(name => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+                <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+                  style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, color: filterStatus !== "all" ? C.text : C.textMuted, padding: "8px 12px", fontSize: 13, outline: "none", cursor: "pointer" }}>
+                  <option value="all">All Statuses</option>
+                  <option value="pending">Pending</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+                <button onClick={() => {
+                  const listFiltered = weekRowsAll.filter(r => {
                     if (filterEmp && r.employee_name !== filterEmp) return false;
                     if (filterStatus !== "all" && r.status !== filterStatus) return false;
                     return true;
                   });
+                  handleDownloadCSV(listFiltered);
+                }} style={{ background: C.accent + "18", border: `1px solid ${C.accent}44`, borderRadius: 10, color: C.accent, padding: "8px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+                  📥 CSV
+                </button>
+              </div>
+            </div>
 
-                  if (listFiltered.length === 0) {
-                    return <tr><td colSpan={7} style={{ padding: 40, textAlign: "center", color: C.textMuted }}>No timesheets found for this week.</td></tr>;
-                  }
+            {/* Column headers */}
+            <div className="ts-list-row" style={{ background: C.surface, padding: "9px 20px", borderBottom: `1px solid ${C.border}` }}>
+              {["Employee", "Project", "Date", "Hours", "Task", "Status", "Action"].map(h => (
+                <div key={h} style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>{h}</div>
+              ))}
+            </div>
 
-                  return listFiltered.map((r, idx) => (
-                    <tr key={r.id} style={{ borderBottom: `1px solid ${C.border}22`, background: idx % 2 === 0 ? "transparent" : C.bg + "44" }}>
-                      <Td style={{ fontWeight: 600, color: C.text }}>{r.employee_name}</Td>
-                      <Td style={{ fontWeight: 700, color: C.accent }}>{r.project_code}</Td>
-                      <Td style={{ color: C.textDim, fontSize: 12 }}>{r.work_date ? fmtD(r.work_date) : "—"}</Td>
-                      <Td style={{ fontWeight: 700, color: C.text }}>{r.hours}</Td>
-                      <Td style={{ color: C.textDim, fontSize: 12 }}>{r.task || "—"}</Td>
-                      <Td><StatusBadge status={r.status} /></Td>
-                      <Td>
-                        {r.status === "pending" && (
-                          <div style={{ display: "flex", gap: 6 }}>
-                            <Btn small variant="success" onClick={() => handleApprove(r.id)}>✓ Approve</Btn>
-                            <Btn small variant="danger" onClick={() => handleReject(r.id)}>✕</Btn>
-                          </div>
-                        )}
-                      </Td>
-                    </tr>
-                  ));
-                })()}
-              </tbody>
-            </table>
+            {/* Rows */}
+            {(() => {
+              const listFiltered = weekRowsAll.filter(r => {
+                if (filterEmp && r.employee_name !== filterEmp) return false;
+                if (filterStatus !== "all" && r.status !== filterStatus) return false;
+                return true;
+              });
+
+              if (listFiltered.length === 0) return (
+                <div style={{ padding: "48px 20px", textAlign: "center", color: C.textMuted }}>
+                  <div style={{ fontSize: 32, marginBottom: 10 }}>📭</div>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>No timesheet entries found for this week</div>
+                </div>
+              );
+
+              return listFiltered.map(r => (
+                <div key={r.id} className="ts-list-row">
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: "50%", background: C.accent + "22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: C.accent, flexShrink: 0 }}>
+                      {mkAvi(r.employee_name || "")}
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{r.employee_name}</span>
+                  </div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.accent, background: C.accent + "14", border: `1px solid ${C.accent}33`, borderRadius: 6, padding: "2px 8px", width: "fit-content" }}>{r.project_code}</div>
+                  <div style={{ fontSize: 12, color: C.textDim }}>{r.work_date ? fmtD(r.work_date) : "—"}</div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: C.text }}>{r.hours}h</div>
+                  <div style={{ fontSize: 12, color: C.textDim, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.task || "—"}</div>
+                  <div><StatusBadge status={r.status} /></div>
+                  <div>
+                    {r.status === "pending" && (
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button onClick={() => handleApprove(r.id)}
+                          style={{ background: C.green + "18", border: `1px solid ${C.green}44`, borderRadius: 8, color: C.green, fontSize: 12, fontWeight: 700, padding: "4px 10px", cursor: "pointer" }}>✓ Approve</button>
+                        <button onClick={() => handleReject(r.id)}
+                          style={{ background: C.red + "18", border: `1px solid ${C.red}44`, borderRadius: 8, color: C.red, fontSize: 12, fontWeight: 700, padding: "4px 10px", cursor: "pointer" }}>✕</button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ));
+            })()}
           </div>
-        </Card>
-      )}
-    </div>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -2788,6 +3176,9 @@ function Leaves({ currentUser, viewOnly }) {
   // { employeeId, employeeName, balance, total_credited, total_used }
   const [editBalanceTarget, setEditBalanceTarget] = useState(null);
   const [editBalanceSaving, setEditBalanceSaving] = useState(false);
+  const [editLeave, setEditLeave] = useState(null);   // leave row being edited
+  const [editForm, setEditForm] = useState({ type: "Annual", startDate: "", endDate: "", reason: "" });
+  const [editSaving, setEditSaving] = useState(false);
 
   // Compute days selected in the form
   const selectedDays = (() => {
@@ -2841,6 +3232,26 @@ function Leaves({ currentUser, viewOnly }) {
     } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setSaving(false); }
   }
 
+  function openEditLeave(l) {
+    setEditLeave(l);
+    setEditForm({
+      type: l.leave_type,
+      startDate: String(l.start_date).slice(0, 10),
+      endDate: String(l.end_date).slice(0, 10),
+      reason: l.reason || "",
+    });
+  }
+
+  async function handleUpdateLeave() {
+    if (!editForm.startDate || !editForm.endDate) return;
+    setEditSaving(true);
+    try {
+      await api.updateLeave(editLeave.id, editForm);
+      setEditLeave(null);
+      await load();
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setEditSaving(false); }
+  }
+
   async function handleCreditMonthly() {
     if (!await dialog.confirm("Credit 2 leaves to ALL employees for this month? This cannot be undone.", { dtype: "warning" })) return;
     setCrediting(true);
@@ -2892,143 +3303,219 @@ function Leaves({ currentUser, viewOnly }) {
   if (err) return <ErrBox msg={err} onRetry={load} />;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
-        <div><h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>{viewOnly ? "My Leave" : "Leave Management"}</h2>
-          <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>
-            {viewOnly ? "View your time-off requests" : "Track all absences"}
-          </p></div>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-          {!viewOnly && currentUser.role === "admin" && (
-            <Btn variant="ghost" onClick={handleCreditMonthly} disabled={crediting} small>
-              {crediting ? "Crediting…" : "🗓 Credit Monthly Leaves"}
-            </Btn>
-          )}
-          {!viewOnly && currentUser.role === "admin" && (
-            <Btn variant="ghost" onClick={() => setEditBalanceTarget("open")} small>🧹 Amend Bucket of Leave</Btn>
-          )}
-          {!viewOnly && currentUser.role === "admin" && (
-            <Btn variant="ghost" onClick={() => setSettingsModal(true)} small>⚙ Holiday Link</Btn>
-          )}
-          {leaveSettings.holiday_link && (
-            <a
-              href={leaveSettings.holiday_link}
-              target="_blank"
-              rel="noreferrer"
-              style={{
-                fontSize: 13, fontWeight: 600, color: C.accent,
-                textDecoration: "none", display: "flex", alignItems: "center", gap: 5,
+    <>
+      <style>{`
+        .lv-kpi-row { display: flex; gap: 12px; flex-wrap: wrap; }
+        .lv-kpi-card { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 14px; padding: 14px 20px; display: flex; align-items: center; gap: 12px; flex: 1 1 160px; transition: box-shadow .2s; }
+        .lv-kpi-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+        .lv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 14px; }
+        .lv-card { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; transition: transform .15s, box-shadow .15s; }
+        .lv-card:hover { transform: translateY(-1px); box-shadow: 0 6px 28px rgba(0,0,0,0.35); }
+        @media (max-width: 600px) {
+          .lv-kpi-row { gap: 8px; }
+          .lv-kpi-card { flex: 1 1 140px; padding: 12px 16px; }
+          .lv-grid { grid-template-columns: 1fr; }
+        }
+      `}</style>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+
+        {/* ── Header ── */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: -0.5 }}>
+              {viewOnly ? "My Leave" : "Leave Management"}
+            </h2>
+            <p style={{ margin: "5px 0 0", color: C.textMuted, fontSize: 13 }}>
+              {viewOnly ? "Request and track your time-off" : "Track and manage all employee absences"}
+            </p>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            {!viewOnly && currentUser.role === "admin" && (
+              <Btn variant="ghost" small onClick={handleCreditMonthly} disabled={crediting}>
+                {crediting ? "Crediting…" : "🗓 Credit Monthly"}
+              </Btn>
+            )}
+            {!viewOnly && currentUser.role === "admin" && (
+              <Btn variant="ghost" small onClick={() => setEditBalanceTarget("open")}>🧹 Amend Buckets</Btn>
+            )}
+            {!viewOnly && currentUser.role === "admin" && (
+              <Btn variant="ghost" small onClick={() => setSettingsModal(true)}>⚙ Holiday Link</Btn>
+            )}
+            {leaveSettings.holiday_link && (
+              <a href={leaveSettings.holiday_link} target="_blank" rel="noreferrer" style={{
+                fontSize: 13, fontWeight: 600, color: C.accent, textDecoration: "none",
+                display: "inline-flex", alignItems: "center", gap: 5,
                 border: `1px solid ${C.accent}44`, borderRadius: 8,
-                padding: "6px 12px", background: C.accentGlow, transition: "opacity .15s"
-              }}
-              onMouseEnter={e => e.currentTarget.style.opacity = ".8"}
-              onMouseLeave={e => e.currentTarget.style.opacity = "1"}
-            >
-              🗓 View Holiday Calendar
-            </a>
-          )}
-          <Btn onClick={() => setModal(true)}>+ Request Leave</Btn>
+                padding: "7px 14px", background: C.accentGlow,
+              }}>🗓 Holiday Calendar</a>
+            )}
+            <Btn onClick={() => setModal(true)}>+ Request Leave</Btn>
+          </div>
         </div>
-      </div>
 
-      {/* Summary cards + Balance card */}
-      <div className="grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16 }}>
-        {[["Total Requests", summary.total, C.accent], ["Pending", summary.pending, C.amber], ["Approved", summary.approved, C.green]].map(([l, v, col]) => (
-          <Card key={l} style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 28, fontWeight: 800, color: col }}>{v}</div>
-            <div style={{ fontSize: 12, color: C.textMuted, marginTop: 4 }}>{l}</div>
-          </Card>
-        ))}
-      </div>
-
-      {/* Leave Balance Banner */}
-      {balance !== null && !isIntern && (
-        <Card style={{ background: balNum === 0 ? C.red + "12" : C.surface, border: `1px solid ${balColor}44`, padding: "18px 24px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
-            <div>
-              <div style={{ fontSize: 12, color: C.textMuted, fontWeight: 700, letterSpacing: .5, textTransform: "uppercase", marginBottom: 6 }}>
-                🗂 Leave Balance (Sick &amp; Vacation)
+        {/* ── KPI Cards ── */}
+        <div className="lv-kpi-row">
+          {[
+            { label: "Total Requests", value: summary.total, color: C.accent, icon: "🗓" },
+            { label: "Pending", value: summary.pending, color: C.amber, icon: "⏳" },
+            { label: "Approved", value: summary.approved, color: C.green, icon: "✅" },
+            { label: "Rejected", value: rows.filter(l => l.status === "rejected").length, color: C.red, icon: "❌" },
+          ].map(s => (
+            <div key={s.label} className="lv-kpi-card">
+              <div style={{ width: 38, height: 38, borderRadius: 10, background: s.color + "22", border: `1px solid ${s.color}33`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{s.icon}</div>
+              <div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: s.color, lineHeight: 1 }}>{s.value}</div>
+                <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 600, marginTop: 3, letterSpacing: .3 }}>{s.label}</div>
               </div>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                <span style={{ fontSize: 40, fontWeight: 800, color: balColor, lineHeight: 1 }}>{balNum}</span>
-                <span style={{ fontSize: 14, color: C.textMuted }}>day{balNum !== 1 ? "s" : ""} available</span>
-              </div>
-              {balance.last_credited_month && (
-                <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4 }}>
-                  Last credited: <strong style={{ color: C.textDim }}>{balance.last_credited_month}</strong>
-                  &nbsp;· +2 leaves added every month-end automatically
-                </div>
-              )}
             </div>
-            <div style={{ display: "flex", gap: 24 }}>
+          ))}
+        </div>
+
+        {/* ── Balance Card ── */}
+        {balance !== null && !isIntern && (
+          <div style={{
+            background: C.card, border: `1px solid ${balColor}44`, borderRadius: 16,
+            padding: "20px 24px", display: "flex", alignItems: "center", gap: 24,
+            flexWrap: "wrap", position: "relative", overflow: "hidden",
+          }}>
+            <div style={{
+              position: "absolute", top: -30, right: -30, width: 140, height: 140,
+              borderRadius: "50%", background: balColor + "14", pointerEvents: "none",
+            }} />
+            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+              <div style={{
+                width: 68, height: 68, borderRadius: "50%", flexShrink: 0,
+                background: balColor + "22", border: `3px solid ${balColor}66`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 26, fontWeight: 900, color: balColor,
+              }}>{balNum}</div>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 5 }}>
+                  Leave Balance (Sick & Vacation)
+                </div>
+                <div style={{ fontSize: 17, fontWeight: 700, color: C.text }}>
+                  {balNum} day{balNum !== 1 ? "s" : ""} available
+                </div>
+                {balance.last_credited_month && (
+                  <div style={{ fontSize: 11, color: C.textMuted, marginTop: 3 }}>
+                    Last credited: <strong style={{ color: C.textDim }}>{balance.last_credited_month}</strong> · +2 leaves/month
+                  </div>
+                )}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 24, marginLeft: "auto" }}>
               {[["Total Earned", balance.total_credited, C.green], ["Total Used", balance.total_used, C.amber]].map(([lbl, val, col]) => (
                 <div key={lbl} style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: col }}>{parseFloat(val) || 0}</div>
-                  <div style={{ fontSize: 11, color: C.textMuted }}>{lbl}</div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: col }}>{parseFloat(val) || 0}</div>
+                  <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 600, marginTop: 2 }}>{lbl}</div>
                 </div>
               ))}
             </div>
           </div>
-        </Card>
-      )}
+        )}
 
-      {/* Leave table */}
-      <Card style={{ padding: 0, overflow: "hidden" }}>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead style={{ background: C.surface }}><tr>{cols.map(h => <Th key={h}>{h}</Th>)}</tr></thead>
-            <tbody>
-              {rows.map((l, idx) => {
-                const s = new Date(l.start_date); const e = new Date(l.end_date);
-                const days = Math.round((e - s) / 86400000) + 1;
-                const usesBalance = BALANCE_TYPES.has(l.leave_type);
-                const empBal = !viewOnly ? (allBalances[String(l.employee_id)] || null) : null;
-                const empBalNum = empBal ? parseFloat(empBal.balance) || 0 : null;
-                const empBalColor = empBalNum === null ? C.textMuted : empBalNum >= 4 ? C.green : empBalNum >= 2 ? C.amber : C.red;
-                return (
-                  <tr key={l.id} style={{ borderBottom: `1px solid ${C.border}22`, background: idx % 2 === 0 ? "transparent" : C.bg + "44" }}>
-                    {!viewOnly && <Td><div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <Avatar initials={l.avatar} color={l.group_color} size={28} />
-                      <span style={{ fontSize: 13, color: C.text }}>{l.employee_name}</span>
-                    </div></Td>}
-                    <Td>
-                      <Badge color={l.leave_type === "Sick" ? C.red : l.leave_type === "Annual" ? C.accent : C.textMuted}>{l.leave_type}</Badge>
-                      {usesBalance && <span style={{ fontSize: 10, color: C.textMuted, marginLeft: 4 }}>(-bucket)</span>}
-                    </Td>
-                    <Td style={{ fontSize: 12, color: C.textDim }}>{fmtD(l.start_date)}</Td>
-                    <Td style={{ fontSize: 12, color: C.textDim }}>{fmtD(l.end_date)}</Td>
-                    <Td style={{ fontSize: 13, fontWeight: 700, color: C.accent }}>{days > 0 ? `${days}d` : "—"}</Td>
-                    <Td style={{ fontSize: 12, color: C.textDim, maxWidth: 180 }}>{l.reason}</Td>
-                    <Td><StatusBadge status={l.status} /></Td>
-                    {!viewOnly && <Td>
-                      {empBalNum !== null ? (
-                        <span style={{ fontWeight: 700, fontSize: 13, color: empBalColor }}>{empBalNum}d</span>
-                      ) : <span style={{ color: C.textMuted, fontSize: 12 }}>—</span>}
-                    </Td>}
-                    {!viewOnly && <Td>{l.status === "pending" && (
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <Btn small variant="success" onClick={async () => { try { await api.approveLeave(l.id); await load(); } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } }}>✓</Btn>
-                        <Btn small variant="danger" onClick={async () => { try { await api.rejectLeave(l.id); await load(); } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } }}>✕</Btn>
+        {/* ── Leave Cards ── */}
+        {rows.length === 0 ? (
+          <div style={{
+            background: C.card, border: `1px solid ${C.border}`, borderRadius: 14,
+            padding: 48, textAlign: "center", color: C.textMuted, fontSize: 13,
+          }}>
+            No leave records yet.{viewOnly && " Click \u201c+ Request Leave\u201d to submit your first request."}
+          </div>
+        ) : (
+          <div className="lv-grid">
+            {rows.map(l => {
+              const s = new Date(l.start_date), e = new Date(l.end_date);
+              const days = Math.round((e - s) / 86400000) + 1;
+              const usesBalance = BALANCE_TYPES.has(l.leave_type);
+              const typeColor = l.leave_type === "Sick" ? C.red : l.leave_type === "Annual" ? C.accent : l.leave_type === "Reserve" ? "#06B6D4" : C.textMuted;
+              const statusBorderColor = l.status === "approved" ? C.green : l.status === "rejected" ? C.red : C.amber;
+              const typeIcon = { Annual: "🌴", Sick: "🤒", Unpaid: "⏸", Maternity: "🤰", Paternity: "👶", Reserve: "🗓️" }[l.leave_type] || "📋";
+              const empBal = !viewOnly ? (allBalances[String(l.employee_id)] || null) : null;
+              const empBalNum = empBal ? parseFloat(empBal.balance) || 0 : null;
+              const empBalColor = empBalNum === null ? C.textMuted : empBalNum >= 4 ? C.green : empBalNum >= 2 ? C.amber : C.red;
+
+              return (
+                <div key={l.id} className="lv-card" style={{ borderLeft: `4px solid ${statusBorderColor}88` }}>
+                  {/* Top row */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      {!viewOnly && <Avatar initials={l.avatar} color={l.group_color} size={34} />}
+                      <div>
+                        {!viewOnly && <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 4 }}>{l.employee_name}</div>}
+                        <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                          <span style={{ fontSize: 17 }}>{typeIcon}</span>
+                          <Badge color={typeColor}>{l.leave_type}</Badge>
+                          {usesBalance && <span style={{ fontSize: 10, color: C.textMuted, background: C.surface, padding: "1px 6px", borderRadius: 10, border: `1px solid ${C.border}` }}>−bucket</span>}
+                        </div>
                       </div>
-                    )}</Td>}
-                  </tr>
-                );
-              })}
-              {rows.length === 0 && <tr><td colSpan={cols.length} style={{ padding: 40, textAlign: "center", color: C.textMuted, fontSize: 13 }}>No records found.</td></tr>}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5 }}>
+                      <StatusBadge status={l.status} />
+                      <span style={{
+                        fontSize: 12, fontWeight: 700, color: C.accent,
+                        background: C.accent + "18", padding: "2px 10px",
+                        borderRadius: 20, border: `1px solid ${C.accent}33`,
+                      }}>{days}d</span>
+                    </div>
+                  </div>
 
-      {/* Admin: Amend Bucket of Leave Modal */}
-      {editBalanceTarget === "open" && (() => {
-        // Build one editable row per unique employee from allBalances + employees list
-        return (
+                  {/* Date range */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+                    <span style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "4px 10px", color: C.textDim }}>
+                      📅 {fmtD(l.start_date)}
+                    </span>
+                    <span style={{ color: C.border, fontSize: 16 }}>→</span>
+                    <span style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "4px 10px", color: C.textDim }}>
+                      {fmtD(l.end_date)}
+                    </span>
+                  </div>
+
+                  {/* Reason */}
+                  {l.reason && (
+                    <div style={{
+                      fontSize: 12, color: C.textMuted, background: C.surface,
+                      borderRadius: 8, padding: "8px 12px",
+                      borderLeft: `3px solid ${C.border}`,
+                    }}>"{l.reason}"</div>
+                  )}
+
+                  {/* Employee: edit button on pending */}
+                  {viewOnly && l.status === "pending" && (
+                    <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                      <Btn small variant="ghost" onClick={() => openEditLeave(l)}>✏ Edit</Btn>
+                    </div>
+                  )}
+
+                  {/* Admin balance + actions */}
+                  {!viewOnly && (
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                      {empBalNum !== null && (
+                        <span style={{ fontSize: 12, color: empBalColor, fontWeight: 600, background: empBalColor + "18", padding: "3px 10px", borderRadius: 20, border: `1px solid ${empBalColor}33` }}>
+                          Balance: {empBalNum}d
+                        </span>
+                      )}
+                      {l.status === "pending" && (
+                        <div style={{ display: "flex", gap: 6, marginLeft: "auto" }}>
+                          <Btn small variant="success" onClick={async () => { try { await api.approveLeave(l.id); await load(); } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } }}>✓ Approve</Btn>
+                          <Btn small variant="danger" onClick={async () => { try { await api.rejectLeave(l.id); await load(); } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } }}>✕ Reject</Btn>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ── Admin: Amend Leave Buckets Modal ── */}
+        {editBalanceTarget === "open" && (() => (
           <Modal title="🧹 Amend Bucket of Leave" onClose={() => setEditBalanceTarget(null)} maxWidth={860}>
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div style={{ fontSize: 13, color: C.textMuted }}>
-                Edit leave balances for all employees. Click ❯❯ Save on each row to apply changes.
+                Edit leave balances for all employees. Click Save on each row to apply.
               </div>
               <div style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -3040,15 +3527,8 @@ function Leaves({ currentUser, viewOnly }) {
                       const key = String(emp.id);
                       const bal = allBalances[key] || { balance: 0, total_credited: 0, total_used: 0 };
                       return (
-                        <AmendRow
-                          key={emp.id}
-                          emp={emp}
-                          initialBal={bal}
-                          idx={idx}
-                          onSaved={(updated) => {
-                            setAllBalances(prev => ({ ...prev, [key]: updated }));
-                          }}
-                        />
+                        <AmendRow key={emp.id} emp={emp} initialBal={bal} idx={idx}
+                          onSaved={(updated) => setAllBalances(prev => ({ ...prev, [key]: updated }))} />
                       );
                     })}
                     {employees.length === 0 && <tr><td colSpan={5} style={{ padding: 40, textAlign: "center", color: C.textMuted }}>No employees found.</td></tr>}
@@ -3060,102 +3540,132 @@ function Leaves({ currentUser, viewOnly }) {
               </div>
             </div>
           </Modal>
-        );
-      })()}
+        ))()}
 
-      {/* Admin: Holiday Calendar Settings Modal */}
-      {settingsModal && (
-        <Modal title="⚙ Holiday Calendar Settings" onClose={() => setSettingsModal(false)}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <div style={{ fontSize: 13, color: C.textMuted }}>
-              Set a link to your company holiday calendar. This link will be shown to employees in the Request Leave form.
-            </div>
-            <Inp label="Holiday Calendar URL" value={settingsForm.holiday_link} onChange={v => setSettingsForm(f => ({ ...f, holiday_link: v }))} placeholder="https://calendar.google.com/..." />
-            {settingsForm.holiday_link && (
-              <div style={{ fontSize: 12, color: C.textMuted }}>
-                Preview: <a href={settingsForm.holiday_link} target="_blank" rel="noreferrer" style={{ color: C.accent }}>🗓 View Holiday Calendar →</a>
+        {/* ── Admin: Holiday Calendar Settings Modal ── */}
+        {settingsModal && (
+          <Modal title="⚙ Holiday Calendar Settings" onClose={() => setSettingsModal(false)}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div style={{ fontSize: 13, color: C.textMuted }}>
+                Set a link to your company holiday calendar shown to all employees.
               </div>
-            )}
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-              <Btn variant="ghost" onClick={() => setSettingsModal(false)}>Cancel</Btn>
-              <Btn onClick={handleSaveSettings} disabled={settingsSaving}>{settingsSaving ? "Saving…" : "Save Link"}</Btn>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {modal && (
-        <Modal title="Request Leave" onClose={() => { setModal(false); setBalance(viewOnly ? balance : null); }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {!viewOnly && (
-              <Inp label="Employee" value={form.employeeId} onChange={v => { setForm(f => ({ ...f, employeeId: v })); loadBalanceFor(v); }} required
-                options={employees.map(e => ({ value: e.id, label: e.name }))} />
-            )}
-            {viewOnly && (
-              <div style={{ background: C.surface, borderRadius: 8, padding: "10px 14px", fontSize: 13, color: C.textDim }}>
-                Requesting as: <span style={{ color: C.text, fontWeight: 700 }}>{currentUser.emp_name}</span>
-              </div>
-            )}
-
-            {/* Leave type */}
-            <Inp label="Leave Type" value={form.type} onChange={v => setForm(f => ({ ...f, type: v }))}
-              options={[
-                { value: "Annual", label: "Annual / Vacation 🌴 (uses balance)" },
-                { value: "Sick", label: "Sick Leave 🤒 (uses balance)" },
-                { value: "Unpaid", label: "Unpaid" },
-                { value: "Maternity", label: "Maternity" },
-                { value: "Paternity", label: "Paternity" },
-              ]} />
-
-            {/* Balance indicator for bucket types */}
-            {BALANCE_TYPES.has(form.type) && balance !== null && !isIntern && (
-              <div style={{
-                background: insufficient ? C.red + "18" : C.green + "12",
-                border: `1px solid ${insufficient ? C.red : C.green}44`,
-                borderRadius: 10, padding: "12px 16px",
-                display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8
-              }}>
-                <div>
-                  <div style={{ fontSize: 12, color: C.textMuted, fontWeight: 700 }}>LEAVE BALANCE</div>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: insufficient ? C.red : balColor }}>
-                    {balNum} <span style={{ fontSize: 13, fontWeight: 400, color: C.textMuted }}>available</span>
-                  </div>
+              <Inp label="Holiday Calendar URL" value={settingsForm.holiday_link} onChange={v => setSettingsForm(f => ({ ...f, holiday_link: v }))} placeholder="https://calendar.google.com/…" />
+              {settingsForm.holiday_link && (
+                <div style={{ fontSize: 12, color: C.textMuted }}>
+                  Preview: <a href={settingsForm.holiday_link} target="_blank" rel="noreferrer" style={{ color: C.accent }}>🗓 View →</a>
                 </div>
-                {selectedDays > 0 && (
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 11, color: C.textMuted }}>After this request</div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: insufficient ? C.red : C.textDim }}>
-                      {insufficient ? "—" : balAfter} days left
+              )}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                <Btn variant="ghost" onClick={() => setSettingsModal(false)}>Cancel</Btn>
+                <Btn onClick={handleSaveSettings} disabled={settingsSaving}>{settingsSaving ? "Saving…" : "Save Link"}</Btn>
+              </div>
+            </div>
+          </Modal>
+        )}
+
+        {/* ── Edit Leave Modal (employee, pending only) ── */}
+        {editLeave && (
+          <Modal title="✏ Edit Leave Request" onClose={() => setEditLeave(null)}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div style={{ background: C.surface, borderRadius: 8, padding: "10px 14px", fontSize: 13, color: C.textDim }}>
+                Editing your <strong style={{ color: C.amber }}>pending</strong> leave — changes will reset to pending for re-review.
+              </div>
+              <Inp label="Leave Type" value={editForm.type} onChange={v => setEditForm(f => ({ ...f, type: v }))}
+                options={[
+                  { value: "Annual", label: "Annual / Vacation 🌴 (uses balance)" },
+                  { value: "Sick", label: "Sick Leave 🤒 (uses balance)" },
+                  { value: "Unpaid", label: "Unpaid" },
+                  { value: "Maternity", label: "Maternity" },
+                  { value: "Paternity", label: "Paternity" },
+                  { value: "Reserve", label: "Reserve / Floating 🗓️" },
+                ]} />
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <Inp label="Start Date" type="date" value={editForm.startDate} onChange={v => setEditForm(f => ({ ...f, startDate: v }))} required />
+                <Inp label="End Date" type="date" value={editForm.endDate} onChange={v => setEditForm(f => ({ ...f, endDate: v }))} required />
+              </div>
+              <Inp label="Reason" value={editForm.reason} onChange={v => setEditForm(f => ({ ...f, reason: v }))} placeholder="Optional reason…" />
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                <Btn variant="ghost" onClick={() => setEditLeave(null)}>Cancel</Btn>
+                <Btn onClick={handleUpdateLeave} disabled={editSaving || !editForm.startDate || !editForm.endDate}>
+                  {editSaving ? "Saving…" : "Save Changes"}
+                </Btn>
+              </div>
+            </div>
+          </Modal>
+        )}
+
+        {/* ── Request Leave Modal ── */}
+        {modal && (
+          <Modal title="Request Leave" onClose={() => { setModal(false); setBalance(viewOnly ? balance : null); }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {!viewOnly && (
+                <Inp label="Employee" value={form.employeeId}
+                  onChange={v => { setForm(f => ({ ...f, employeeId: v })); loadBalanceFor(v); }}
+                  required options={employees.map(e => ({ value: e.id, label: e.name }))} />
+              )}
+              {viewOnly && (
+                <div style={{ background: C.surface, borderRadius: 8, padding: "10px 14px", fontSize: 13, color: C.textDim }}>
+                  Requesting as: <span style={{ color: C.text, fontWeight: 700 }}>{currentUser.emp_name}</span>
+                </div>
+              )}
+              <Inp label="Leave Type" value={form.type} onChange={v => setForm(f => ({ ...f, type: v }))}
+                options={[
+                  { value: "Annual", label: "Annual / Vacation 🌴 (uses balance)" },
+                  { value: "Sick", label: "Sick Leave 🤒 (uses balance)" },
+                  { value: "Unpaid", label: "Unpaid" },
+                  { value: "Maternity", label: "Maternity" },
+                  { value: "Paternity", label: "Paternity" },
+                  { value: "Reserve", label: "Reserve / Floating 🗓️" },
+                ]} />
+              {BALANCE_TYPES.has(form.type) && balance !== null && !isIntern && (
+                <div style={{
+                  background: insufficient ? C.red + "18" : C.green + "12",
+                  border: `1px solid ${insufficient ? C.red : C.green}44`,
+                  borderRadius: 10, padding: "12px 16px",
+                  display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8,
+                }}>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, letterSpacing: .5 }}>LEAVE BALANCE</div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: insufficient ? C.red : balColor }}>
+                      {balNum} <span style={{ fontSize: 13, fontWeight: 400, color: C.textMuted }}>available</span>
                     </div>
                   </div>
-                )}
+                  {selectedDays > 0 && (
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 11, color: C.textMuted }}>After this request</div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: insufficient ? C.red : C.textDim }}>
+                        {insufficient ? "—" : balAfter} days left
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              {insufficient && (
+                <div style={{ background: C.red + "14", border: `1px solid ${C.red}44`, borderRadius: 8, padding: "10px 14px", fontSize: 12, color: C.red }}>
+                  ⚠ Only <strong>{balNum}</strong> day(s) available, requested <strong>{selectedDays}</strong>. Please reduce duration or choose Unpaid.
+                </div>
+              )}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <Inp label="Start Date" type="date" value={form.startDate} onChange={v => setForm(f => ({ ...f, startDate: v }))} required />
+                <Inp label="End Date" type="date" value={form.endDate} onChange={v => setForm(f => ({ ...f, endDate: v }))} required />
               </div>
-            )}
-            {insufficient && (
-              <div style={{ background: C.red + "14", border: `1px solid ${C.red}44`, borderRadius: 8, padding: "10px 14px", fontSize: 12, color: C.red }}>
-                ⚠ You only have <strong>{balNum}</strong> day(s) available but requested <strong>{selectedDays}</strong>. Please reduce the duration or choose Unpaid leave.
+              {selectedDays > 0 && (
+                <div style={{ fontSize: 12, color: C.textDim, textAlign: "center" }}>
+                  📅 {selectedDays} day{selectedDays !== 1 ? "s" : ""} selected
+                  {willDeduct && <span style={{ color: C.amber }}> — will deduct from balance</span>}
+                </div>
+              )}
+              <Inp label="Reason" value={form.reason} onChange={v => setForm(f => ({ ...f, reason: v }))} placeholder="Brief description…" />
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                <Btn variant="ghost" onClick={() => setModal(false)}>Cancel</Btn>
+                <Btn onClick={handleCreate} disabled={saving || insufficient}>{saving ? "Saving…" : "Submit Request"}</Btn>
               </div>
-            )}
+            </div>
+          </Modal>
+        )}
 
-            <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <Inp label="Start Date" type="date" value={form.startDate} onChange={v => setForm(f => ({ ...f, startDate: v }))} required />
-              <Inp label="End Date" type="date" value={form.endDate} onChange={v => setForm(f => ({ ...f, endDate: v }))} required />
-            </div>
-            {selectedDays > 0 && (
-              <div style={{ fontSize: 12, color: C.textDim, textAlign: "center" }}>
-                📅 {selectedDays} day{selectedDays !== 1 ? "s" : ""} selected
-                {willDeduct && <span style={{ color: C.amber }}> — will deduct from your balance</span>}
-              </div>
-            )}
-            <Inp label="Reason" value={form.reason} onChange={v => setForm(f => ({ ...f, reason: v }))} placeholder="Brief description…" />
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-              <Btn variant="ghost" onClick={() => setModal(false)}>Cancel</Btn>
-              <Btn onClick={handleCreate} disabled={saving || insufficient}>{saving ? "Saving…" : "Submit Request"}</Btn>
-            </div>
-          </div>
-        </Modal>
-      )}
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -3398,7 +3908,6 @@ function MyProfile({ currentUser }) {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const [form, setForm] = useState({});
-
   const [pwForm, setPwForm] = useState({ oldPassword: "", newPassword: "" });
   const [pwSaving, setPwSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -3426,11 +3935,7 @@ function MyProfile({ currentUser }) {
       await api.updateEmployee(currentUser.employee_id, payload);
       dialog.alert("Profile updated successfully!", { title: "Success", dtype: "success" });
       setIsEditing(false);
-    } catch (e) {
-      setErr(e.message);
-    } finally {
-      setSaving(false);
-    }
+    } catch (e) { setErr(e.message); } finally { setSaving(false); }
   }
 
   async function handleSavePw() {
@@ -3440,8 +3945,7 @@ function MyProfile({ currentUser }) {
       await api.updatePassword(pwForm);
       dialog.alert("Password updated successfully!", { title: "Success", dtype: "success" });
       setPwForm({ oldPassword: "", newPassword: "" });
-      setErr(null);
-      setShowPwModal(false);
+      setErr(null); setShowPwModal(false);
     } catch (e) { setErr(e.message); }
     setPwSaving(false);
   }
@@ -3449,136 +3953,202 @@ function MyProfile({ currentUser }) {
   if (loading) return <Spinner />;
   if (err && !profile) return <ErrBox msg={err} />;
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>My Profile</h2>
-          <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>
-            View your organizational details and manage your personal information.
-            {" "}
-            <span style={{ color: C.accent, cursor: "pointer", textDecoration: "underline", fontWeight: 600, marginLeft: 8 }} onClick={() => setShowPwModal(true)}>
-              Change Password
-            </span>
-          </p>
-        </div>
-        <div>
-          {!isEditing ? (
-            <Btn onClick={() => setIsEditing(true)}>✏ Edit Profile</Btn>
-          ) : (
-            <div style={{ display: "flex", gap: 8 }}>
-              <Btn variant="ghost" onClick={() => {
-                setIsEditing(false);
-                setForm({ ...profile, bankAccountNo: profile.bank_account_no, bankIfsc: profile.bank_ifsc, bankName: profile.bank_name });
-              }}>Cancel</Btn>
-              <Btn onClick={handleSave} disabled={saving}>{saving ? "Saving…" : "Save Profile"}</Btn>
-            </div>
-          )}
+  // ── small helper: one info row in view mode ───────────────
+  const InfoRow = ({ icon, label, value, masked, show, onToggle }) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: `1px solid ${C.border}22` }}>
+      <div style={{
+        width: 34, height: 34, borderRadius: 9, flexShrink: 0,
+        background: C.surface, border: `1px solid ${C.border}`,
+        display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16,
+      }}>{icon}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, letterSpacing: 1, textTransform: "uppercase", marginBottom: 2 }}>{label}</div>
+        <div style={{ fontSize: 13, color: C.text, fontWeight: 500, wordBreak: "break-word" }}>
+          {masked ? (show ? (value || "—") : "••••••••") : (value || "—")}
         </div>
       </div>
+      {masked && value && (
+        <button onClick={onToggle} style={{ background: "none", border: "none", color: C.textMuted, cursor: "pointer", fontSize: 16, padding: 4, lineHeight: 1, flexShrink: 0 }}>
+          {show ? "🙈" : "👁"}
+        </button>
+      )}
+    </div>
+  );
 
-      {err && <div style={{ background: C.red + "18", color: C.red, padding: "10px 14px", borderRadius: 8, fontSize: 13, border: `1px solid ${C.red}44` }}>⚠ {err}</div>}
+  // ── section header helper ─────────────────────────────────
+  const SectionHead = ({ icon, title, badge }) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+      <div style={{ width: 32, height: 32, borderRadius: 9, background: C.accent + "22", border: `1px solid ${C.accent}33`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>{icon}</div>
+      <div>
+        <div style={{ fontSize: 13, fontWeight: 800, color: C.text }}>{title}</div>
+        {badge && <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 600, letterSpacing: .5 }}>{badge}</div>}
+      </div>
+    </div>
+  );
 
-      <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
-        <Card>
-          <h4 style={{ margin: "0 0 16px", fontSize: 14, color: C.text, fontWeight: 800 }}>Organizational Details <span style={{ fontSize: 11, fontWeight: 500, color: C.textMuted, marginLeft: 8 }}>(Read-Only)</span></h4>
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <Inp label="Full Name" value={profile.name} disabled />
-            <Inp label="Employee ID" value={profile.custom_employee_id || "—"} disabled />
-            <Inp label="Email" value={profile.email} disabled />
-            <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <Inp label="Role / Group" value={profile.group_name || "—"} disabled />
-              <Inp label="Manager" value={profile.manager_name || "—"} disabled />
+  const roleLabel = currentUser.role === "manager" ? "Manager" : currentUser.role === "admin" ? "Admin" : currentUser.role === "intras" ? "Intern" : "Employee";
+  const roleColor = currentUser.role === "admin" ? C.purple : currentUser.role === "manager" ? C.accent : C.green;
+
+  return (
+    <>
+      <style>{`
+        .prof-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .prof-bank-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        @media (max-width: 860px) { .prof-grid { grid-template-columns: 1fr; } }
+        @media (max-width: 560px) { .prof-bank-grid { grid-template-columns: 1fr; } }
+      `}</style>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+
+        {/* ── Hero Card ── */}
+        <div style={{
+          background: C.card, border: `1px solid ${C.border}`, borderRadius: 18,
+          padding: "24px 28px", display: "flex", alignItems: "center",
+          gap: 22, flexWrap: "wrap",
+        }}>
+          {/* Avatar */}
+          <div style={{
+            width: 76, height: 76, borderRadius: 20, flexShrink: 0,
+            background: `linear-gradient(135deg, ${C.accent}44, ${C.accent}22)`,
+            border: `2px solid ${C.accent}66`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 28, fontWeight: 800, color: C.accent,
+          }}>
+            {currentUser.avatar || mkAvi(profile.name)}
+          </div>
+
+          {/* Identity */}
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: -0.5 }}>{profile.name}</div>
+            <div style={{ fontSize: 13, color: C.textMuted, marginTop: 3 }}>
+              {profile.designation && <span>{profile.designation}</span>}
+              {profile.custom_employee_id && <span style={{ color: C.border, margin: "0 8px" }}>·</span>}
+              {profile.custom_employee_id && <span style={{ fontFamily: "monospace", fontSize: 12, color: C.textDim }}>{profile.custom_employee_id}</span>}
             </div>
-            <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <Inp label="Designation" value={profile.designation || "—"} disabled />
-              <Inp label="Location" value={profile.location || "—"} disabled />
+            <div style={{ display: "flex", gap: 7, marginTop: 10, flexWrap: "wrap", alignItems: "center" }}>
+              <Badge color={roleColor}>{roleLabel}</Badge>
+              {profile.group_name && <Badge color={profile.group_color || C.accent}>{profile.group_name}</Badge>}
+              {profile.location && <Badge color={C.textMuted}>📍 {profile.location}</Badge>}
+              {profile.joining_date && <Badge color={C.textMuted}>Joined {fmtD(profile.joining_date)}</Badge>}
             </div>
-            <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <Inp label="Joining Date" value={profile.joining_date ? fmtD(profile.joining_date) : "—"} disabled />
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <label style={{ fontSize: 12, color: C.textMuted, fontWeight: 600, letterSpacing: .4 }}>Annual CTC</label>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px" }}>
-                  <span style={{ flex: 1, fontSize: 13, color: C.text, letterSpacing: showCtc ? "normal" : "0.15em" }}>
-                    {profile.ctc_annual
-                      ? (showCtc ? `₹${Number(profile.ctc_annual).toLocaleString("en-IN")}` : "••••••••")
-                      : "—"}
-                  </span>
-                  {profile.ctc_annual && (
-                    <button onClick={() => setShowCtc(v => !v)} style={{ background: "none", border: "none", color: C.textMuted, cursor: "pointer", fontSize: 15, padding: 0, lineHeight: 1 }} title={showCtc ? "Hide" : "Show"}>
-                      {showCtc ? "🙈" : "👁"}
-                    </button>
-                  )}
+          </div>
+
+          {/* Actions */}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
+            {!isEditing ? (
+              <Btn onClick={() => setIsEditing(true)}>✏ Edit Profile</Btn>
+            ) : (
+              <>
+                <Btn variant="ghost" onClick={() => { setIsEditing(false); setForm({ ...profile, bankAccountNo: profile.bank_account_no, bankIfsc: profile.bank_ifsc, bankName: profile.bank_name, emergencyContact: profile.emergency_contact }); }}>Cancel</Btn>
+                <Btn onClick={handleSave} disabled={saving}>{saving ? "Saving…" : "Save Changes"}</Btn>
+              </>
+            )}
+            <Btn variant="ghost" onClick={() => setShowPwModal(true)}>🔐 Password</Btn>
+          </div>
+        </div>
+
+        {err && <div style={{ background: C.red + "18", color: C.red, padding: "10px 14px", borderRadius: 10, fontSize: 13, border: `1px solid ${C.red}44` }}>⚠ {err}</div>}
+
+        {/* ── Org + Personal ── */}
+        <div className="prof-grid">
+
+          {/* Org Details — read-only */}
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "22px 22px" }}>
+            <SectionHead icon="🏢" title="Organizational Details" badge="Read-only · managed by admin" />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
+              <InfoRow icon="👤" label="Full Name" value={profile.name} />
+              <InfoRow icon="🪪" label="Employee ID" value={profile.custom_employee_id} />
+              <InfoRow icon="✉️" label="Email" value={profile.email} />
+              <InfoRow icon="👥" label="Group / Team" value={profile.group_name} />
+              <InfoRow icon="🧑‍💼" label="Manager" value={profile.manager_name} />
+              <InfoRow icon="💼" label="Designation" value={profile.designation} />
+              <InfoRow icon="📅" label="Joining Date" value={profile.joining_date ? fmtD(profile.joining_date) : null} />
+              <InfoRow icon="💰" label="Annual CTC"
+                value={profile.ctc_annual ? `₹${Number(profile.ctc_annual).toLocaleString("en-IN")}` : null}
+                masked show={showCtc} onToggle={() => setShowCtc(v => !v)}
+              />
+            </div>
+          </div>
+
+          {/* Personal Info — editable */}
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "22px 22px" }}>
+            <SectionHead icon="👤" title="Personal Information" badge={isEditing ? "Editing — click Save Changes to apply" : "Click Edit Profile to update"} />
+            {!isEditing ? (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
+                <InfoRow icon="🎂" label="Date of Birth" value={form.dob ? fmtD(form.dob) : null} />
+                <InfoRow icon="📱" label="Mobile" value={form.mobile} />
+                <InfoRow icon="🆘" label="Emergency Contact" value={form.emergencyContact} />
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <InfoRow icon="🏠" label="Address" value={form.address} />
+                </div>
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <InfoRow icon="🛠" label="Skillset" value={form.skillset} />
                 </div>
               </div>
-            </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <Inp label="Date of Birth" type="date" value={form.dob || ""} onChange={v => setForm(f => ({ ...f, dob: v }))} />
+                  <Inp label="Mobile" value={form.mobile || ""} onChange={v => setForm(f => ({ ...f, mobile: v }))} placeholder="+91 98765 43210" />
+                </div>
+                <Inp label="Emergency Contact" value={form.emergencyContact || ""} onChange={v => setForm(f => ({ ...f, emergencyContact: v }))} placeholder="+91 … (Emergency)" />
+                <Inp label="Address" value={form.address || ""} onChange={v => setForm(f => ({ ...f, address: v }))} placeholder="Full address…" />
+                <Inp label="Skillset" value={form.skillset || ""} onChange={v => setForm(f => ({ ...f, skillset: v }))} placeholder="e.g. React, Python, SQL" />
+              </div>
+            )}
           </div>
-        </Card>
+        </div>
 
-        <Card>
-          <h4 style={{ margin: "0 0 16px", fontSize: 14, color: C.text, fontWeight: 800 }}>Personal Information</h4>
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <Inp disabled={!isEditing} label="Date of Birth" type="date" value={form.dob || ""} onChange={v => setForm(f => ({ ...f, dob: v }))} />
-              <Inp disabled={!isEditing} label="Mobile" value={form.mobile || ""} onChange={v => setForm(f => ({ ...f, mobile: v }))} placeholder="+1 123 456 7890" />
-              <Inp disabled={!isEditing} label="Emergency Contact" value={form.emergencyContact || ""} onChange={v => setForm(f => ({ ...f, emergencyContact: v }))} placeholder="+1 ... (Emergency)" />
-            </div>
-            <Inp disabled={!isEditing} label="Address" value={form.address || ""} onChange={v => setForm(f => ({ ...f, address: v }))} placeholder="Full address..." />
-            <Inp disabled={!isEditing} label="Skillset" value={form.skillset || ""} onChange={v => setForm(f => ({ ...f, skillset: v }))} placeholder="e.g. React, Node, SQL, Python" />
-          </div>
-        </Card>
-      </div>
-
-      <Card>
-        <h4 style={{ margin: "0 0 16px", fontSize: 14, color: C.text, fontWeight: 800 }}>Banking Details & Taxation</h4>
-        <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          {isEditing ? (
-            <div>
-              <Inp label="PAN Number" value={form.panNumber || profile.pan_number || ""} onChange={v => setForm(f => ({ ...f, panNumber: v }))} placeholder="ABCDE1234F" type={showPan ? "text" : "password"} />
-              <button onClick={() => setShowPan(s => !s)} style={{ marginTop: 4, background: "none", border: "none", cursor: "pointer", color: C.accent, fontSize: 11, fontWeight: 600, padding: 0 }}>{showPan ? "Hide" : "View"}</button>
+        {/* ── Banking & Taxation ── */}
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "22px 22px" }}>
+          <SectionHead icon="🏦" title="Banking & Taxation" badge="Sensitive — data is masked by default" />
+          {!isEditing ? (
+            <div className="prof-bank-grid">
+              <div>
+                <InfoRow icon="🪪" label="PAN Number" value={form.panNumber || profile.pan_number} masked show={showPan} onToggle={() => setShowPan(v => !v)} />
+                <InfoRow icon="🔢" label="Account No" value={form.bankAccountNo} masked show={showAccount} onToggle={() => setShowAccount(v => !v)} />
+              </div>
+              <div>
+                <InfoRow icon="🏛" label="Bank Name" value={form.bankName} />
+                <InfoRow icon="🔤" label="IFSC Code" value={form.bankIfsc} />
+              </div>
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <label style={{ fontSize: 12, color: C.textDim, fontWeight: 600, letterSpacing: .4 }}>PAN Number</label>
-              <SensitiveDisplay value={form.panNumber || profile?.pan_number} />
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div className="prof-bank-grid">
+                <div>
+                  <Inp label="PAN Number" value={form.panNumber || profile.pan_number || ""} onChange={v => setForm(f => ({ ...f, panNumber: v }))} placeholder="ABCDE1234F" type={showPan ? "text" : "password"} />
+                  <button onClick={() => setShowPan(s => !s)} style={{ marginTop: 4, background: "none", border: "none", cursor: "pointer", color: C.accent, fontSize: 11, fontWeight: 600, padding: 0 }}>{showPan ? "Hide" : "Show"}</button>
+                </div>
+                <Inp label="Bank Name" value={form.bankName || ""} onChange={v => setForm(f => ({ ...f, bankName: v }))} placeholder="e.g. HDFC Bank" />
+              </div>
+              <div className="prof-bank-grid">
+                <div>
+                  <Inp label="Account No" value={form.bankAccountNo || ""} onChange={v => setForm(f => ({ ...f, bankAccountNo: v }))} placeholder="1234567890" type={showAccount ? "text" : "password"} />
+                  <button onClick={() => setShowAccount(s => !s)} style={{ marginTop: 4, background: "none", border: "none", cursor: "pointer", color: C.accent, fontSize: 11, fontWeight: 600, padding: 0 }}>{showAccount ? "Hide" : "Show"}</button>
+                </div>
+                <Inp label="IFSC Code" value={form.bankIfsc || ""} onChange={v => setForm(f => ({ ...f, bankIfsc: v }))} placeholder="HDFC0001234" />
+              </div>
             </div>
           )}
-          <Inp disabled={!isEditing} label="Bank Name" value={form.bankName || ""} onChange={v => setForm(f => ({ ...f, bankName: v }))} placeholder="e.g. Chase" />
         </div>
-        <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 12 }}>
-          {isEditing ? (
-            <div>
-              <Inp label="Account No" value={form.bankAccountNo || ""} onChange={v => setForm(f => ({ ...f, bankAccountNo: v }))} placeholder="1234567890" type={showAccount ? "text" : "password"} />
-              <button onClick={() => setShowAccount(s => !s)} style={{ marginTop: 4, background: "none", border: "none", cursor: "pointer", color: C.accent, fontSize: 11, fontWeight: 600, padding: 0 }}>{showAccount ? "Hide" : "View"}</button>
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <label style={{ fontSize: 12, color: C.textDim, fontWeight: 600, letterSpacing: .4 }}>Account No</label>
-              <SensitiveDisplay value={form.bankAccountNo} />
-            </div>
-          )}
-          <Inp disabled={!isEditing} label="IFSC Code" value={form.bankIfsc || ""} onChange={v => setForm(f => ({ ...f, bankIfsc: v }))} placeholder="CHAS0123456" />
-        </div>
-      </Card>
 
-      {showPwModal && (
-        <Modal title="Change Password" onClose={() => setShowPwModal(false)}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
+        {/* ── Change Password Modal ── */}
+        {showPwModal && (
+          <Modal title="Change Password" onClose={() => setShowPwModal(false)}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <Inp label="Current Password" type="password" value={pwForm.oldPassword} onChange={v => setPwForm(f => ({ ...f, oldPassword: v }))} placeholder="••••••••" />
               <Inp label="New Password" type="password" value={pwForm.newPassword} onChange={v => setPwForm(f => ({ ...f, newPassword: v }))} placeholder="••••••••" />
+              <div style={{ fontSize: 12, color: C.textDim }}>Updates your login credentials immediately.</div>
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <Btn onClick={handleSavePw} disabled={pwSaving}>{pwSaving ? "Updating…" : "Update Password"}</Btn>
+              </div>
             </div>
-            <div style={{ fontSize: 12, color: C.textDim }}>Updates your login credentials immediately.</div>
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
-              <Btn onClick={handleSavePw} disabled={pwSaving} style={{ padding: "8px 24px", fontSize: 13, background: `linear-gradient(135deg,${C.purple},${C.purple}dd)` }}>
-                {pwSaving ? "Updating…" : "Update Password"}
-              </Btn>
-            </div>
-          </div>
-        </Modal>
-      )}
+          </Modal>
+        )}
 
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -3587,43 +4157,157 @@ function MyProfile({ currentUser }) {
 // ════════════════════════════════════════════════════════
 function EmployeeHome({ currentUser }) {
   const [tab, setTab] = useState("profile");
+
+  const roleLabel = currentUser.role === "manager" ? "Manager"
+    : currentUser.role === "admin" ? "Admin"
+      : currentUser.role === "intras" ? "Intern"
+        : "Employee";
+
+  const roleColor = currentUser.role === "admin" ? C.red
+    : currentUser.role === "manager" ? C.amber
+      : currentUser.role === "intras" ? C.purple
+        : C.green;
+
+  const tabs = [
+    { key: "profile", icon: "👤", label: "My Profile" },
+    { key: "timesheets", icon: "⏱", label: "My Timesheets" },
+    { key: "leave", icon: "🌴", label: "My Leave" },
+    { key: "expenses", icon: "💳", label: "My Expenses" },
+    { key: "pay", icon: "💰", label: "My Pay" },
+    { key: "policies", icon: "📋", label: "Company Policy" },
+  ].filter(t => t.key !== "pay" || currentUser.role !== "intras");
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <Card style={{ padding: 0, overflow: "hidden", border: `1px solid ${C.accent}33`, position: "relative", height: 225 }}>
-        <img src="/banner.jpg" alt="Fascinate IT" style={{ width: "100%", height: "100%", display: "block", objectFit: "cover", objectPosition: "bottom" }} />
-        <div style={{
-          position: "absolute", inset: 0,
-          background: "linear-gradient(90deg, rgba(10,14,26,0.88) 0%, rgba(10,14,26,0.65) 50%, rgba(10,14,26,0.15) 100%)",
-          display: "flex", alignItems: "center", padding: "0 28px"
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
-            <Avatar initials={currentUser.avatar || mkAvi(currentUser.emp_name || "")} color={C.accent} size={54} />
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 20, fontWeight: 800, color: "#ffffff" }}>Welcome, {(currentUser.emp_name || currentUser.username).split(" ")[0]} 👋</div>
-              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.65)", marginTop: 3 }}>Employee Portal</div>
-              <div style={{ marginTop: 8 }}><Badge color={C.green}>{currentUser.role === "manager" ? "Manager" : currentUser.role === "admin" ? "Admin" : currentUser.role === "intras" ? "Intern" : "Employee"}</Badge></div>
+    <>
+      <style>{`
+        .eh-tabs-bar { display: flex; overflow-x: auto; gap: 2px; scrollbar-width: none; }
+        .eh-tabs-bar::-webkit-scrollbar { display: none; }
+        .eh-tab-btn { display: flex; align-items: center; gap: 7px; padding: 11px 20px; border: none; cursor: pointer; font-size: 13.5px; font-weight: 600; white-space: nowrap; border-bottom: 3px solid transparent; transition: all .18s; background: transparent; }
+        .eh-tab-btn:hover { color: #ffffff !important; background: rgba(255,255,255,0.05); }
+        @media (max-width: 768px) {
+          .eh-hero-content { padding: 0 20px !important; }
+          .eh-hero-name { font-size: 22px !important; }
+          .eh-hero-meta { display: none; }
+          .eh-tab-btn { padding: 10px 14px; font-size: 12.5px; }
+        }
+        @media (max-width: 500px) {
+          .eh-tab-btn .eh-tab-label { display: none; }
+          .eh-tab-btn { padding: 10px 14px; font-size: 18px; }
+        }
+      `}</style>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+
+        {/* ── Hero Banner ── */}
+        <div style={{ position: "relative", borderRadius: 20, overflow: "hidden", border: `1px solid ${C.border}`, boxShadow: "0 8px 40px rgba(0,0,0,0.4)" }}>
+          {/* Background image */}
+          <img src="/banner.jpg" alt="Fascinate IT"
+            style={{ width: "100%", height: 220, display: "block", objectFit: "cover", objectPosition: "bottom" }} />
+
+          {/* Gradient overlay */}
+          <div style={{
+            position: "absolute", inset: 0,
+            background: "linear-gradient(100deg, rgba(8,12,24,0.95) 0%, rgba(8,12,24,0.78) 45%, rgba(8,12,24,0.15) 100%)",
+          }} />
+
+          {/* Content */}
+          <div className="eh-hero-content" style={{
+            position: "absolute", inset: 0,
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "0 36px",
+          }}>
+            {/* Left: Avatar + name */}
+            <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+              {/* Avatar ring */}
+              <div style={{
+                padding: 3, borderRadius: "50%",
+                background: `linear-gradient(135deg, ${C.accent}, ${C.purple})`,
+                boxShadow: `0 0 24px ${C.accent}55`,
+              }}>
+                <div style={{
+                  width: 68, height: 68, borderRadius: "50%",
+                  background: `linear-gradient(135deg, ${C.accent}cc, ${C.purple}99)`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 26, fontWeight: 900, color: "#fff", letterSpacing: -1,
+                  border: "2px solid rgba(0,0,0,0.4)",
+                }}>
+                  {currentUser.avatar || mkAvi(currentUser.emp_name || currentUser.username || "")}
+                </div>
+              </div>
+
+              <div>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", marginBottom: 5 }}>
+                  Employee Portal
+                </div>
+                <div className="eh-hero-name" style={{ fontSize: 28, fontWeight: 900, color: "#ffffff", letterSpacing: -0.5, lineHeight: 1 }}>
+                  Welcome, {(currentUser.emp_name || currentUser.username).split(" ")[0]} 👋
+                </div>
+                <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span style={{
+                    background: roleColor + "33", color: roleColor, border: `1px solid ${roleColor}55`,
+                    fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20, letterSpacing: .5, textTransform: "uppercase",
+                  }}>{roleLabel}</span>
+                  {currentUser.group_name && (
+                    <span style={{
+                      background: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.7)", border: "1px solid rgba(255,255,255,0.15)",
+                      fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20,
+                    }}>{currentUser.group_name}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Right: Quick info chips (hidden on mobile via CSS) */}
+            <div className="eh-hero-meta" style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
+              {currentUser.emp_id && (
+                <div style={{ display: "flex", alignItems: "center", gap: 7, background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 10, padding: "7px 14px" }}>
+                  <span style={{ fontSize: 13 }}>🪪</span>
+                  <span style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", fontWeight: 500 }}>ID</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>{currentUser.emp_id}</span>
+                </div>
+              )}
+              {currentUser.email && (
+                <div style={{ display: "flex", alignItems: "center", gap: 7, background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 10, padding: "7px 14px" }}>
+                  <span style={{ fontSize: 13 }}>✉️</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.75)" }}>{currentUser.email}</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
-      </Card>
-      <div style={{ display: "flex", gap: 4, background: C.surface, padding: 4, borderRadius: 10, width: "fit-content", flexWrap: "wrap" }}>
-        {[["profile", "👤 My Profile"], ["timesheets", "⏱ My Timesheets"], ["leave", "🌴 My Leave"], ["expenses", "💳 My Expenses"], ["pay", "💰 My Pay"], ["policies", "📜 Company Policy"]]
-          .filter(([t]) => t !== "pay" || currentUser.role !== "intras")
-          .map(([t, label]) => (
-            <button key={t} onClick={() => setTab(t)} style={{
-              background: tab === t ? C.card : "transparent", color: tab === t ? C.text : C.textMuted,
-              border: tab === t ? `1px solid ${C.border}` : "1px solid transparent",
-              borderRadius: 8, padding: "8px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer"
-            }}>{label}</button>
-          ))}
+
+        {/* ── Tab Navigation Bar ── */}
+        <div style={{
+          background: C.card, border: `1px solid ${C.border}`, borderRadius: 14,
+          overflow: "hidden",
+        }}>
+          <div className="eh-tabs-bar" style={{ borderBottom: `1px solid ${C.border}` }}>
+            {tabs.map(t => (
+              <button key={t.key} className="eh-tab-btn" onClick={() => setTab(t.key)}
+                style={{
+                  color: tab === t.key ? C.accent : C.textMuted,
+                  borderBottomColor: tab === t.key ? C.accent : "transparent",
+                  background: tab === t.key ? C.accent + "0e" : "transparent",
+                }}>
+                <span style={{ fontSize: 16 }}>{t.icon}</span>
+                <span className="eh-tab-label">{t.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* ── Tab Content ── */}
+          <div style={{ padding: "24px 20px" }}>
+            {tab === "profile" && <MyProfile currentUser={currentUser} />}
+            {tab === "timesheets" && <Timesheets currentUser={currentUser} viewOnly />}
+            {tab === "leave" && <Leaves currentUser={currentUser} viewOnly />}
+            {tab === "expenses" && <Expenses currentUser={currentUser} viewOnly />}
+            {tab === "pay" && currentUser.role !== "intras" && <MyPay currentUser={currentUser} />}
+            {tab === "policies" && <DocumentGrid type="policy" allowEdit={false} />}
+          </div>
+        </div>
+
       </div>
-      {tab === "profile" && <MyProfile currentUser={currentUser} />}
-      {tab === "timesheets" && <Timesheets currentUser={currentUser} viewOnly />}
-      {tab === "leave" && <Leaves currentUser={currentUser} viewOnly />}
-      {tab === "expenses" && <Expenses currentUser={currentUser} viewOnly />}
-      {tab === "pay" && currentUser.role !== "intras" && <MyPay currentUser={currentUser} />}
-      {tab === "policies" && <DocumentGrid type="policy" allowEdit={false} />}
-    </div>
+    </>
   );
 }
 
@@ -3674,137 +4358,204 @@ function MyPay({ currentUser }) {
   const mask = n => showAmounts ? fmt(n) : "••••••";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>My Pay</h2>
-          <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>Monthly salary slips issued by your admin</p>
+    <>
+      <style>{`
+        .pay-kpi-row { display: flex; gap: 12px; flex-wrap: wrap; }
+        .pay-kpi-card { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 14px; padding: 14px 18px; display: flex; align-items: center; gap: 12px; flex: 1 1 150px; transition: box-shadow .2s, transform .15s; }
+        .pay-kpi-card:hover { box-shadow: 0 6px 24px rgba(0,0,0,0.32); transform: translateY(-1px); }
+        .pay-ed-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+        .pay-history-row { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid ${C.border}22; cursor: pointer; transition: background .15s; }
+        .pay-history-row:hover { background: ${C.accentGlow}; }
+        .pay-history-row:last-child { border-bottom: none; }
+        @media (max-width: 700px) {
+          .pay-ed-grid { grid-template-columns: 1fr; gap: 16px; }
+          .pay-kpi-card { flex: 1 1 140px; padding: 12px 14px; }
+        }
+        @media (max-width: 480px) {
+          .pay-kpi-row { gap: 8px; }
+          .pay-kpi-card { flex: 1 1 120px; }
+        }
+      `}</style>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+
+        {/* ── Header ── */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: -0.5 }}>My Pay</h2>
+            <p style={{ margin: "5px 0 0", color: C.textMuted, fontSize: 13 }}>Monthly salary slips issued by your admin</p>
+          </div>
+          {payslips.length > 0 && (
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <button onClick={() => setShowAmounts(v => !v)}
+                style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, color: showAmounts ? C.accent : C.textMuted, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, transition: "all .2s" }}>
+                {showAmounts ? "🙈 Hide Amounts" : "👁 Show Amounts"}
+              </button>
+              <select value={selected?.id || ""} onChange={e => setSelected(payslips.find(p => p.id === +e.target.value))}
+                style={{ background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                {payslips.map(p => (
+                  <option key={p.id} value={p.id}>{SLIP_MONTHS[p.month - 1]} {p.year}</option>
+                ))}
+              </select>
+              {selected && (
+                selected.is_approved
+                  ? <Btn onClick={() => printPayslipData(selected, origin)}>🖨 Download PDF</Btn>
+                  : selected.download_requested
+                    ? <Btn variant="ghost" disabled style={{ opacity: 0.6, cursor: "not-allowed" }}>⏳ Awaiting Approval</Btn>
+                    : <Btn variant="ghost" onClick={() => handleRequestDownload(selected)} disabled={requesting}>📩 Request Download</Btn>
+              )}
+            </div>
+          )}
         </div>
-        {payslips.length > 0 && (
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <button onClick={() => setShowAmounts(v => !v)} title={showAmounts ? "Hide amounts" : "View amounts"}
-              style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.textMuted, padding: "7px 12px", fontSize: 14, cursor: "pointer", lineHeight: 1 }}>
-              {showAmounts ? "🙈 Hide" : "👁 View"}
-            </button>
-            <select value={selected?.id || ""} onChange={e => setSelected(payslips.find(p => p.id === +e.target.value))}
-              style={{ background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "7px 12px", fontSize: 13, cursor: "pointer" }}>
-              {payslips.map(p => (
-                <option key={p.id} value={p.id}>{SLIP_MONTHS[p.month - 1]} {p.year}</option>
+
+        {payslips.length === 0 ? (
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "56px 32px", textAlign: "center" }}>
+            <div style={{ fontSize: 52, marginBottom: 14 }}>💰</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 8 }}>No payslips yet</div>
+            <p style={{ fontSize: 13, color: C.textMuted, margin: 0 }}>Your admin hasn't generated any payslips for you yet. Check back later.</p>
+          </div>
+        ) : selected ? (
+          <>
+            {/* ── KPI Summary Cards ── */}
+            <div className="pay-kpi-row">
+              {[
+                { label: "Monthly Gross", value: mask(selected.gross), color: C.green, icon: "💵" },
+                { label: "Basic Salary", value: mask(selected.basic), color: C.accent, icon: "🏦" },
+                { label: "HRA", value: mask(selected.hra), color: C.purple, icon: "🏠" },
+                { label: "Conveyance", value: mask(selected.transport), color: C.amber, icon: "🚗" },
+                { label: "PF Deduction", value: mask(selected.pf_employee), color: C.red, icon: "📉" },
+                { label: "Net Pay", value: mask(selected.net_pay), color: C.green, icon: "✅" },
+              ].map(s => (
+                <div key={s.label} className="pay-kpi-card">
+                  <div style={{ width: 38, height: 38, borderRadius: 10, background: s.color + "22", border: `1px solid ${s.color}33`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, flexShrink: 0 }}>{s.icon}</div>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: s.color, lineHeight: 1 }}>{s.value}</div>
+                    <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 600, marginTop: 3, letterSpacing: .3 }}>{s.label}</div>
+                  </div>
+                </div>
               ))}
-            </select>
-            {selected && (
-              selected.is_approved
-                ? <Btn onClick={() => printPayslipData(selected, origin)}>🖨 Download PDF</Btn>
-                : selected.download_requested
-                  ? <Btn variant="ghost" disabled style={{ opacity: 0.6, cursor: "not-allowed" }}>⏳ Awaiting Approval</Btn>
-                  : <Btn variant="ghost" onClick={() => handleRequestDownload(selected)} disabled={requesting}>📩 Request for Download</Btn>
-            )}
+            </div>
+
+            {/* ── Earnings & Deductions ── */}
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "24px 28px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: C.accent + "22", border: `1px solid ${C.accent}33`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17 }}>📋</div>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Earnings &amp; Deductions</div>
+                  <div style={{ fontSize: 12, color: C.textMuted }}>{SLIP_MONTHS[selected.month - 1]} {selected.year}</div>
+                </div>
+              </div>
+
+              <div className="pay-ed-grid">
+                {/* Earnings column */}
+                <div style={{ background: C.surface, borderRadius: 12, padding: "16px 18px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 14 }}>
+                    <div style={{ width: 6, height: 6, borderRadius: 3, background: C.green }} />
+                    <span style={{ fontSize: 11, color: C.green, fontWeight: 700, textTransform: "uppercase", letterSpacing: .6 }}>Earnings</span>
+                  </div>
+                  {[
+                    ["Basic Salary", selected.basic],
+                    ["HRA", selected.hra],
+                    ["Leave Travel Allowance", selected.leave_travel_allowance],
+                    ["Special Allowance", selected.special_allowance],
+                    ["Conveyance Allowance", selected.transport],
+                    ["Medical Allowance", selected.medical_allowance],
+                    ["Internet & Broadband", selected.internet_allowance],
+                    ["Professional Dev.", selected.professional_dev_allowance],
+                    ["Insurance", selected.insurance_allowance],
+                    ["Variable Pay", selected.variable_pay],
+                    ["Bonus", selected.bonus],
+                  ].map(([k, v]) => Number(v) > 0 ? (
+                    <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: `1px solid ${C.border}22`, fontSize: 13 }}>
+                      <span style={{ color: C.textDim }}>{k}</span>
+                      <span style={{ fontWeight: 600, color: C.text }}>{mask(v)}</span>
+                    </div>
+                  ) : null)}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0 2px", fontSize: 14, fontWeight: 800, color: C.green, borderTop: `2px solid ${C.green}33`, marginTop: 6 }}>
+                    <span>Gross Salary</span><span>{mask(selected.gross)}</span>
+                  </div>
+                </div>
+
+                {/* Deductions column */}
+                <div style={{ background: C.surface, borderRadius: 12, padding: "16px 18px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 14 }}>
+                    <div style={{ width: 6, height: 6, borderRadius: 3, background: C.red }} />
+                    <span style={{ fontSize: 11, color: C.red, fontWeight: 700, textTransform: "uppercase", letterSpacing: .6 }}>Deductions</span>
+                  </div>
+                  {[
+                    ["Professional Tax", selected.professional_tax],
+                    ["Income Tax (TDS)", selected.income_tax],
+                    ["Provident Fund", selected.pf_employee],
+                    ["Other Deductions", selected.extra_deductions],
+                  ].map(([k, v]) => Number(v) > 0 ? (
+                    <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: `1px solid ${C.border}22`, fontSize: 13 }}>
+                      <span style={{ color: C.textDim }}>{k}</span>
+                      <span style={{ fontWeight: 600, color: C.red }}>{mask(v)}</span>
+                    </div>
+                  ) : null)}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0 2px", fontSize: 14, fontWeight: 800, color: C.red, borderTop: `2px solid ${C.red}33`, marginTop: 6 }}>
+                    <span>Total Deductions</span>
+                    <span>{mask(Number(selected.pf_employee) + Number(selected.professional_tax) + Number(selected.income_tax) + Number(selected.extra_deductions))}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Net Pay Banner */}
+              <div style={{ background: `linear-gradient(135deg, ${C.green}18, ${C.accent}14)`, border: `1px solid ${C.green}44`, borderRadius: 12, padding: "18px 24px", marginTop: 20, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 10, background: C.green + "25", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>💳</div>
+                  <div>
+                    <div style={{ fontSize: 12, color: C.textMuted, fontWeight: 600 }}>Take-Home Pay</div>
+                    <div style={{ fontSize: 13, color: C.textDim }}>{SLIP_MONTHS[selected.month - 1]} {selected.year}</div>
+                  </div>
+                </div>
+                <div style={{ fontSize: 30, fontWeight: 900, color: C.green, letterSpacing: -1 }}>{mask(selected.net_pay)}</div>
+              </div>
+            </div>
+          </>
+        ) : null}
+
+        {/* ── Payslip History ── */}
+        {payslips.length > 1 && (
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, overflow: "hidden" }}>
+            <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ width: 32, height: 32, borderRadius: 8, background: C.accent + "22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }}>📅</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Payslip History</div>
+              <div style={{ marginLeft: "auto", fontSize: 12, color: C.textMuted, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 20, padding: "3px 10px" }}>{payslips.length} slips</div>
+            </div>
+
+            {/* Table header */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr auto", gap: 0, padding: "10px 20px", background: C.surface, borderBottom: `1px solid ${C.border}` }}>
+              {["Period", "Gross", "Deductions", "Net Pay", ""].map(h => (
+                <div key={h} style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>{h}</div>
+              ))}
+            </div>
+
+            {payslips.map(p => (
+              <div key={p.id} className="pay-history-row"
+                style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr auto", gap: 0, background: selected?.id === p.id ? C.accentGlow : "transparent" }}
+                onClick={() => setSelected(p)}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.text, display: "flex", alignItems: "center", gap: 8 }}>
+                  {selected?.id === p.id && <div style={{ width: 6, height: 6, borderRadius: 3, background: C.accent }} />}
+                  {SLIP_MONTHS[p.month - 1]} {p.year}
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: C.green, display: "flex", alignItems: "center" }}>{mask(p.gross)}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: C.red, display: "flex", alignItems: "center" }}>{mask(Number(p.pf_employee) + Number(p.professional_tax))}</div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: C.green, display: "flex", alignItems: "center" }}>{mask(p.net_pay)}</div>
+                <div onClick={e => e.stopPropagation()} style={{ display: "flex", alignItems: "center" }}>
+                  {p.is_approved
+                    ? <Btn small variant="ghost" onClick={() => printPayslipData(p, origin)}>🖨 PDF</Btn>
+                    : p.download_requested
+                      ? <span style={{ fontSize: 12, color: C.textMuted, padding: "4px 10px", border: `1px solid ${C.border}`, borderRadius: 8 }}>⏳ Pending</span>
+                      : <Btn small variant="ghost" onClick={() => handleRequestDownload(p)} disabled={requesting}>📩 Request</Btn>
+                  }
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
-
-      {payslips.length === 0 ? (
-        <Card style={{ textAlign: "center", padding: 48, color: C.textMuted }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>💰</div>
-          <div style={{ fontSize: 15, fontWeight: 600 }}>No payslips yet</div>
-          <p style={{ fontSize: 13, marginTop: 8 }}>Your admin hasn't generated any payslips for you yet.</p>
-        </Card>
-      ) : selected ? (
-        <>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 14 }}>
-            {[["Monthly Gross", mask(selected.gross), C.green], ["Basic Salary", mask(selected.basic), C.accent],
-            ["HRA", mask(selected.hra), C.purple], ["Conveyance", mask(selected.transport), C.amber],
-            ["PF Deduction", mask(selected.pf_employee), C.red], ["Net Pay", mask(selected.net_pay), C.green]].map(([label, value, color]) => (
-              <Card key={label} style={{ textAlign: "center", padding: "18px 12px" }}>
-                <div style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", letterSpacing: .5, marginBottom: 6 }}>{label}</div>
-                <div style={{ fontSize: 20, fontWeight: 800, color }}>{value}</div>
-              </Card>
-            ))}
-          </div>
-          <Card>
-            <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 16 }}>
-              Earnings &amp; Deductions — {SLIP_MONTHS[selected.month - 1]} {selected.year}
-            </div>
-            <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
-              <div>
-                <div style={{ fontSize: 12, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>Earnings</div>
-                {[
-                  ["Basic Salary", selected.basic], ["HRA", selected.hra],
-                  ["Leave Travel Allowance", selected.leave_travel_allowance],
-                  ["Special Allowance", selected.special_allowance],
-                  ["Conveyance Allowance", selected.transport],
-                  ["Medical Allowance", selected.medical_allowance],
-                  ["Internet & Broadband Allowance", selected.internet_allowance],
-                  ["Professional Development Allowance", selected.professional_dev_allowance],
-                  ["Insurance", selected.insurance_allowance],
-                  ["Variable Pay", selected.variable_pay],
-                  ["Bonus", selected.bonus]
-                ].map(([k, v]) => Number(v) > 0 ? (
-                  <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.border}22`, fontSize: 13 }}>
-                    <span style={{ color: C.textDim }}>{k}</span><span style={{ fontWeight: 600, color: C.text }}>{mask(v)}</span>
-                  </div>
-                ) : null)}
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", fontSize: 14, fontWeight: 800, color: C.green, borderTop: `2px solid ${C.border}44`, marginTop: 4 }}>
-                  <span>Gross Salary</span><span>{mask(selected.gross)}</span>
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: 12, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>Deductions</div>
-                {[
-                  ["Professional Tax", selected.professional_tax],
-                  ["Income Tax (TDS)", selected.income_tax],
-                  ["Provident Fund", selected.pf_employee],
-                  ["Other Deductions", selected.extra_deductions]
-                ].map(([k, v]) => Number(v) > 0 ? (
-                  <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.border}22`, fontSize: 13 }}>
-                    <span style={{ color: C.textDim }}>{k}</span><span style={{ fontWeight: 600, color: C.red }}>{mask(v)}</span>
-                  </div>
-                ) : null)}
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", fontSize: 14, fontWeight: 800, color: C.red, borderTop: `2px solid ${C.border}44`, marginTop: 4 }}>
-                  <span>Total Deductions</span><span>{mask(Number(selected.pf_employee) + Number(selected.professional_tax) + Number(selected.income_tax) + Number(selected.extra_deductions))}</span>
-                </div>
-              </div>
-            </div>
-            <div style={{ background: `linear-gradient(135deg,#1a234044,#2d3d6e44)`, border: `1px solid ${C.accent}44`, borderRadius: 10, padding: "16px 24px", marginTop: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontSize: 13, color: C.textMuted }}>Net Pay for {SLIP_MONTHS[selected.month - 1]} {selected.year}</div>
-              <div style={{ fontSize: 26, fontWeight: 800, color: C.green }}>{mask(selected.net_pay)}</div>
-            </div>
-          </Card>
-        </>
-      ) : null}
-
-      {/* All payslips list */}
-      {payslips.length > 1 && (
-        <Card style={{ padding: 0, overflow: "hidden" }}>
-          <div style={{ padding: "14px 20px", borderBottom: `1px solid ${C.border}`, fontSize: 14, fontWeight: 700, color: C.text }}>All Payslips</div>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead><tr style={{ background: C.surface }}>
-              {["Period", "Gross", "Deductions", "Net Pay", ""].map(h => (
-                <th key={h} style={{ padding: "10px 16px", textAlign: "left", fontSize: 11, color: C.textMuted, textTransform: "uppercase", letterSpacing: .5, fontWeight: 700, borderBottom: `1px solid ${C.border}` }}>{h}</th>
-              ))}
-            </tr></thead>
-            <tbody>
-              {payslips.map(p => (
-                <tr key={p.id} style={{ borderBottom: `1px solid ${C.border}22`, background: selected?.id === p.id ? C.accentGlow : "transparent", cursor: "pointer" }} onClick={() => setSelected(p)}>
-                  <td style={{ padding: "11px 16px", fontSize: 13, fontWeight: 600, color: C.text }}>{SLIP_MONTHS[p.month - 1]} {p.year}</td>
-                  <td style={{ padding: "11px 16px", fontSize: 13, color: C.green }}>{mask(p.gross)}</td>
-                  <td style={{ padding: "11px 16px", fontSize: 13, color: C.red }}>{mask(Number(p.pf_employee) + Number(p.professional_tax))}</td>
-                  <td style={{ padding: "11px 16px", fontSize: 14, fontWeight: 800, color: C.green }}>{mask(p.net_pay)}</td>
-                  <td style={{ padding: "11px 16px" }} onClick={e => e.stopPropagation()}>
-                    {p.is_approved
-                      ? <Btn small variant="ghost" onClick={() => printPayslipData(p, origin)}>🖨 Download PDF</Btn>
-                      : p.download_requested
-                        ? <span style={{ fontSize: 12, color: C.textMuted, padding: "4px 8px", border: `1px solid ${C.border}`, borderRadius: 6 }}>⏳ Awaiting Approval</span>
-                        : <Btn small variant="ghost" onClick={() => handleRequestDownload(p)} disabled={requesting}>📩 Request</Btn>
-                    }
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
-      )}
-    </div>
+    </>
   );
 }
 
@@ -3872,117 +4623,205 @@ function Expenses({ currentUser, viewOnly }) {
   const statusOpts = ["pending", "approved", "rejected", "needs_correction", "paid"].map(s => ({ value: s, label: s.replace("_", " ") }));
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 10 }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>{viewOnly ? "My Expenses" : "Expense Reports"}</h2>
-          <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>{viewOnly ? "Submit and track expense claims" : "Review and approve employee expenses"}</p>
-        </div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <Inp label="" value={filterStatus} onChange={setFilterStatus} options={statusOpts} placeholder="All statuses" />
+    <>
+      <style>{`
+        .exp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; }
+        .exp-card { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 14px; overflow: hidden; transition: transform .15s, box-shadow .15s; }
+        .exp-card:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
+        .exp-filter-pill { background: ${C.surface}; border: 1px solid ${C.border}; border-radius: 20px; padding: 5px 14px; font-size: 12px; font-weight: 600; color: ${C.textMuted}; cursor: pointer; transition: all .15s; white-space: nowrap; }
+        .exp-filter-pill.active { background: ${C.accent}22; border-color: ${C.accent}66; color: ${C.accent}; }
+        @media (max-width: 640px) { .exp-grid { grid-template-columns: 1fr; } }
+      `}</style>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+
+        {/* ── Header ── */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: -0.5 }}>
+              {viewOnly ? "My Expenses" : "Expense Reports"}
+            </h2>
+            <p style={{ margin: "5px 0 0", color: C.textMuted, fontSize: 13 }}>
+              {viewOnly ? "Submit and track your expense claims" : "Review and approve employee expenses"}
+            </p>
+          </div>
           {viewOnly && <Btn onClick={() => setModal("new")}>+ Submit Expense</Btn>}
         </div>
-      </div>
 
-      {rows.length === 0 && (
-        <Card style={{ textAlign: "center", padding: 40, color: C.textMuted }}>No expense records found.</Card>
-      )}
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {rows.map(ex => {
-          const statusColor = EXP_STATUS_COLOR[ex.status] || C.textMuted;
-          const canEdit = viewOnly && (ex.status === "pending" || ex.status === "needs_correction");
+        {/* ── Summary KPIs ── */}
+        {rows.length > 0 && (() => {
+          const totalAmt = rows.reduce((s, r) => s + (+r.amount || 0), 0);
+          const pendingAmt = rows.filter(r => r.status === "pending").reduce((s, r) => s + (+r.amount || 0), 0);
+          const paidAmt = rows.filter(r => r.status === "paid").reduce((s, r) => s + (+r.amount || 0), 0);
           return (
-            <Card key={ex.id} style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
-              <div style={{
-                width: 44, height: 44, borderRadius: 10, background: statusColor + "22", border: `1px solid ${statusColor} 44`,
-                display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0
-              }}>
-                {ex.category === "Travel" ? "✈️" : ex.category === "Meals" ? "🍽" : ex.category === "Software" ? "💻" : ex.category === "Hardware" ? "🖥" : ex.category === "Training" ? "📚" : "🧾"}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8 }}>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              {[
+                { label: "Total Claimed", value: fmt$(totalAmt), color: C.accent, icon: "🧾" },
+                { label: "Pending", value: fmt$(pendingAmt), color: C.amber, icon: "⏳" },
+                { label: "Paid Out", value: fmt$(paidAmt), color: C.green, icon: "✅" },
+                { label: "Submissions", value: rows.length, color: C.purple, icon: "📋" },
+              ].map(s => (
+                <div key={s.label} style={{
+                  background: C.card, border: `1px solid ${C.border}`, borderRadius: 14,
+                  padding: "14px 20px", display: "flex", alignItems: "center", gap: 12, flex: "1 1 160px",
+                }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 10, background: s.color + "22", border: `1px solid ${s.color}33`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{s.icon}</div>
                   <div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{ex.title}</div>
-                    {!viewOnly && <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>{ex.employee_name}</div>}
-                    <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>
-                      <Badge color={C.accent}>{ex.category}</Badge>
-                      {ex.project_code && <span style={{ marginLeft: 8 }}><Badge color={C.purple}>{ex.project_code}</Badge></span>}
+                    <div style={{ fontSize: 16, fontWeight: 800, color: s.color }}>{s.value}</div>
+                    <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 600, marginTop: 2 }}>{s.label}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+
+        {/* ── Status Filter Pills ── */}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, letterSpacing: .5, textTransform: "uppercase" }}>Filter:</span>
+          {["", "pending", "approved", "rejected", "needs_correction", "paid"].map(s => (
+            <button key={s} className={`exp-filter-pill${filterStatus === s ? " active" : ""}`}
+              onClick={() => setFilterStatus(s)}
+              style={{
+                background: filterStatus === s ? (EXP_STATUS_COLOR[s] || C.accent) + "22" : C.surface,
+                border: `1px solid ${filterStatus === s ? (EXP_STATUS_COLOR[s] || C.accent) + "66" : C.border}`,
+                borderRadius: 20, padding: "5px 14px", fontSize: 12, fontWeight: 600,
+                color: filterStatus === s ? (EXP_STATUS_COLOR[s] || C.accent) : C.textMuted,
+                cursor: "pointer", transition: "all .15s", whiteSpace: "nowrap",
+              }}
+            >
+              {s === "" ? "All" : s.replace("_", " ").replace(/\b\w/g, c => c.toUpperCase())}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Expense Cards ── */}
+        {rows.length === 0 ? (
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 48, textAlign: "center", color: C.textMuted, fontSize: 13 }}>
+            No expense records found.{viewOnly && " Click \u201c+ Submit Expense\u201d to add your first claim."}
+          </div>
+        ) : (
+          <div className="exp-grid">
+            {rows.map(ex => {
+              const statusColor = EXP_STATUS_COLOR[ex.status] || C.textMuted;
+              const canEdit = viewOnly && (ex.status === "pending" || ex.status === "needs_correction");
+              const catIcon = ex.category === "Travel" ? "✈️" : ex.category === "Meals" ? "🍽" : ex.category === "Software" ? "💻" : ex.category === "Hardware" ? "🖥" : ex.category === "Training" ? "📚" : "🧾";
+              return (
+                <div key={ex.id} className="exp-card">
+                  {/* Card Header */}
+                  <div style={{
+                    padding: "14px 18px", borderBottom: `1px solid ${C.border}`,
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                    background: statusColor + "0A",
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{
+                        width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+                        background: statusColor + "22", border: `1px solid ${statusColor}44`,
+                        display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20,
+                      }}>{catIcon}</div>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{ex.title}</div>
+                        {!viewOnly && ex.employee_name && (
+                          <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{ex.employee_name}</div>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: C.green }}>₹{(+ex.amount || 0).toFixed(2)}</div>
+                      <div style={{ marginTop: 4 }}><Badge color={statusColor}>{ex.status.replace("_", " ")}</Badge></div>
                     </div>
                   </div>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 20, fontWeight: 800, color: C.green }}>₹{(+ex.amount || 0).toFixed(2)}</div>
-                    <div style={{ marginTop: 4 }}><Badge color={statusColor}>{ex.status.replace("_", " ")}</Badge></div>
+
+                  {/* Card Body */}
+                  <div style={{ padding: "12px 18px", display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      <Badge color={C.accent}>{ex.category}</Badge>
+                      {ex.project_code && <Badge color={C.purple}>{ex.project_code}</Badge>}
+                    </div>
+                    {ex.description && (
+                      <div style={{ fontSize: 12, color: C.textDim }}>{ex.description}</div>
+                    )}
+                    {ex.admin_note && (
+                      <div style={{ background: C.purple + "18", border: `1px solid ${C.purple}33`, borderRadius: 8, padding: "8px 12px", fontSize: 12, color: C.purple }}>
+                        📝 {ex.admin_note}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Card Footer — actions */}
+                  <div style={{
+                    padding: "10px 18px", borderTop: `1px solid ${C.border}`,
+                    display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center",
+                  }}>
+                    {canEdit && <Btn small variant="ghost" onClick={() => setModal(ex)}>✏ Edit</Btn>}
+                    {canEdit && <Btn small variant="danger" onClick={() => handleDelete(ex.id)}>🗑</Btn>}
+                    {ex.receipt_url && (
+                      <a href={`${process.env.REACT_APP_API_URL || "http://localhost:5002/api"}/receipts/${ex.receipt_url}`}
+                        target="_blank" rel="noreferrer"
+                        style={{ fontSize: 12, padding: "4px 10px", borderRadius: 6, background: C.accent + "18", color: C.accent, textDecoration: "none", border: `1px solid ${C.accent}44`, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        📎 Receipt
+                      </a>
+                    )}
+                    {!viewOnly && ex.status === "pending" && (
+                      <>
+                        <Btn small variant="success" onClick={() => setNoteModal({ id: ex.id, action: "approve" })}>✓ Approve</Btn>
+                        <Btn small variant="danger" onClick={() => setNoteModal({ id: ex.id, action: "reject" })}>✕ Reject</Btn>
+                        <Btn small variant="ghost" onClick={() => setNoteModal({ id: ex.id, action: "sendback" })}>↩ Send Back</Btn>
+                      </>
+                    )}
+                    {!viewOnly && ex.status === "approved" && (
+                      <Btn small variant="success" onClick={() => setNoteModal({ id: ex.id, action: "pay" })}>💵 Mark Paid</Btn>
+                    )}
                   </div>
                 </div>
-                {ex.description && <div style={{ fontSize: 12, color: C.textDim, marginTop: 8 }}>{ex.description}</div>}
-                {ex.admin_note && (
-                  <div style={{ marginTop: 8, background: C.purple + "18", border: `1px solid ${C.purple} 33`, borderRadius: 8, padding: "8px 12px", fontSize: 12, color: C.purple }}>
-                    📝 Admin note: {ex.admin_note}
-                  </div>
-                )}
-                <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-                  {canEdit && <Btn small variant="ghost" onClick={() => setModal(ex)}>✏ Edit</Btn>}
-                  {canEdit && <Btn small variant="danger" onClick={() => handleDelete(ex.id)}>🗑 Delete</Btn>}
-                  {ex.receipt_url && (
-                    <a href={`${process.env.REACT_APP_API_URL || "http://localhost:5002/api"}/receipts/${ex.receipt_url}`}
-                      target="_blank" rel="noreferrer"
-                      style={{ fontSize: 12, padding: "4px 10px", borderRadius: 6, background: C.accent + "18", color: C.accent, textDecoration: "none", border: `1px solid ${C.accent}44`, display: "inline-flex", alignItems: "center", gap: 4 }}>
-                      📎 View Receipt
-                    </a>
-                  )}
-                  {!viewOnly && ex.status === "pending" && (
-                    <>
-                      <Btn small variant="success" onClick={() => setNoteModal({ id: ex.id, action: "approve" })}>✓ Approve</Btn>
-                      <Btn small variant="danger" onClick={() => setNoteModal({ id: ex.id, action: "reject" })}>✕ Reject</Btn>
-                      <Btn small variant="ghost" onClick={() => setNoteModal({ id: ex.id, action: "sendback" })}>↩ Send Back</Btn>
-                    </>
-                  )}
-                  {!viewOnly && ex.status === "approved" && (
-                    <Btn small variant="success" onClick={() => setNoteModal({ id: ex.id, action: "pay" })}>💵 Mark Paid</Btn>
-                  )}
-                </div>
-              </div>
-            </Card>
-          );
-        })}
-      </div>
-
-      {/* Submit / Edit modal */}
-      {modal && (
-        <Modal title={modal === "new" ? "Submit Expense" : "Edit Expense"} onClose={() => setModal(null)}>
-          <ExpenseForm
-            init={modal === "new" ? { title: "", amount: "", category: "Other", projectId: "", description: "", receiptUrl: "" } :
-              { title: modal.title, amount: modal.amount, category: modal.category, projectId: modal.project_id || "", description: modal.description || "", receiptUrl: modal.receipt_url || "" }}
-            projects={projects}
-            saving={saving}
-            onCancel={() => setModal(null)}
-            onSave={handleSave}
-            btnLabel={modal === "new" ? "Submit" : "Save & Resubmit"}
-          />
-        </Modal>
-      )}
-
-      {/* Admin action note modal */}
-      {noteModal && (
-        <Modal title={noteModal.action === "pay" ? "Mark Expense Paid" : noteModal.action === "approve" ? "Approve Expense" : noteModal.action === "reject" ? "Reject Expense" : "Send Back for Correction"} onClose={() => { setNoteModal(null); setNote(""); }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {noteModal.action !== "approve" && noteModal.action !== "pay" && (
-              <Inp label={noteModal.action === "reject" ? "Rejection reason" : "Correction notes"} value={note} onChange={setNote}
-                placeholder={noteModal.action === "reject" ? "Please explain why…" : "What needs to be fixed…"} />
-            )}
-            {noteModal.action === "approve" && <p style={{ color: C.textDim, fontSize: 13, margin: 0 }}>Confirm approval of this expense?</p>}
-            {noteModal.action === "pay" && <p style={{ color: C.textDim, fontSize: 13, margin: 0 }}>Confirm this approved expense has been paid out?</p>}
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-              <Btn variant="ghost" onClick={() => { setNoteModal(null); setNote(""); }}>Cancel</Btn>
-              <Btn variant={noteModal.action === "approve" || noteModal.action === "pay" ? "success" : "danger"} onClick={handleAction} disabled={saving}>
-                {saving ? "Saving…" : noteModal.action === "approve" ? "✓ Approve" : noteModal.action === "pay" ? "💵 Mark Paid" : noteModal.action === "reject" ? "✕ Reject" : "↩ Send Back"}
-              </Btn>
-            </div>
+              );
+            })}
           </div>
-        </Modal>
-      )}
-    </div>
+        )}
+
+        {/* ── Submit / Edit Modal ── */}
+        {modal && (
+          <Modal title={modal === "new" ? "Submit Expense" : "Edit Expense"} onClose={() => setModal(null)}>
+            <ExpenseForm
+              init={modal === "new"
+                ? { title: "", amount: "", category: "Other", projectId: "", description: "", receiptUrl: "" }
+                : { title: modal.title, amount: modal.amount, category: modal.category, projectId: modal.project_id || "", description: modal.description || "", receiptUrl: modal.receipt_url || "" }}
+              projects={projects}
+              saving={saving}
+              onCancel={() => setModal(null)}
+              onSave={handleSave}
+              btnLabel={modal === "new" ? "Submit" : "Save & Resubmit"}
+            />
+          </Modal>
+        )}
+
+        {/* ── Admin Action Modal ── */}
+        {noteModal && (
+          <Modal
+            title={noteModal.action === "pay" ? "Mark Expense Paid" : noteModal.action === "approve" ? "Approve Expense" : noteModal.action === "reject" ? "Reject Expense" : "Send Back for Correction"}
+            onClose={() => { setNoteModal(null); setNote(""); }}
+          >
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {noteModal.action !== "approve" && noteModal.action !== "pay" && (
+                <Inp label={noteModal.action === "reject" ? "Rejection reason" : "Correction notes"}
+                  value={note} onChange={setNote}
+                  placeholder={noteModal.action === "reject" ? "Please explain why…" : "What needs to be fixed…"} />
+              )}
+              {noteModal.action === "approve" && <p style={{ color: C.textDim, fontSize: 13, margin: 0 }}>Confirm approval of this expense?</p>}
+              {noteModal.action === "pay" && <p style={{ color: C.textDim, fontSize: 13, margin: 0 }}>Confirm this approved expense has been paid out?</p>}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                <Btn variant="ghost" onClick={() => { setNoteModal(null); setNote(""); }}>Cancel</Btn>
+                <Btn variant={noteModal.action === "approve" || noteModal.action === "pay" ? "success" : "danger"} onClick={handleAction} disabled={saving}>
+                  {saving ? "Saving…" : noteModal.action === "approve" ? "✓ Approve" : noteModal.action === "pay" ? "💵 Mark Paid" : noteModal.action === "reject" ? "✕ Reject" : "↩ Send Back"}
+                </Btn>
+              </div>
+            </div>
+          </Modal>
+        )}
+
+      </div>
+    </>
   );
 }
 
@@ -4965,63 +5804,128 @@ function DocumentGrid({ type = "document", allowEdit = false }) {
     try { await api.deleteDocument(id); setDocs(ds => ds.filter(d => d.id !== id)); } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
   }
 
+  const isPolicy = type === "policy";
+  const docIcon = isPolicy ? "📋" : "📄";
+  const accentColor = isPolicy ? C.accent : C.purple;
+
+  // Pick a distinctive icon per index for policy cards
+  const policyIcons = ["📋", "🛡️", "📊", "🔐", "📝", "⚖️", "🏢", "💼", "🎯", "📌"];
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>{titleText}</h2>
-          <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>{descText}</p>
-        </div>
-        {allowEdit && <Btn onClick={() => setModal({ title: "", url: "" })}>+ Add Link</Btn>}
-      </div>
+    <>
+      <style>{`
+        .doc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+        .doc-card { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; transition: transform .15s, box-shadow .2s; }
+        .doc-card:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.35); }
+        .doc-open-btn { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 0; background: transparent; color: ${accentColor}; font-size: 13px; font-weight: 700; text-decoration: none; border-top: 1px solid ${C.border}; transition: background .15s; }
+        .doc-open-btn:hover { background: ${accentColor}14; }
+        @media (max-width: 640px) {
+          .doc-grid { grid-template-columns: 1fr; }
+        }
+      `}</style>
 
-      {loading ? <div style={{ padding: 40, textAlign: "center" }}><Spinner /></div> : docs.length === 0 ? (
-        <Card style={{ padding: 40, textAlign: "center", color: C.textMuted }}>No {type === "policy" ? "policies" : "documents"} found.</Card>
-      ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
-          {docs.map(d => (
-            <Card key={d.id} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <div style={{ fontWeight: 700, fontSize: 16, color: C.text }}>{d.title}</div>
-                {allowEdit && (
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button onClick={() => setModal(d)} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 14 }}>✏</button>
-                    <button onClick={() => del(d.id)} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 14, color: C.red }}>🗑</button>
-                  </div>
-                )}
-              </div>
-              <div style={{ fontSize: 12, color: C.textMuted }}>Added by {d.creator_name || "Unknown"} on {d.created_at?.slice(0, 10)}</div>
-              <a href={d.url} target="_blank" rel="noreferrer" style={{
-                marginTop: "auto", display: "inline-block", backgroundColor: C.surface, color: C.accent,
-                textDecoration: "none", padding: "8px 12px", borderRadius: 8, fontSize: 13, fontWeight: 600,
-                border: `1px solid ${C.border}`, textAlign: "center"
-              }}>↗ Open Link</a>
-            </Card>
-          ))}
-        </div>
-      )}
+      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
 
-      {modal && (
-        <Modal title={modal.id ? "Edit Document" : "New Document"} onClose={() => setModal(null)}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {/* ── Header ── */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <div style={{ width: 48, height: 48, borderRadius: 14, background: accentColor + "22", border: `1px solid ${accentColor}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>{docIcon}</div>
             <div>
-              <div style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700, marginBottom: 6 }}>Title</div>
-              <input value={modal.title} onChange={e => setModal({ ...modal, title: e.target.value })}
-                placeholder="e.g. Employee Handbook" style={{ width: "100%", background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13 }} />
-            </div>
-            <div>
-              <div style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700, marginBottom: 6 }}>URL</div>
-              <input value={modal.url} onChange={e => setModal({ ...modal, url: e.target.value })}
-                placeholder="https://..." style={{ width: "100%", background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13 }} />
-            </div>
-            <div style={{ display: "flex", gap: 8, marginTop: 8, justifyContent: "flex-end" }}>
-              <Btn variant="ghost" onClick={() => setModal(null)}>Cancel</Btn>
-              <Btn onClick={save} disabled={saving}>{saving ? "Saving…" : "Save"}</Btn>
+              <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: -0.5 }}>{titleText}</h2>
+              <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>{descText}</p>
             </div>
           </div>
-        </Modal>
-      )}
-    </div>
+          {allowEdit && (
+            <Btn onClick={() => setModal({ title: "", url: "" })}>+ Add Link</Btn>
+          )}
+        </div>
+
+        {/* ── Content ── */}
+        {loading ? (
+          <div style={{ padding: 60, textAlign: "center" }}><Spinner /></div>
+        ) : docs.length === 0 ? (
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "60px 32px", textAlign: "center" }}>
+            <div style={{ fontSize: 52, marginBottom: 14 }}>{isPolicy ? "🛡️" : "📄"}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 8 }}>No {isPolicy ? "policies" : "documents"} yet</div>
+            <p style={{ fontSize: 13, color: C.textMuted, margin: 0 }}>
+              {isPolicy ? "Company policies will appear here once added by your admin." : "No document links have been added yet."}
+            </p>
+          </div>
+        ) : (
+          <div className="doc-grid">
+            {docs.map((d, i) => (
+              <div key={d.id} className="doc-card">
+                {/* Card top accent bar */}
+                <div style={{ height: 4, background: `linear-gradient(90deg, ${accentColor}, ${accentColor}88)` }} />
+
+                <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14, flex: 1 }}>
+                  {/* Icon + title row */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{ width: 42, height: 42, borderRadius: 12, background: accentColor + "20", border: `1px solid ${accentColor}33`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
+                        {policyIcons[i % policyIcons.length]}
+                      </div>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: C.text, lineHeight: 1.3 }}>{d.title}</div>
+                    </div>
+                    {allowEdit && (
+                      <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                        <button onClick={() => setModal(d)} title="Edit"
+                          style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", fontSize: 13, padding: "5px 9px", color: C.textMuted, transition: "all .15s" }}>✏</button>
+                        <button onClick={() => del(d.id)} title="Delete"
+                          style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", fontSize: 13, padding: "5px 9px", color: C.red, transition: "all .15s" }}>🗑</button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Meta */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <div style={{ width: 20, height: 20, borderRadius: 6, background: C.surface, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11 }}>👤</div>
+                    <span style={{ fontSize: 12, color: C.textMuted }}>Added by <span style={{ color: C.textDim, fontWeight: 600 }}>{d.creator_name || "Unknown"}</span></span>
+                    <span style={{ fontSize: 12, color: C.border }}>·</span>
+                    <span style={{ fontSize: 12, color: C.textMuted }}>{d.created_at?.slice(0, 10)}</span>
+                  </div>
+
+                  {/* URL preview chip */}
+                  <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 10px", display: "flex", alignItems: "center", gap: 6, overflow: "hidden" }}>
+                    <span style={{ fontSize: 12 }}>🔗</span>
+                    <span style={{ fontSize: 11, color: C.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.url}</span>
+                  </div>
+                </div>
+
+                {/* Open link button */}
+                <a href={d.url} target="_blank" rel="noreferrer" className="doc-open-btn">
+                  ↗ Open {isPolicy ? "Policy" : "Document"}
+                </a>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── Add/Edit Modal ── */}
+        {modal && (
+          <Modal title={modal.id ? `Edit ${isPolicy ? "Policy" : "Document"}` : `New ${isPolicy ? "Policy" : "Document"}`} onClose={() => setModal(null)}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div>
+                <div style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700, marginBottom: 6, letterSpacing: .5 }}>Title</div>
+                <input value={modal.title} onChange={e => setModal({ ...modal, title: e.target.value })}
+                  placeholder={isPolicy ? "e.g. Employee Handbook" : "e.g. Design Guidelines"}
+                  style={{ width: "100%", boxSizing: "border-box", background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 14px", fontSize: 13 }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700, marginBottom: 6, letterSpacing: .5 }}>URL</div>
+                <input value={modal.url} onChange={e => setModal({ ...modal, url: e.target.value })}
+                  placeholder="https://..."
+                  style={{ width: "100%", boxSizing: "border-box", background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 14px", fontSize: 13 }} />
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 8, justifyContent: "flex-end" }}>
+                <Btn variant="ghost" onClick={() => setModal(null)}>Cancel</Btn>
+                <Btn onClick={save} disabled={saving}>{saving ? "Saving…" : "Save"}</Btn>
+              </div>
+            </div>
+          </Modal>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -5081,197 +5985,197 @@ function AdminCompanyResume() {
 
       {/* ── Two-panel body (form | preview) ── */}
       <div className="resume-panels" style={{ display: "flex", gap: 24, alignItems: "flex-start" }}>
-      {/* Left: Editor Panel */}
-      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 16 }}>
-        <Card>
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <input type="checkbox" id="show-logo-cb" checked={form.showLogo} onChange={e => setForm({ ...form, showLogo: e.target.checked })} style={{ cursor: "pointer", width: 16, height: 16, accentColor: C.accent }} />
-              <label htmlFor="show-logo-cb" style={{ fontSize: 13, color: C.text, fontWeight: 600, cursor: "pointer" }}>Display Company Logo on Resume</label>
-            </div>
+        {/* Left: Editor Panel */}
+        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 16 }}>
+          <Card>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input type="checkbox" id="show-logo-cb" checked={form.showLogo} onChange={e => setForm({ ...form, showLogo: e.target.checked })} style={{ cursor: "pointer", width: 16, height: 16, accentColor: C.accent }} />
+                <label htmlFor="show-logo-cb" style={{ fontSize: 13, color: C.text, fontWeight: 600, cursor: "pointer" }}>Display Company Logo on Resume</label>
+              </div>
 
-            <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <Inp label="Employee Name" value={form.name} onChange={v => setForm({ ...form, name: v })} placeholder="e.g. FirstName LastName" />
-              <Inp label="Technologies (Subtitle)" value={form.technologies} onChange={v => setForm({ ...form, technologies: v })} placeholder="e.g. SAP C4C, Sales Cloud..." />
-            </div>
+              <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <Inp label="Employee Name" value={form.name} onChange={v => setForm({ ...form, name: v })} placeholder="e.g. FirstName LastName" />
+                <Inp label="Technologies (Subtitle)" value={form.technologies} onChange={v => setForm({ ...form, technologies: v })} placeholder="e.g. SAP C4C, Sales Cloud..." />
+              </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <label style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Profile Summary (1 bullet per line)</label>
-              <textarea value={form.summary} onChange={e => setForm({ ...form, summary: e.target.value })} rows={4}
-                style={{ width: "100%", background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, resize: "vertical", fontFamily: "inherit" }} />
-            </div>
-
-            <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <label style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Certifications (1 per line)</label>
-                <textarea value={form.certifications} onChange={e => setForm({ ...form, certifications: e.target.value })} rows={3}
+                <label style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Profile Summary (1 bullet per line)</label>
+                <textarea value={form.summary} onChange={e => setForm({ ...form, summary: e.target.value })} rows={4}
                   style={{ width: "100%", background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, resize: "vertical", fontFamily: "inherit" }} />
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <label style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Global Exposure (1 per line)</label>
-                <textarea value={form.exposure} onChange={e => setForm({ ...form, exposure: e.target.value })} rows={3}
-                  style={{ width: "100%", background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, resize: "vertical", fontFamily: "inherit" }} />
-              </div>
-            </div>
 
-            <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <label style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Industries (1 per line)</label>
-                <textarea value={form.industries} onChange={e => setForm({ ...form, industries: e.target.value })} rows={3}
-                  style={{ width: "100%", background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, resize: "vertical", fontFamily: "inherit" }} />
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <label style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Clients (1 per line)</label>
-                <textarea value={form.clients} onChange={e => setForm({ ...form, clients: e.target.value })} rows={3}
-                  style={{ width: "100%", background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, resize: "vertical", fontFamily: "inherit" }} />
-              </div>
-            </div>
-
-            <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Professional Experience</span>
-                <Btn small variant="ghost" onClick={addExp}>+ Add Experience</Btn>
-              </div>
-              {form.experience.map((exp, i) => (
-                <div key={i} style={{ display: "flex", flexDirection: "column", gap: 12, border: `1px solid ${C.border}66`, padding: 12, borderRadius: 8, marginBottom: 12, background: C.bg }}>
-                  <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                    <Inp label="Client" value={exp.client} onChange={v => handleExpChange(i, "client", v)} placeholder="e.g. NIR" />
-                    <Inp label="Role" value={exp.role} onChange={v => handleExpChange(i, "role", v)} placeholder="e.g. SAP C4C Functional consultant" />
-                    <Inp label="Start Date" value={exp.startDate} onChange={v => handleExpChange(i, "startDate", v)} placeholder="e.g. Jan 2020" />
-                    <Inp label="End Date" value={exp.endDate} onChange={v => handleExpChange(i, "endDate", v)} placeholder="e.g. Dec 2022 or Present" />
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    <label style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Environment</label>
-                    <input value={exp.environment} onChange={e => handleExpChange(i, "environment", e.target.value)} placeholder="e.g. SAP C4C ISU & SAP S4 Hana"
-                      style={{ width: "100%", background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13 }} />
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    <label style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Responsibilities (1 per line)</label>
-                    <textarea value={exp.responsibilities} onChange={e => handleExpChange(i, "responsibilities", e.target.value)} rows={3}
-                      style={{ width: "100%", background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, resize: "vertical", fontFamily: "inherit" }} />
-                  </div>
-                  <div style={{ textAlign: "right" }}><Btn small variant="danger" onClick={() => remExp(i)}>Remove</Btn></div>
+              <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <label style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Certifications (1 per line)</label>
+                  <textarea value={form.certifications} onChange={e => setForm({ ...form, certifications: e.target.value })} rows={3}
+                    style={{ width: "100%", background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, resize: "vertical", fontFamily: "inherit" }} />
                 </div>
-              ))}
-            </div>
-          </div>
-        </Card>
-      </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <label style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Global Exposure (1 per line)</label>
+                  <textarea value={form.exposure} onChange={e => setForm({ ...form, exposure: e.target.value })} rows={3}
+                    style={{ width: "100%", background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, resize: "vertical", fontFamily: "inherit" }} />
+                </div>
+              </div>
 
-      {/* Right: Live Preview Panel */}
-      <div style={{ flex: 1.2, minWidth: 0, display: "flex", flexDirection: "column", gap: 16 }}>
-        {/* The Capture Box */}
-        <div style={{ background: "#e2e8f0", padding: "20px", borderRadius: 12, overflowY: "auto", flex: 1, display: "flex", justifyContent: "center" }}>
-          <div id="capture-resume" style={{ background: "#fff", width: "210mm", minHeight: "297mm", padding: "0", boxShadow: "0 0 10px rgba(0,0,0,0.1)", color: "#000", fontFamily: "Arial, sans-serif" }}>
+              <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <label style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Industries (1 per line)</label>
+                  <textarea value={form.industries} onChange={e => setForm({ ...form, industries: e.target.value })} rows={3}
+                    style={{ width: "100%", background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, resize: "vertical", fontFamily: "inherit" }} />
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <label style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Clients (1 per line)</label>
+                  <textarea value={form.clients} onChange={e => setForm({ ...form, clients: e.target.value })} rows={3}
+                    style={{ width: "100%", background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, resize: "vertical", fontFamily: "inherit" }} />
+                </div>
+              </div>
 
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr>
-                  <td style={{ paddingTop: "16px", paddingBottom: "12px" }}>
-                    {/* Payslip Logo - Top Left */}
-                    {form.showLogo && (
-                      <div style={{ textAlign: "left", marginLeft: "40px" }}>
-                        <img src={`${window.location.origin}/paysliplogo.png`} alt="Fascinate IT Logo" style={{ height: "35px", objectFit: "contain" }} />
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td style={{ padding: "0 40px 40px" }}>
-                    {/* Header */}
-                    <div style={{ marginBottom: "20px" }}>
-                      {form.name && <h1 style={{ margin: 0, fontSize: "16px", color: "#000", fontWeight: "bold", borderLeft: "3px solid #000", paddingLeft: "8px" }}>{form.name}</h1>}
-                      {form.technologies && <p style={{ margin: "4px 0 0 11px", fontSize: "12px", color: "#1e40af", fontWeight: "bold", textDecoration: "underline" }}>{form.technologies}</p>}
+              <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Professional Experience</span>
+                  <Btn small variant="ghost" onClick={addExp}>+ Add Experience</Btn>
+                </div>
+                {form.experience.map((exp, i) => (
+                  <div key={i} style={{ display: "flex", flexDirection: "column", gap: 12, border: `1px solid ${C.border}66`, padding: 12, borderRadius: 8, marginBottom: 12, background: C.bg }}>
+                    <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                      <Inp label="Client" value={exp.client} onChange={v => handleExpChange(i, "client", v)} placeholder="e.g. NIR" />
+                      <Inp label="Role" value={exp.role} onChange={v => handleExpChange(i, "role", v)} placeholder="e.g. SAP C4C Functional consultant" />
+                      <Inp label="Start Date" value={exp.startDate} onChange={v => handleExpChange(i, "startDate", v)} placeholder="e.g. Jan 2020" />
+                      <Inp label="End Date" value={exp.endDate} onChange={v => handleExpChange(i, "endDate", v)} placeholder="e.g. Dec 2022 or Present" />
                     </div>
-
-                    <hr style={{ border: "none", borderTop: "2px solid #000", margin: "10px 0 20px" }} />
-
-                    {/* Summary */}
-                    {form.summary && (
-                      <div style={{ marginBottom: "16px", pageBreakInside: "avoid" }}>
-                        <SectionHeader title="PROFILE SUMMARY:" />
-                        <BulletList items={parseBullets(form.summary)} />
-                      </div>
-                    )}
-
-                    {/* Certifications */}
-                    {form.certifications && (
-                      <div style={{ marginBottom: "16px", pageBreakInside: "avoid" }}>
-                        <SectionHeader title="CERTIFICATIONS:" />
-                        <BulletList items={parseBullets(form.certifications)} />
-                      </div>
-                    )}
-
-                    {/* Global Exposure */}
-                    {form.exposure && (
-                      <div style={{ marginBottom: "16px", pageBreakInside: "avoid" }}>
-                        <SectionHeader title="GLOBAL EXPOSURE:" />
-                        <BulletList items={parseBullets(form.exposure)} />
-                      </div>
-                    )}
-
-                    {/* Industries */}
-                    {form.industries && (
-                      <div style={{ marginBottom: "16px", pageBreakInside: "avoid" }}>
-                        <SectionHeader title="INDUSTRIES:" />
-                        <BulletList items={parseBullets(form.industries)} />
-                      </div>
-                    )}
-
-                    {/* Clients */}
-                    {form.clients && (
-                      <div style={{ marginBottom: "16px", pageBreakInside: "avoid" }}>
-                        <SectionHeader title="CLIENTS:" />
-                        <BulletList items={parseBullets(form.clients)} />
-                      </div>
-                    )}
-
-                    {/* Experience */}
-                    {form.experience.some(e => e.client || e.role || e.startDate || e.endDate || e.environment || e.responsibilities) && (
-                      <div style={{ marginBottom: "16px" }}>
-                        <SectionHeader title="PROFESSIONAL EXPERIENCE:" />
-                        {form.experience.map((exp, i) => (exp.client || exp.role || exp.startDate || exp.endDate || exp.environment || exp.responsibilities) ? (
-                          <div key={i} style={{ marginBottom: "16px", fontSize: "12px", color: "#000", fontFamily: "Arial, sans-serif", pageBreakInside: "avoid" }}>
-                            {exp.client && <div style={{ marginBottom: "2px" }}><strong>Client:</strong> <span style={{ color: "#1e40af" }}>{exp.client}</span></div>}
-                            {exp.role && <div style={{ marginBottom: "2px" }}><strong>Role:</strong> <span style={{ color: "#1e40af" }}>{exp.role}</span></div>}
-                            {(exp.startDate || exp.endDate) && (
-                              <div style={{ marginBottom: "2px" }}>
-                                <strong>Duration:</strong> <span style={{ color: "#1e40af" }}>{exp.startDate || "—"} to {exp.endDate || "Present"}</span>
-                              </div>
-                            )}
-                            {exp.environment && <div style={{ marginBottom: "8px" }}><strong>Environment:</strong> <span style={{ color: "#1e40af" }}>{exp.environment}</span></div>}
-                            {exp.responsibilities && (
-                              <div>
-                                <div style={{ fontWeight: "bold", marginBottom: "4px" }}>Responsibilities/Deliverables:</div>
-                                <BulletList items={parseBullets(exp.responsibilities)} />
-                              </div>
-                            )}
-                          </div>
-                        ) : null)}
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              </tbody>
-              <tfoot style={{ display: "table-footer-group" }}>
-                <tr>
-                  <td style={{ height: "40px" }}></td>
-                </tr>
-              </tfoot>
-            </table>
-
-            {/* CSS Print Footer for Page Numbers */}
-            <div className="print-footer" style={{ position: "fixed", bottom: 0, left: 0, right: 0, textAlign: "center", fontSize: "10px", color: "#666", paddingBottom: "10mm", background: "#fff" }}>
-              <span className="pageNumber"></span>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      <label style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Environment</label>
+                      <input value={exp.environment} onChange={e => handleExpChange(i, "environment", e.target.value)} placeholder="e.g. SAP C4C ISU & SAP S4 Hana"
+                        style={{ width: "100%", background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13 }} />
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      <label style={{ fontSize: 11, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Responsibilities (1 per line)</label>
+                      <textarea value={exp.responsibilities} onChange={e => handleExpChange(i, "responsibilities", e.target.value)} rows={3}
+                        style={{ width: "100%", background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, resize: "vertical", fontFamily: "inherit" }} />
+                    </div>
+                    <div style={{ textAlign: "right" }}><Btn small variant="danger" onClick={() => remExp(i)}>Remove</Btn></div>
+                  </div>
+                ))}
+              </div>
             </div>
+          </Card>
+        </div>
 
+        {/* Right: Live Preview Panel */}
+        <div style={{ flex: 1.2, minWidth: 0, display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* The Capture Box */}
+          <div style={{ background: "#e2e8f0", padding: "20px", borderRadius: 12, overflowY: "auto", flex: 1, display: "flex", justifyContent: "center" }}>
+            <div id="capture-resume" style={{ background: "#fff", width: "210mm", minHeight: "297mm", padding: "0", boxShadow: "0 0 10px rgba(0,0,0,0.1)", color: "#000", fontFamily: "Arial, sans-serif" }}>
+
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>
+                    <td style={{ paddingTop: "16px", paddingBottom: "12px" }}>
+                      {/* Payslip Logo - Top Left */}
+                      {form.showLogo && (
+                        <div style={{ textAlign: "left", marginLeft: "40px" }}>
+                          <img src={`${window.location.origin}/paysliplogo.png`} alt="Fascinate IT Logo" style={{ height: "35px", objectFit: "contain" }} />
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td style={{ padding: "0 40px 40px" }}>
+                      {/* Header */}
+                      <div style={{ marginBottom: "20px" }}>
+                        {form.name && <h1 style={{ margin: 0, fontSize: "16px", color: "#000", fontWeight: "bold", borderLeft: "3px solid #000", paddingLeft: "8px" }}>{form.name}</h1>}
+                        {form.technologies && <p style={{ margin: "4px 0 0 11px", fontSize: "12px", color: "#1e40af", fontWeight: "bold", textDecoration: "underline" }}>{form.technologies}</p>}
+                      </div>
+
+                      <hr style={{ border: "none", borderTop: "2px solid #000", margin: "10px 0 20px" }} />
+
+                      {/* Summary */}
+                      {form.summary && (
+                        <div style={{ marginBottom: "16px", pageBreakInside: "avoid" }}>
+                          <SectionHeader title="PROFILE SUMMARY:" />
+                          <BulletList items={parseBullets(form.summary)} />
+                        </div>
+                      )}
+
+                      {/* Certifications */}
+                      {form.certifications && (
+                        <div style={{ marginBottom: "16px", pageBreakInside: "avoid" }}>
+                          <SectionHeader title="CERTIFICATIONS:" />
+                          <BulletList items={parseBullets(form.certifications)} />
+                        </div>
+                      )}
+
+                      {/* Global Exposure */}
+                      {form.exposure && (
+                        <div style={{ marginBottom: "16px", pageBreakInside: "avoid" }}>
+                          <SectionHeader title="GLOBAL EXPOSURE:" />
+                          <BulletList items={parseBullets(form.exposure)} />
+                        </div>
+                      )}
+
+                      {/* Industries */}
+                      {form.industries && (
+                        <div style={{ marginBottom: "16px", pageBreakInside: "avoid" }}>
+                          <SectionHeader title="INDUSTRIES:" />
+                          <BulletList items={parseBullets(form.industries)} />
+                        </div>
+                      )}
+
+                      {/* Clients */}
+                      {form.clients && (
+                        <div style={{ marginBottom: "16px", pageBreakInside: "avoid" }}>
+                          <SectionHeader title="CLIENTS:" />
+                          <BulletList items={parseBullets(form.clients)} />
+                        </div>
+                      )}
+
+                      {/* Experience */}
+                      {form.experience.some(e => e.client || e.role || e.startDate || e.endDate || e.environment || e.responsibilities) && (
+                        <div style={{ marginBottom: "16px" }}>
+                          <SectionHeader title="PROFESSIONAL EXPERIENCE:" />
+                          {form.experience.map((exp, i) => (exp.client || exp.role || exp.startDate || exp.endDate || exp.environment || exp.responsibilities) ? (
+                            <div key={i} style={{ marginBottom: "16px", fontSize: "12px", color: "#000", fontFamily: "Arial, sans-serif", pageBreakInside: "avoid" }}>
+                              {exp.client && <div style={{ marginBottom: "2px" }}><strong>Client:</strong> <span style={{ color: "#1e40af" }}>{exp.client}</span></div>}
+                              {exp.role && <div style={{ marginBottom: "2px" }}><strong>Role:</strong> <span style={{ color: "#1e40af" }}>{exp.role}</span></div>}
+                              {(exp.startDate || exp.endDate) && (
+                                <div style={{ marginBottom: "2px" }}>
+                                  <strong>Duration:</strong> <span style={{ color: "#1e40af" }}>{exp.startDate || "—"} to {exp.endDate || "Present"}</span>
+                                </div>
+                              )}
+                              {exp.environment && <div style={{ marginBottom: "8px" }}><strong>Environment:</strong> <span style={{ color: "#1e40af" }}>{exp.environment}</span></div>}
+                              {exp.responsibilities && (
+                                <div>
+                                  <div style={{ fontWeight: "bold", marginBottom: "4px" }}>Responsibilities/Deliverables:</div>
+                                  <BulletList items={parseBullets(exp.responsibilities)} />
+                                </div>
+                              )}
+                            </div>
+                          ) : null)}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                </tbody>
+                <tfoot style={{ display: "table-footer-group" }}>
+                  <tr>
+                    <td style={{ height: "40px" }}></td>
+                  </tr>
+                </tfoot>
+              </table>
+
+              {/* CSS Print Footer for Page Numbers */}
+              <div className="print-footer" style={{ position: "fixed", bottom: 0, left: 0, right: 0, textAlign: "center", fontSize: "10px", color: "#666", paddingBottom: "10mm", background: "#fff" }}>
+                <span className="pageNumber"></span>
+              </div>
+
+            </div>
           </div>
         </div>
       </div>
     </div>
-  </div>
   );
 }
 
@@ -5315,8 +6219,7 @@ function SubscriptionManagement() {
   }
 
   async function handleSave() {
-    if (!form.app_name || !form.start_date || !form.expire_date || !form.link)
-      { dialog.alert("App name, start date, expire date and link are required.", { title: "Validation", dtype: "warning" }); return; }
+    if (!form.app_name || !form.start_date || !form.expire_date || !form.link) { dialog.alert("App name, start date, expire date and link are required.", { title: "Validation", dtype: "warning" }); return; }
     setSaving(true);
     try {
       const payload = { ...form, amount: parseFloat(form.amount) || 0 };
@@ -6185,48 +7088,77 @@ const STYLE = [
   "::-webkit-scrollbar-track { background: transparent; }",
   "::-webkit-scrollbar-thumb { background: #1E2740; border-radius: 4px; }",
   "@keyframes spin { to { transform: rotate(360deg); } }",
-  ".app-layout { display: flex; min-height: 100vh; }",
-  ".app-nav { width: 224px; flex-shrink: 0; display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; transition: transform 0.25s ease; z-index: 200; }",
-  ".emp-nav { width: 200px; }",
-  ".hamburger-btn { display: none; position: fixed; top: 12px; left: 12px; z-index: 300; background: #161B2A; border: 1px solid #1E2740; color: #E2E8F0; border-radius: 8px; padding: 8px 11px; font-size: 18px; cursor: pointer; line-height: 1; }",
-  ".nav-overlay { display: none; position: fixed; inset: 0; z-index: 199; background: rgba(0,0,0,0.6); }",
-  ".nav-overlay.open { display: block; }",
-  ".main-content { flex: 1; padding: 32px 36px; overflow-y: auto; max-width: calc(100vw - 224px); }",
-  ".emp-main { flex: 1; padding: 32px 36px; overflow-y: auto; }",
+  /* ── Root layout ── */
+  ".app-root { display: flex; flex-direction: column; min-height: 100vh; }",
+  /* ── Header ── */
+  ".app-header { position: fixed; top: 0; left: 0; right: 0; height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 18px 0 14px; z-index: 300; }",
+  ".burger-btn { background: none; border: 1px solid #1E2740; color: #E2E8F0; border-radius: 8px; padding: 6px 10px; font-size: 18px; cursor: pointer; line-height: 1; display: flex; align-items: center; flex-shrink: 0; }",
+  ".burger-btn:hover { background: rgba(255,255,255,0.07); }",
+  /* ── Body (sidebar + main) ── */
+  ".app-body { display: flex; flex: 1; padding-top: 56px; }",
+  /* ── Sidebar ── */
+  ".app-nav { width: 240px; flex-shrink: 0; display: flex; flex-direction: column; position: fixed; top: 56px; left: 0; height: calc(100vh - 56px); transition: width 0.28s cubic-bezier(0.4,0,0.2,1); z-index: 200; overflow-y: auto; overflow-x: hidden; background: linear-gradient(180deg,#0D1119 0%,#0F1420 100%); box-shadow: 1px 0 0 rgba(30,39,64,0.8), 8px 0 24px rgba(0,0,0,0.35); }",
+  ".app-nav.nav-closed { width: 56px; }",
+  /* ── Nav section label ── */
+  ".nav-section { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #2A3550; padding: 16px 16px 6px; white-space: nowrap; }",
+  ".app-nav.nav-closed .nav-section { display: none; }",
+  /* ── Nav items ── */
+  ".nav-item { width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 10px; border: none; cursor: pointer; text-align: left; margin-bottom: 2px; font-size: 13px; font-weight: 500; transition: background 0.18s ease, color 0.18s ease, width 0.28s, margin 0.28s, padding 0.28s; color: #4A5A7A; background: transparent; outline: none; white-space: nowrap; }",
+  ".nav-item:hover { background: rgba(59,130,246,0.07); color: #8899BB; }",
+  ".nav-item.active { background: linear-gradient(135deg,rgba(59,130,246,0.18) 0%,rgba(59,130,246,0.08) 100%); color: #3B82F6; font-weight: 650; box-shadow: inset 0 0 0 1px rgba(59,130,246,0.18); }",
+  /* Collapsed: fixed 36px square, auto-centered */
+  ".app-nav.nav-closed .nav-item { width: 36px; height: 36px; padding: 0; margin: 0 auto 4px; justify-content: center; gap: 0; border-radius: 10px; }",
+  ".nav-label { flex: 1; }",
+  ".app-nav.nav-closed .nav-label { display: none; }",
+  /* ── Nav items wrapper ── */
+  ".nav-items-wrap { flex: 1; overflow-y: auto; padding: 4px 8px; }",
+  ".app-nav.nav-closed .nav-items-wrap { padding: 8px 0; }",
+  /* ── Nav icon ── */
+  ".nav-icon { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border-radius: 8px; font-size: 16px; flex-shrink: 0; transition: background 0.18s; }",
+  ".nav-item.active .nav-icon { background: rgba(59,130,246,0.15); }",
+  ".nav-item:hover:not(.active) .nav-icon { background: rgba(255,255,255,0.05); }",
+  /* ── Role badge ── */
+  ".nav-badge { display: flex; align-items: center; gap: 7px; border-radius: 8px; padding: 6px 12px; }",
+  ".app-nav.nav-closed .nav-badge { justify-content: center; padding: 8px 0; }",
+  ".nav-badge-text { font-size: 10px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; white-space: nowrap; }",
+  ".app-nav.nav-closed .nav-badge-text { display: none; }",
+  /* ── Main content ── */
+  ".main-content { flex: 1; padding: 32px 36px; margin-left: 240px; transition: margin-left 0.28s cubic-bezier(0.4,0,0.2,1); min-height: calc(100vh - 56px - 44px); }",
+  ".main-content.nav-closed { margin-left: 56px; }",
+  /* ── Footer ── */
+  ".app-footer { height: 44px; display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0; margin-left: 240px; transition: margin-left 0.28s cubic-bezier(0.4,0,0.2,1); }",
+  ".app-footer.nav-closed { margin-left: 56px; }",
+  /* ── Responsive utility classes ── */
   ".resp-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }",
-  ".mobile-top-bar { display: none; height: 52px; align-items: center; padding: 0 16px; z-index: 150; }",
-  "@media (max-width: 1023px) { .app-nav { width: 200px; } .emp-nav { width: 180px; } .main-content { padding: 24px 20px; max-width: calc(100vw - 200px); } .emp-main { padding: 24px 20px; } }",
-  "@media (max-width: 767px) { .hamburger-btn { display: block; } .mobile-top-bar { display: flex; position: fixed; top: 0; left: 0; right: 0; width: 100%; } .app-nav { position: fixed; top: 0; left: 0; height: 100vh; width: 240px !important; transform: translateX(-100%); box-shadow: 4px 0 24px rgba(0,0,0,0.5); } .app-nav.nav-open { transform: translateX(0); } .main-content { padding: 70px 14px 24px; max-width: 100vw; width: 100%; } .emp-main { padding: 70px 14px 24px; } }",
-  /* ── Responsive utility classes ─────────────────────────────── */
   ".grid-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }",
   ".grid-4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; }",
   ".grid-2 { display: grid; grid-template-columns: 1fr 1fr; }",
   ".page-header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; }",
   ".tab-bar { display: flex; gap: 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; }",
-  /* Tablet (≤1199px) */
   "@media (max-width: 1199px) { .grid-4 { grid-template-columns: repeat(2,1fr) !important; } }",
-  /* Large tablet (≤1023px) */
-  "@media (max-width: 1023px) { .grid-3 { grid-template-columns: repeat(2,1fr) !important; } }",
-  /* Mobile (≤767px) */
+  "@media (max-width: 1023px) { .grid-3 { grid-template-columns: repeat(2,1fr) !important; } .main-content { padding: 24px 20px; } }",
   "@media (max-width: 767px) {",
+  "  .app-nav { width: 240px !important; transform: translateX(0); transition: transform 0.28s cubic-bezier(0.4,0,0.2,1) !important; }",
+  "  .app-nav.nav-closed { transform: translateX(-240px) !important; width: 240px !important; }",
+  "  .app-nav.nav-closed .nav-section { display: block !important; }",
+  "  .app-nav.nav-closed .nav-label { display: inline !important; }",
+  "  .app-nav.nav-closed .nav-item { width: 100% !important; height: auto !important; padding: 9px 12px !important; margin: 0 0 2px 0 !important; justify-content: flex-start !important; gap: 10px !important; }",
+  "  .app-nav.nav-closed .nav-items-wrap { padding: 4px 8px !important; }",
+  "  .app-nav.nav-closed .nav-badge { justify-content: flex-start !important; padding: 6px 12px !important; }",
+  "  .app-nav.nav-closed .nav-badge-text { display: inline !important; }",
+  "  .main-content { margin-left: 0 !important; padding: 20px 14px 24px; }",
+  "  .app-footer { margin-left: 0 !important; }",
   "  .grid-3 { grid-template-columns: 1fr !important; }",
   "  .grid-4 { grid-template-columns: repeat(2,1fr) !important; }",
   "  .grid-2 { grid-template-columns: 1fr !important; }",
   "  .page-header { flex-direction: column; align-items: flex-start; }",
   "  .page-header > * { width: 100%; }",
   "  .page-header > button, .page-header > div > button { width: auto !important; }",
-  "  .mobile-top-bar-title { font-size: 15px !important; }",
   "  .resp-table-wrap table { min-width: 600px; }",
-  /* Nav close button inside mobile sidebar */
-  "  .nav-close-btn { display: flex !important; }",
-  /* Reduce font sizes slightly for very small screens */
   "  h2 { font-size: 18px !important; }",
   "  .recharts-wrapper { font-size: 11px; }",
-  /* Make modal padding smaller on mobile */
   "  .modal-body { padding: 20px 16px !important; }",
-  /* Make tab bar wrap on tiny screens */
   "  .tab-bar { flex-wrap: wrap !important; }",
-  /* Ensure inputs are full-width on mobile */
   "  input[type='text'], input[type='email'], input[type='password'], input[type='number'], input[type='date'], select, textarea { width: 100% !important; box-sizing: border-box !important; }",
   "}",
   "@media print { ",
@@ -6250,7 +7182,7 @@ export default function App() {
     } catch { return null; }
   });
   const [page, setPage] = useState("dashboard");
-  const [navOpen, setNavOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(true);
   const nav = (p) => { setPage(p); setNavOpen(false); };
 
   useEffect(() => {
@@ -6279,161 +7211,143 @@ export default function App() {
 
   if (!isAdmin) return (
     <><DialogProvider />
-    <div className="app-layout" style={{ background: C.bg, color: C.text, fontFamily: "'DM Sans','Segoe UI',sans-serif" }}>
       <style>{STYLE}</style>
-      {/* Hamburger button */}
-      <button className="hamburger-btn" onClick={() => setNavOpen(v => !v)}>☰</button>
-      {/* Mobile top bar */}
-      <div className="mobile-top-bar" style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, gap: 10 }}>
-        <div style={{ width: 36 }} />
-        <div style={{ flex: 1, textAlign: "center", fontSize: 15, fontWeight: 700, color: C.text, className: "mobile-top-bar-title" }}>
-          {currentUser.emp_name || currentUser.username}
+      <div className="app-root" style={{ background: C.bg, color: C.text, fontFamily: "'DM Sans','Segoe UI',sans-serif" }}>
+        {/* ── Header ── */}
+        <header className="app-header" style={{ background: C.surface, borderBottom: `1px solid ${C.border}` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button className="burger-btn" onClick={() => setNavOpen(v => !v)} aria-label="Toggle sidebar">
+              {navOpen ? "✕" : "☰"}
+            </button>
+            <img src="/image.png" alt="Logo" style={{ height: 50, objectFit: "contain" }} />
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Avatar initials={currentUser.avatar || mkAvi(currentUser.emp_name || "")} color={C.accent} size={28} />
+              <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{currentUser.emp_name || currentUser.username}</span>
+            </div>
+            <Btn variant="ghost" onClick={handleLogout} small style={{ fontSize: 12 }}>↩ Sign Out</Btn>
+          </div>
+        </header>
+        {/* ── Body ── */}
+        <div className="app-body">
+          {/* Sidebar */}
+          <nav className={`app-nav${navOpen ? "" : " nav-closed"}`}>
+            <div className="nav-items-wrap" style={{ paddingTop: 10 }}>
+              <div className="nav-section">Menu</div>
+              <button onClick={() => nav("employee-home")} title="My Portal"
+                className={`nav-item${(page === "employee-home" || page === "dashboard") ? " active" : ""}`}>
+                <span className="nav-icon">🏠</span>
+                <span className="nav-label">My Portal</span>
+              </button>
+              <button onClick={() => nav("resumes")} title="Company Resume"
+                className={`nav-item${page === "resumes" ? " active" : ""}`}>
+                <span className="nav-icon">📑</span>
+                <span className="nav-label">Company Resume</span>
+              </button>
+            </div>
+          </nav>
+          {/* Main */}
+          <main className={`main-content${navOpen ? "" : " nav-closed"}`}>
+            {(page === "employee-home" || page === "dashboard") && <EmployeeHome currentUser={currentUser} />}
+            {page === "resumes" && <AdminCompanyResume />}
+          </main>
         </div>
-        <Avatar initials={currentUser.avatar || mkAvi(currentUser.emp_name || "")} color={C.accent} size={26} />
+        {/* ── Footer ── */}
+        <footer className={`app-footer${navOpen ? "" : " nav-closed"}`} style={{ background: "#0D1119", borderTop: `1px solid ${C.border}`, color: C.textMuted }}>
+          © {new Date().getFullYear()} FascinateIT · All rights reserved
+        </footer>
       </div>
-      {/* Overlay */}
-      <div className={`nav-overlay${navOpen ? " open" : ""}`} onClick={() => setNavOpen(false)} />
-      <nav className={`app-nav emp-nav${navOpen ? " nav-open" : ""}`} style={{
-        background: C.surface, borderRight: `1px solid ${C.border}`, padding: "24px 0"
-      }}>
-        <div style={{ padding: "0 16px 22px", borderBottom: `1px solid ${C.border}` }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
-            <img src="/image.png" alt="Logo" style={{ height: 60, objectFit: "contain" }} />
-            <button className="nav-close-btn" onClick={() => setNavOpen(false)} style={{
-              display: "none", position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)",
-              background: "none", border: `1px solid ${C.border}`, borderRadius: 6, color: C.textMuted,
-              fontSize: 16, cursor: "pointer", padding: "2px 8px", lineHeight: 1
-            }}>✕</button>
-          </div>
-        </div>
-        <div style={{ padding: "14px 10px", flex: 1 }}>
-          <button onClick={() => nav("employee-home")} style={{
-            width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "9px 12px",
-            borderRadius: 8, border: "none", cursor: "pointer", textAlign: "left", marginBottom: 2,
-            background: (page === "employee-home" || page === "dashboard") ? C.accentGlow : "transparent",
-            color: (page === "employee-home" || page === "dashboard") ? C.accent : C.textMuted,
-            fontWeight: (page === "employee-home" || page === "dashboard") ? 700 : 500, fontSize: 13,
-            borderLeft: (page === "employee-home" || page === "dashboard") ? `2px solid ${C.accent}` : "2px solid transparent"
-          }}>🏠 My Portal</button>
-
-          <button onClick={() => nav("resumes")} style={{
-            width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "9px 12px",
-            borderRadius: 8, border: "none", cursor: "pointer", textAlign: "left",
-            background: page === "resumes" ? C.accentGlow : "transparent",
-            color: page === "resumes" ? C.accent : C.textMuted,
-            fontWeight: page === "resumes" ? 700 : 500, fontSize: 13,
-            borderLeft: page === "resumes" ? `2px solid ${C.accent}` : "2px solid transparent"
-          }}>📑 Generate Company Resume</button>
-        </div>
-        <div style={{ padding: "14px 16px", borderTop: `1px solid ${C.border}` }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 12 }}>
-            <Avatar initials={currentUser.avatar || mkAvi(currentUser.emp_name || "")} color={C.accent} size={30} />
-            <div><div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{currentUser.emp_name || currentUser.username}</div>
-              <div style={{ fontSize: 10, color: C.textMuted }}>Employee</div></div>
-          </div>
-          <Btn variant="ghost" onClick={handleLogout} style={{ width: "100%", justifyContent: "center", fontSize: 12 }}>↩ Sign Out</Btn>
-        </div>
-      </nav>
-      <main className="emp-main">
-        {(page === "employee-home" || page === "dashboard") && <EmployeeHome currentUser={currentUser} />}
-        {page === "resumes" && <AdminCompanyResume />}
-      </main>
-    </div>
     </>
   );
 
   return (
     <><DialogProvider />
-    <div className="app-layout" style={{ background: C.bg, color: C.text, fontFamily: "'DM Sans','Segoe UI',sans-serif" }}>
       <style>{STYLE}</style>
-      {/* Hamburger button */}
-      <button className="hamburger-btn" onClick={() => setNavOpen(v => !v)}>☰</button>
-      {/* Mobile top bar */}
-      <div className="mobile-top-bar" style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, gap: 10 }}>
-        <div style={{ width: 36 }} />
-        <div style={{ flex: 1, textAlign: "center", fontSize: 15, fontWeight: 700, color: C.text }}>
-          {currentUser.role === "admin" ? "Admin Panel" : currentUser.role === "manager" ? "Manager Panel" : currentUser.emp_name || currentUser.username}
+      <div className="app-root" style={{ background: C.bg, color: C.text, fontFamily: "'DM Sans','Segoe UI',sans-serif" }}>
+        {/* ── Header ── */}
+        <header className="app-header" style={{ background: C.surface, borderBottom: `1px solid ${C.border}` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button className="burger-btn" onClick={() => setNavOpen(v => !v)} aria-label="Toggle sidebar">
+              {navOpen ? "✕" : "☰"}
+            </button>
+            <img src="/image.png" alt="Logo" style={{ height: 34, objectFit: "contain" }} />
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Avatar initials={currentUser.avatar || mkAvi(currentUser.emp_name || "")} color={currentUser.role === "manager" ? C.green : C.purple} size={28} />
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{currentUser.emp_name || currentUser.username}</div>
+                <div style={{ fontSize: 10, color: C.textMuted, textTransform: "capitalize" }}>{currentUser.role}</div>
+              </div>
+            </div>
+            <Btn variant="ghost" onClick={handleLogout} small style={{ fontSize: 12 }}>↩ Sign Out</Btn>
+          </div>
+        </header>
+        {/* ── Body ── */}
+        <div className="app-body">
+          {/* Sidebar */}
+          <nav className={`app-nav${navOpen ? "" : " nav-closed"}`}>
+            {/* Role badge */}
+            <div style={{ padding: "12px 8px 4px" }}>
+              {currentUser.role === "admin" && (
+                <div className="nav-badge" style={{ background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.22)" }}>
+                  <span style={{ fontSize: 14, flexShrink: 0 }}>🔑</span>
+                  <span className="nav-badge-text" style={{ color: C.purple }}>Administrator</span>
+                </div>
+              )}
+              {currentUser.role === "manager" && (
+                <div className="nav-badge" style={{ background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.2)" }}>
+                  <span style={{ fontSize: 14, flexShrink: 0 }}>📋</span>
+                  <span className="nav-badge-text" style={{ color: C.green }}>Manager</span>
+                </div>
+              )}
+            </div>
+            {/* Nav items */}
+            <div className="nav-items-wrap">
+              {currentUser.role === "manager" && (
+                <>
+                  <div className="nav-section">My Space</div>
+                  <button onClick={() => nav("mywork")} title="My Work" className={`nav-item${page === "mywork" ? " active" : ""}`}>
+                    <span className="nav-icon">👤</span><span className="nav-label">My Work</span>
+                  </button>
+                </>
+              )}
+              <div className="nav-section">Navigation</div>
+              {ADMIN_NAV.filter(n =>
+                isManager ? ["attendance", "documents", "resumes"].includes(n.id) : true
+              ).map(n => (
+                <button key={n.id} onClick={() => nav(n.id)} title={n.label} className={`nav-item${page === n.id ? " active" : ""}`}>
+                  <span className="nav-icon">{n.icon}</span>
+                  <span className="nav-label">{n.label}</span>
+                </button>
+              ))}
+            </div>
+          </nav>
+          {/* Main */}
+          <main className={`main-content${navOpen ? "" : " nav-closed"}`}>
+            {page === "dashboard" && <Dashboard />}
+            {page === "project_management" && <ProjectManagement readOnly={isManager} currentUser={currentUser} />}
+            {page === "people" && <PeopleHub readOnly={isManager} currentUser={currentUser} />}
+            {page === "attendance" && <AttendanceClaims currentUser={currentUser} />}
+            {page === "payslips" && !isManager && <AdminPayslips />}
+            {page === "reports" && <Reports />}
+            {page === "useraccounts" && <UserAccounts />}
+            {page === "documents" && <DocumentGrid type="document" allowEdit={isAdmin} />}
+            {page === "policies" && <DocumentGrid type="policy" allowEdit={currentUser.role === "admin"} />}
+            {page === "resumes" && <AdminCompanyResume />}
+            {page === "subscriptions" && <SubscriptionManagement />}
+            {page === "onboard" && <OnboardEmployee />}
+            {page === "compensation" && currentUser.role === "admin" && <CompensationDetails />}
+            {page === "infra" && currentUser.role === "admin" && <AdminAssets />}
+            {page === "mywork" && <EmployeeHome currentUser={currentUser} />}
+          </main>
         </div>
-        <Avatar initials={currentUser.avatar || mkAvi(currentUser.emp_name || "")} color={currentUser.role === "manager" ? C.green : C.purple} size={26} />
+        {/* ── Footer ── */}
+        <footer className={`app-footer${navOpen ? "" : " nav-closed"}`} style={{ background: "#0D1119", borderTop: `1px solid ${C.border}`, color: C.textMuted }}>
+          © {new Date().getFullYear()} FascinateIT · All rights reserved
+        </footer>
       </div>
-      {/* Overlay */}
-      <div className={`nav-overlay${navOpen ? " open" : ""}`} onClick={() => setNavOpen(false)} />
-      <nav className={`app-nav${navOpen ? " nav-open" : ""}`} style={{
-        background: C.surface, borderRight: `1px solid ${C.border}`, padding: "24px 0"
-      }}>
-        <div style={{ padding: "0 20px 22px", borderBottom: `1px solid ${C.border}` }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
-            <img src="/image.png" alt="Logo" style={{ height: 60, objectFit: "contain" }} />
-            <button className="nav-close-btn" onClick={() => setNavOpen(false)} style={{
-              display: "none", position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)",
-              background: "none", border: `1px solid ${C.border}`, borderRadius: 6, color: C.textMuted,
-              fontSize: 16, cursor: "pointer", padding: "2px 8px", lineHeight: 1
-            }}>✕</button>
-          </div>
-        </div>
-        {currentUser.role === "admin" && (
-          <div style={{ margin: "12px 12px 4px", background: C.purple + "18", border: `1px solid ${C.purple}33`, borderRadius: 8, padding: "6px 12px" }}>
-            <div style={{ fontSize: 10, color: C.purple, fontWeight: 700, letterSpacing: .5, textTransform: "uppercase" }}>🔑 Administrator</div>
-          </div>
-        )}
-        {currentUser.role === "manager" && (
-          <div style={{ margin: "12px 12px 4px", background: C.green + "18", border: `1px solid ${C.green}33`, borderRadius: 8, padding: "6px 12px" }}>
-            <div style={{ fontSize: 10, color: C.green, fontWeight: 700, letterSpacing: .5, textTransform: "uppercase" }}>📋 Manager</div>
-          </div>
-        )}
-        <div style={{ padding: "8px 10px", flex: 1, overflowY: "auto" }}>
-          {currentUser.role === "manager" && (
-            <button onClick={() => nav("mywork")} style={{
-              width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "8px 12px",
-              marginBottom: 2, borderRadius: 8, border: "none", cursor: "pointer", textAlign: "left",
-              background: page === "mywork" ? C.accentGlow : "transparent",
-              color: page === "mywork" ? C.accent : C.textMuted,
-              fontWeight: page === "mywork" ? 700 : 500, fontSize: 13,
-              borderLeft: page === "mywork" ? `2px solid ${C.accent}` : "2px solid transparent"
-            }}><span style={{ fontSize: 14 }}>👤</span><span>My Work</span></button>
-          )}
-          {ADMIN_NAV.filter(n =>
-            isManager
-              ? ["attendance", "documents", "resumes"].includes(n.id)
-              : true
-          ).map(n => {
-            const active = page === n.id;
-            return (<button key={n.id} onClick={() => nav(n.id)} style={{
-              width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "8px 12px",
-              borderRadius: 8, border: "none", cursor: "pointer", marginBottom: 2, textAlign: "left",
-              background: active ? C.accentGlow : "transparent", color: active ? C.accent : C.textMuted,
-              fontWeight: active ? 700 : 500, fontSize: 13, transition: "all .15s",
-              borderLeft: active ? `2px solid ${C.accent}` : "2px solid transparent"
-            }}><span style={{ fontSize: 14, opacity: active ? 1 : .7 }}>{n.icon}</span><span style={{ flex: 1 }}>{n.label}</span></button>);
-          })}
-        </div>
-        <div style={{ padding: "14px 18px", borderTop: `1px solid ${C.border}` }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 10 }}>
-            <Avatar initials={currentUser.avatar || mkAvi(currentUser.emp_name || "")} color={currentUser.role === "manager" ? C.green : C.purple} size={30} />
-            <div><div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{currentUser.emp_name || currentUser.username}</div>
-              <div style={{ fontSize: 10, color: C.textMuted, textTransform: "capitalize" }}>{currentUser.role}</div></div>
-          </div>
-          <Btn variant="ghost" onClick={handleLogout} style={{ width: "100%", justifyContent: "center", fontSize: 12 }}>↩ Sign Out</Btn>
-        </div>
-      </nav>
-      <main className="main-content">
-        {page === "dashboard" && <Dashboard />}
-        {page === "project_management" && <ProjectManagement readOnly={isManager} currentUser={currentUser} />}
-        {page === "people" && <PeopleHub readOnly={isManager} currentUser={currentUser} />}
-        {page === "attendance" && <AttendanceClaims currentUser={currentUser} />}
-        {page === "payslips" && !isManager && <AdminPayslips />}
-        {page === "reports" && <Reports />}
-        {page === "useraccounts" && <UserAccounts />}
-        {page === "documents" && <DocumentGrid type="document" allowEdit={isAdmin} />}
-        {page === "policies" && <DocumentGrid type="policy" allowEdit={currentUser.role === "admin"} />}
-        {page === "resumes" && <AdminCompanyResume />}
-        {page === "subscriptions" && <SubscriptionManagement />}
-        {page === "onboard" && <OnboardEmployee />}
-        {page === "compensation" && currentUser.role === "admin" && <CompensationDetails />}
-        {page === "infra" && currentUser.role === "admin" && <AdminAssets />}
-        {page === "mywork" && <EmployeeHome currentUser={currentUser} />}
-      </main>
-    </div>
     </>
   );
 }

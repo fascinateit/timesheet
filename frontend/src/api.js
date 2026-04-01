@@ -65,6 +65,7 @@ export const api = {
   updateLeaveBalance: (empId, d) => req("PUT", `/leaves/balance/${empId}`, d),
   getAllLeaveBalances: () => req("GET", "/leaves/all-balances"),
   createLeave: (d) => req("POST", "/leaves/", d),
+  updateLeave: (id, d) => req("PUT", `/leaves/${id}`, d),
   approveLeave: (id) => req("PATCH", `/leaves/${id}/approve`),
   rejectLeave: (id) => req("PATCH", `/leaves/${id}/reject`),
   deleteLeave: (id) => req("DELETE", `/leaves/${id}`),
