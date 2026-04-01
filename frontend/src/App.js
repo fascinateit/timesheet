@@ -3192,7 +3192,7 @@ function Leaves({ currentUser, viewOnly }) {
   const insufficient = willDeduct && balance && selectedDays > parseFloat(balance.balance);
   const isIntern = (() => {
     const me = employees.find(e => e.id === currentUser.employee_id);
-    return me ? /intern/i.test(me.group_name || "") : false;
+    return me ? /intern|intras/i.test(me.group_name || "") : false;
   })();
 
   const load = useCallback(async () => {
@@ -4165,6 +4165,7 @@ function EmployeeDashboard({ currentUser, navFn }) {
   const [timesheets, setTimesheets] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [teamPending, setTeamPending] = useState({ timesheets: 0, leaves: 0 });
+  const [employeeData, setEmployeeData] = useState(null);
 
   useEffect(() => {
     async function load() {
@@ -4175,13 +4176,15 @@ function EmployeeDashboard({ currentUser, navFn }) {
         api.getLeaves({ employee_id: empId }),
         api.getTimesheets({ employee_id: empId }),
         api.getExpenses({ employee_id: empId }),
+        api.getEmployee(empId),
         ...(isMgr ? [api.getTimesheets(), api.getLeaves()] : []),
       ]);
-      const [balR, lvR, tsR, expR, allTsR, allLvR] = results;
+      const [balR, lvR, tsR, expR, empR, allTsR, allLvR] = results;
       setBal(balR.status === "fulfilled" ? balR.value : null);
       setLeaves(lvR.status === "fulfilled" ? (lvR.value || []) : []);
       setTimesheets(tsR.status === "fulfilled" ? (tsR.value || []) : []);
       setExpenses(expR.status === "fulfilled" ? (expR.value || []) : []);
+      setEmployeeData(empR.status === "fulfilled" ? empR.value : null);
       if (isMgr && allTsR && allLvR) {
         const allTs = allTsR.status === "fulfilled" ? (allTsR.value || []) : [];
         const allLv = allLvR.status === "fulfilled" ? (allLvR.value || []) : [];
@@ -4224,7 +4227,7 @@ function EmployeeDashboard({ currentUser, navFn }) {
     return workdays;
   };
   const monthBaseHours = getWorkdaysInMonth(now.getFullYear(), now.getMonth()) * 9;
-  
+
   const monthTs = timesheets.filter(t => parseLocalDate(tsDate(t)) >= monthStart && t.status === "approved");
   const utilizedHours = monthTs.reduce((s, t) => s + (+t.hours || 0), 0);
   const unutilizedHours = Math.max(0, monthBaseHours - utilizedHours);
@@ -4233,10 +4236,10 @@ function EmployeeDashboard({ currentUser, navFn }) {
     ...(utilizedHours > 0 ? [{ name: "Utilized", hours: utilizedHours, color: C.green }] : []),
     ...(unutilizedHours > 0 ? [{ name: "Unutilized", hours: unutilizedHours, color: C.border }] : [])
   ];
-  
+
   const totalMonthHours = utilizedHours;
 
-  const recentTs = [...timesheets].sort((a, b) => parseLocalDate(tsDate(b)) - parseLocalDate(tsDate(a))).slice(0, 6);
+  const recentTs = [...timesheets].sort((a, b) => parseLocalDate(tsDate(b)) - parseLocalDate(tsDate(a))).slice(0, 5);
   const recentLeaves = [...leaves].sort((a, b) => parseLocalDate(b.start_date) - parseLocalDate(a.start_date)).slice(0, 5);
 
   const greet = now.getHours() < 12 ? "Good Morning" : now.getHours() < 17 ? "Good Afternoon" : "Good Evening";
@@ -4249,13 +4252,14 @@ function EmployeeDashboard({ currentUser, navFn }) {
   const fmtD2 = d => { try { return new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }); } catch { return d || "—"; } };
 
   const portalPage = currentUser.role === "manager" ? "mywork" : "employee-home";
+  const isInternGroup = employeeData ? /intern|intras/i.test(employeeData.group_name || "") : false;
 
   const kpis = [
     { label: "Leave Balance", value: `${balNum}d`, sub: `${parseFloat(bal?.total_used || 0)}d used`, icon: "🌴", color: balColor },
     { label: "Hours This Week", value: `${weekHours}h`, sub: `${weekTs.length} entries`, icon: "⏱", color: C.accent },
     { label: "Pending Timesheets", value: pendingTsCount, sub: pendingTsCount === 0 ? "All up to date" : "Awaiting approval", icon: "📋", color: pendingTsCount > 0 ? C.amber : C.green },
     { label: "Expense Claims", value: fmt$(pendingExpAmt), sub: `${pendingExp.length} pending`, icon: "💳", color: pendingExp.length > 0 ? C.purple : C.textDim },
-  ];
+  ].filter(k => k.label !== "Leave Balance" || !isInternGroup);
 
   const quickActions = [
     { icon: "⏱", label: "Log Time", sub: "Add timesheet entry", color: C.accent, page: portalPage, tab: "timesheets" },
@@ -4312,7 +4316,7 @@ function EmployeeDashboard({ currentUser, navFn }) {
               <div style={{ fontSize: 26, fontWeight: 900, color: C.accent, lineHeight: 1 }}>{weekHours}h</div>
               <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 700, letterSpacing: .5, marginTop: 5 }}>THIS WEEK</div>
             </div>
-            {bal && (
+            {bal && !isInternGroup && (
               <div style={{ background: balColor + "18", border: `1px solid ${balColor}30`, borderRadius: 16, padding: "14px 22px", textAlign: "center", minWidth: 86 }}>
                 <div style={{ fontSize: 26, fontWeight: 900, color: balColor, lineHeight: 1 }}>{balNum}d</div>
                 <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 700, letterSpacing: .5, marginTop: 5 }}>LEAVE LEFT</div>
@@ -4380,7 +4384,7 @@ function EmployeeDashboard({ currentUser, navFn }) {
               <span style={{ fontSize: 13, fontWeight: 800, color: C.text }}>🌴 Leave</span>
               <button onClick={() => navFn(portalPage, "leave")} style={{ background: "none", border: "none", color: C.accent, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>View all →</button>
             </div>
-            {bal && (
+            {bal && !isInternGroup && (
               <div style={{ background: C.surface, borderRadius: 12, padding: "12px 14px", border: `1px solid ${C.border}44` }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 7 }}>
                   <span style={{ fontSize: 12, color: C.textMuted, fontWeight: 600 }}>Balance</span>
@@ -4475,7 +4479,7 @@ function EmployeeDashboard({ currentUser, navFn }) {
   );
 }
 
-function EmployeeHome({ currentUser, defaultTab }) {
+function EmployeeHome({ currentUser, defaultTab, navFn }) {
   const [tab, setTab] = useState("profile");
   useEffect(() => { if (defaultTab) setTab(defaultTab); }, [defaultTab]);
 
@@ -4519,8 +4523,22 @@ function EmployeeHome({ currentUser, defaultTab }) {
 
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
+        {/* ── Back to Dashboard ── */}
+        {navFn && (
+          <div>
+            <button onClick={() => navFn("emp-dashboard")} style={{
+              display: "inline-flex", alignItems: "center", gap: 8,
+              background: C.card, border: `1px solid ${C.border}`,
+              borderRadius: 10, padding: "9px 18px", cursor: "pointer",
+              color: C.accent, fontSize: 13, fontWeight: 700,
+            }}>
+              ← Back to Dashboard
+            </button>
+          </div>
+        )}
+
         {/* ── Hero Banner ── */}
-        <div style={{ position: "relative", borderRadius: 20, overflow: "hidden", border: `1px solid ${C.border}`, boxShadow: "0 8px 40px rgba(0,0,0,0.4)" }}>
+        <div style={{ position: "relative", borderRadius: 20, overflow: "hidden", border: `1px solid ${C.border}`, boxShadow: "0 8px 40px rgba(0,0,0,0.4)", display: "none" }}>
           {/* Background image */}
           <img src="/banner.jpg" alt="Fascinate IT"
             style={{ width: "100%", height: 220, display: "block", objectFit: "cover", objectPosition: "bottom" }} />
@@ -7579,7 +7597,7 @@ export default function App() {
           {/* Main */}
           <main className={`main-content${navOpen ? "" : " nav-closed"}`}>
             {page === "emp-dashboard" && <EmployeeDashboard currentUser={currentUser} navFn={navWithTab} />}
-            {page === "employee-home" && <EmployeeHome currentUser={currentUser} defaultTab={portalTab} />}
+            {page === "employee-home" && <EmployeeHome currentUser={currentUser} defaultTab={portalTab} navFn={navWithTab} />}
             {page === "resumes" && <AdminCompanyResume />}
           </main>
         </div>
@@ -7675,7 +7693,7 @@ export default function App() {
             {page === "compensation" && currentUser.role === "admin" && <CompensationDetails />}
             {page === "infra" && currentUser.role === "admin" && <AdminAssets />}
             {page === "emp-dashboard" && isManager && <EmployeeDashboard currentUser={currentUser} navFn={navWithTab} />}
-            {page === "mywork" && <EmployeeHome currentUser={currentUser} defaultTab={portalTab} />}
+            {page === "mywork" && <EmployeeHome currentUser={currentUser} defaultTab={portalTab} navFn={navWithTab} />}
           </main>
         </div>
         {/* ── Footer ── */}
