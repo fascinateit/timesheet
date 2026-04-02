@@ -275,12 +275,17 @@ const ErrBox = ({ msg, onRetry }) => (
 // ════════════════════════════════════════════════════════
 // CLIENT MANAGEMENT
 // ════════════════════════════════════════════════════════
+const CLIENT_COLORS = [C.accent, C.green, C.purple, C.amber, "#f97316", "#ec4899", "#06b6d4", "#84cc16"];
+const clientColor = idx => CLIENT_COLORS[idx % CLIENT_COLORS.length];
+
 function AdminClients() {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [modal, setModal] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState("");
+  const [viewMode, setViewMode] = useState("cards");
 
   const load = useCallback(async () => {
     setLoading(true); setErr("");
@@ -301,7 +306,7 @@ function AdminClients() {
   };
 
   const del = async (id) => {
-    if (!await dialog.confirm("Are you sure you want to delete this client?", { dtype: "warning" })) return;
+    if (!await dialog.confirm("Delete this client? This cannot be undone.", { dtype: "warning" })) return;
     try { await api.deleteClient(id); load(); }
     catch (e) { dialog.alert("Error: " + e.message, { title: "Error", dtype: "error" }); }
   };
@@ -309,51 +314,165 @@ function AdminClients() {
   if (loading) return <Spinner />;
   if (err) return <ErrBox msg={err} onRetry={load} />;
 
+  const filtered = clients.filter(c =>
+    !search ||
+    c.client_name?.toLowerCase().includes(search.toLowerCase()) ||
+    c.email?.toLowerCase().includes(search.toLowerCase()) ||
+    c.gst_number?.toLowerCase().includes(search.toLowerCase())
+  );
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: C.text }}>Client Management</h2>
-          <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>Manage clients for invoicing and projects.</p>
+
+      {/* Toolbar */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ position: "relative", flex: 1, maxWidth: 380 }}>
+          <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: C.textMuted, fontSize: 14, pointerEvents: "none" }}>🔍</span>
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search by name, email or GST…"
+            style={{ width: "100%", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, padding: "9px 12px 9px 36px", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
         </div>
-        <Btn onClick={() => setModal("new")}>+ Add Client</Btn>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+          <div style={{ display: "flex", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, overflow: "hidden" }}>
+            {[["cards", "⊞ Cards"], ["table", "☰ Table"]].map(([m, lbl]) => (
+              <button key={m} onClick={() => setViewMode(m)} style={{
+                padding: "7px 14px", fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer",
+                background: viewMode === m ? C.accent : "transparent",
+                color: viewMode === m ? "#fff" : C.textMuted, transition: "all .2s",
+              }}>{lbl}</button>
+            ))}
+          </div>
+          <Btn onClick={() => setModal("new")}>+ Add Client</Btn>
+        </div>
       </div>
 
-      <Card style={{ padding: 0, overflow: "hidden" }}>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead style={{ background: C.surface }}><tr>
-              <Th>Client Name</Th><Th>Email</Th><Th>Phone</Th><Th>GST Number</Th><Th>Pay Day</Th><Th>Actions</Th>
-            </tr></thead>
-            <tbody>
-              {clients.map((c, idx) => (
-                <tr key={c.id} style={{ borderBottom: `1px solid ${C.border}22`, background: idx % 2 === 0 ? "transparent" : C.bg + "44" }}>
-                  <Td style={{ fontWeight: 700, color: C.text }}>{c.client_name}</Td>
-                  <Td style={{ color: C.textMuted, fontSize: 12 }}>
-                    {c.email ? <a href={`mailto:${c.email}`} style={{ color: C.accent, textDecoration: "none" }}>{c.email}</a> : "—"}
-                  </Td>
-                  <Td style={{ color: C.textMuted, fontSize: 12 }}>
-                    {c.phone_number ? <a href={`tel:${c.phone_number}`} style={{ color: C.text, textDecoration: "none" }}>{c.phone_number}</a> : "—"}
-                  </Td>
-                  <Td style={{ color: C.textMuted, fontSize: 12 }}>{c.gst_number || "—"}</Td>
-                  <Td style={{ fontSize: 12 }}>{c.pay_day ? `Day ${c.pay_day}` : "—"}</Td>
-                  <Td>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <Btn small variant="ghost" onClick={() => setModal(c)}>✏</Btn>
-                      <Btn small variant="danger" onClick={() => del(c.id)}>🗑</Btn>
-                    </div>
-                  </Td>
-                </tr>
-              ))}
-              {clients.length === 0 && <tr><td colSpan={6} style={{ padding: 40, textAlign: "center", color: C.textMuted }}>No clients found.</td></tr>}
-            </tbody>
-          </table>
+      {filtered.length === 0 && (
+        <div style={{ padding: "60px 20px", textAlign: "center", color: C.textMuted, background: C.card, borderRadius: 16, border: `1px solid ${C.border}` }}>
+          {search ? `No clients match "${search}".` : "No clients yet. Add your first client above."}
         </div>
-      </Card>
+      )}
+
+      {/* ── Card Grid View ── */}
+      {viewMode === "cards" && filtered.length > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 }}>
+          {filtered.map((c, idx) => (
+            <div key={c.id} style={{
+              background: C.card, border: `1px solid ${C.border}`, borderRadius: 16,
+              overflow: "hidden", transition: "transform .15s, box-shadow .15s",
+            }}
+              onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = `0 8px 28px ${clientColor(idx)}20`; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = ""; }}
+            >
+              {/* Header strip */}
+              <div style={{
+                background: `linear-gradient(135deg, ${clientColor(idx)}22, ${clientColor(idx)}08)`,
+                borderBottom: `1px solid ${C.border}`, padding: "16px 20px",
+                display: "flex", alignItems: "center", gap: 14,
+              }}>
+                <div style={{
+                  width: 50, height: 50, borderRadius: "50%", flexShrink: 0,
+                  background: `linear-gradient(135deg, ${clientColor(idx)}, ${clientColor(idx)}99)`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 18, fontWeight: 800, color: "#fff",
+                  boxShadow: `0 4px 14px ${clientColor(idx)}44`,
+                }}>{mkAvi(c.client_name)}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: C.text, marginBottom: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.client_name}</div>
+                  {c.gst_number
+                    ? <Badge color={C.green}>{c.gst_number}</Badge>
+                    : <span style={{ fontSize: 11, color: C.textMuted, background: C.surface, borderRadius: 4, padding: "2px 7px", border: `1px solid ${C.border}` }}>No GST</span>
+                  }
+                </div>
+              </div>
+
+              {/* Body */}
+              <div style={{ padding: "14px 20px", display: "flex", flexDirection: "column", gap: 9 }}>
+                {c.email && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 13, color: C.textMuted, width: 18, textAlign: "center" }}>✉</span>
+                    <a href={`mailto:${c.email}`} style={{ color: C.accent, fontSize: 13, textDecoration: "none" }}>{c.email}</a>
+                  </div>
+                )}
+                {c.phone_number && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 13, color: C.textMuted, width: 18, textAlign: "center" }}>📞</span>
+                    <a href={`tel:${c.phone_number}`} style={{ color: C.text, fontSize: 13, textDecoration: "none" }}>{c.phone_number}</a>
+                  </div>
+                )}
+                {c.address && (
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                    <span style={{ fontSize: 13, color: C.textMuted, width: 18, textAlign: "center", marginTop: 1 }}>📍</span>
+                    <span style={{ color: C.textDim, fontSize: 12, lineHeight: 1.5 }}>{c.address}</span>
+                  </div>
+                )}
+                {c.pay_day && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 13, color: C.textMuted, width: 18, textAlign: "center" }}>📅</span>
+                    <span style={{ fontSize: 12, color: C.textDim }}>Expected payment</span>
+                    <Badge color={C.purple}>Day {c.pay_day}</Badge>
+                  </div>
+                )}
+                {!c.email && !c.phone_number && !c.address && !c.pay_day && (
+                  <div style={{ fontSize: 12, color: C.textMuted, fontStyle: "italic" }}>No contact details recorded.</div>
+                )}
+              </div>
+
+              {/* Footer actions */}
+              <div style={{ borderTop: `1px solid ${C.border}`, padding: "10px 16px", display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                <Btn small variant="ghost" onClick={() => setModal(c)}>✏ Edit</Btn>
+                <Btn small variant="danger" onClick={() => del(c.id)}>🗑 Delete</Btn>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Table View ── */}
+      {viewMode === "table" && filtered.length > 0 && (
+        <Card style={{ padding: 0, overflow: "hidden" }}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead style={{ background: C.surface }}>
+                <tr><Th>Client</Th><Th>Email</Th><Th>Phone</Th><Th>Address</Th><Th>GST Number</Th><Th>Pay Day</Th><Th>Actions</Th></tr>
+              </thead>
+              <tbody>
+                {filtered.map((c, idx) => (
+                  <tr key={c.id} style={{ borderBottom: `1px solid ${C.border}22` }}>
+                    <Td>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{
+                          width: 34, height: 34, borderRadius: "50%", flexShrink: 0,
+                          background: `linear-gradient(135deg, ${clientColor(idx)}, ${clientColor(idx)}99)`,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontSize: 12, fontWeight: 800, color: "#fff",
+                        }}>{mkAvi(c.client_name)}</div>
+                        <span style={{ fontWeight: 700, color: C.text }}>{c.client_name}</span>
+                      </div>
+                    </Td>
+                    <Td>{c.email ? <a href={`mailto:${c.email}`} style={{ color: C.accent, textDecoration: "none", fontSize: 13 }}>{c.email}</a> : <span style={{ color: C.textMuted }}>—</span>}</Td>
+                    <Td>{c.phone_number ? <a href={`tel:${c.phone_number}`} style={{ color: C.text, textDecoration: "none", fontSize: 13 }}>{c.phone_number}</a> : <span style={{ color: C.textMuted }}>—</span>}</Td>
+                    <Td><span style={{ fontSize: 12, color: C.textDim }}>{c.address || "—"}</span></Td>
+                    <Td>{c.gst_number ? <Badge color={C.green}>{c.gst_number}</Badge> : <span style={{ color: C.textMuted }}>—</span>}</Td>
+                    <Td>{c.pay_day ? <Badge color={C.purple}>Day {c.pay_day}</Badge> : <span style={{ color: C.textMuted }}>—</span>}</Td>
+                    <Td>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <Btn small variant="ghost" onClick={() => setModal(c)}>✏</Btn>
+                        <Btn small variant="danger" onClick={() => del(c.id)}>🗑</Btn>
+                      </div>
+                    </Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
 
       {modal && (
         <Modal title={modal === "new" ? "Add Client" : "Edit Client"} onClose={() => setModal(null)}>
-          <ClientForm init={modal === "new" ? { client_name: "", email: "", phone_number: "", address: "", pay_day: "", gst_number: "" } : modal} saving={saving} onCancel={() => setModal(null)} onSave={save} />
+          <ClientForm
+            init={modal === "new" ? { client_name: "", email: "", phone_number: "", address: "", pay_day: "", gst_number: "" } : modal}
+            saving={saving} onCancel={() => setModal(null)} onSave={save}
+          />
         </Modal>
       )}
     </div>
@@ -903,7 +1022,6 @@ function ProjectManagement({ readOnly = false, currentUser }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
         <div><h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>Project Management & Ledger</h2>
           <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>Monitor client budgets & track company expenses or invoices</p></div>
-        {!readOnly && tab === "company_expenses" && <Btn onClick={() => setModal("newExpense")}>+ Add Expense</Btn>}
       </div>
 
       <div style={{ display: "flex", gap: 4, background: C.surface, padding: 4, borderRadius: 10, width: "fit-content", overflowX: "auto" }}>
@@ -1395,8 +1513,11 @@ function CompanyExpenses({ modal, setModal, currentUser, projects }) {
   const [filterMonth, setFilterMonth] = useState("all");
   const [filterClearedMonth, setFilterClearedMonth] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [filterPayer, setFilterPayer] = useState("all");
+  const [searchPurpose, setSearchPurpose] = useState("");
   const [chartOffset, setChartOffset] = useState(0);
-  const [clearModal, setClearModal] = useState(null); // { id, clearedDate }
+  const [clearModal, setClearModal] = useState(null);
+  const [showPayerBreakdown, setShowPayerBreakdown] = useState(false);
 
   const initForm = { expenseDate: "", purpose: "", amount: "", paidBy: "", itrType: "", taxType: "", gstAmount: "", status: "pending" };
   const [form, setForm] = useState({ ...initForm });
@@ -1489,150 +1610,278 @@ function CompanyExpenses({ modal, setModal, currentUser, projects }) {
 
   if (loading) return <Spinner />;
 
-  const totalExpenses = expenses.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0) + (parseFloat(curr.gst_amount) || 0), 0);
+  // ── Derived data ──────────────────────────────────────────────────────────
+  const expTotal   = e => (parseFloat(e.amount) || 0) + (parseFloat(e.gst_amount) || 0);
+  const totalAll   = expenses.reduce((s, e) => s + expTotal(e), 0);
+  const totalPend  = expenses.filter(e => e.status === "pending").reduce((s, e) => s + expTotal(e), 0);
+  const totalClr   = expenses.filter(e => e.status === "cleared").reduce((s, e) => s + expTotal(e), 0);
+  const totalAudit = expenses.filter(e => e.status === "sent to auditing").reduce((s, e) => s + expTotal(e), 0);
 
-  // Apply chart window offset
-  const last6Months = [];
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date();
-    d.setMonth(d.getMonth() - i - (chartOffset * 6));
-    const yr = d.getFullYear();
-    const mo = String(d.getMonth() + 1).padStart(2, '0');
-    last6Months.push(`${yr}-${mo}`);
-  }
-
-  const chartDataMap = {};
+  const payerOptions = Array.from(new Set(expenses.map(e => e.paid_by).filter(Boolean))).sort();
   const monthOptions = Array.from(new Set(expenses.map(e => e.expense_date?.slice(0, 7)).filter(Boolean))).sort().reverse();
   const clearedMonthOptions = Array.from(new Set(expenses.filter(e => e.cleared_date).map(e => e.cleared_date?.slice(0, 7)).filter(Boolean))).sort().reverse();
+
   const filteredList = expenses.filter(e => {
     if (filterStatus !== "all" && e.status !== filterStatus) return false;
     if (filterMonth !== "all" && !e.expense_date?.startsWith(filterMonth)) return false;
     if (filterClearedMonth !== "all" && !e.cleared_date?.startsWith(filterClearedMonth)) return false;
+    if (filterPayer !== "all" && e.paid_by !== filterPayer) return false;
+    if (searchPurpose && !e.purpose?.toLowerCase().includes(searchPurpose.toLowerCase())) return false;
     return true;
   });
-  const filteredTotal = filteredList.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0) + (parseFloat(curr.gst_amount) || 0), 0);
+  const filteredTotal = filteredList.reduce((s, e) => s + expTotal(e), 0);
 
+  // Monthly chart data (pending + cleared split)
+  const last6Months = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(); d.setMonth(d.getMonth() - i - chartOffset * 6);
+    last6Months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  }
   const chartData = last6Months.map(m => {
-    const amt = expenses.filter(e => e.expense_date?.startsWith(m)).reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0) + (parseFloat(curr.gst_amount) || 0), 0);
-    return { name: new Date(m + "-01T12:00:00").toLocaleDateString('en-US', { month: 'short', year: 'numeric' }), amount: amt };
+    const inMonth = expenses.filter(e => e.expense_date?.startsWith(m));
+    return {
+      name: new Date(m + "-01T12:00:00").toLocaleDateString("en-US", { month: "short", year: "2-digit" }),
+      pending: inMonth.filter(e => e.status === "pending").reduce((s, e) => s + expTotal(e), 0),
+      cleared: inMonth.filter(e => e.status === "cleared").reduce((s, e) => s + expTotal(e), 0),
+      auditing: inMonth.filter(e => e.status === "sent to auditing").reduce((s, e) => s + expTotal(e), 0),
+    };
   });
+
+  // Per-payer breakdown
+  const payerBreakdown = payerOptions.map(p => {
+    const rows = expenses.filter(e => e.paid_by === p);
+    return {
+      payer: p,
+      total: rows.reduce((s, e) => s + expTotal(e), 0),
+      pending: rows.filter(e => e.status === "pending").reduce((s, e) => s + expTotal(e), 0),
+      cleared: rows.filter(e => e.status === "cleared").reduce((s, e) => s + expTotal(e), 0),
+      count: rows.length,
+    };
+  }).sort((a, b) => b.total - a.total);
+
+  const selStyle = { background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "7px 12px", outline: "none", fontSize: 13 };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
-        <Card>
-          <div style={{ fontSize: 13, color: C.textMuted, fontWeight: 700, letterSpacing: .5 }}>TOTAL EXPENSES (ALL TIME)</div>
-          <div style={{ fontSize: 28, fontWeight: 800, color: C.text, marginTop: 8 }}>{fmt$(totalExpenses)}</div>
-        </Card>
-        <Card>
-          <div style={{ fontSize: 13, color: C.textMuted, fontWeight: 700, letterSpacing: .5, marginBottom: 8 }}>FILTERED EXPENSES</div>
-          <div style={{ fontSize: 28, fontWeight: 800, color: C.text, marginBottom: 14 }}>{fmt$(filteredTotal)}</div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <select value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setFilterMonth("all"); setFilterClearedMonth("all"); }} style={{ background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 12px", outline: "none", fontSize: 13 }}>
-              <option value="all">All Statuses</option>
-              <option value="pending">Pending</option>
-              <option value="cleared">Cleared</option>
-              <option value="sent to auditing">Sent to Auditing</option>
-            </select>
-            <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} style={{ background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 12px", outline: "none", fontSize: 13 }}>
-              <option value="all">All Expense Months</option>
-              {monthOptions.map(m => <option key={m} value={m}>{new Date(m + "-01T12:00:00").toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</option>)}
-            </select>
-            <select value={filterClearedMonth} onChange={e => setFilterClearedMonth(e.target.value)} style={{ background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 12px", outline: "none", fontSize: 13 }}>
-              <option value="all">All Cleared Months</option>
-              {clearedMonthOptions.map(m => <option key={m} value={m}>{new Date(m + "-01T12:00:00").toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</option>)}
-            </select>
+
+      {/* ── Row 1: KPI Strip ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 14 }}>
+        {[
+          { label: "Total All-Time", value: totalAll, color: C.accent, icon: "💰", sub: `${expenses.length} records` },
+          { label: "Pending", value: totalPend, color: C.amber, icon: "⏳", sub: `${expenses.filter(e => e.status === "pending").length} entries` },
+          { label: "Cleared", value: totalClr, color: C.green, icon: "✅", sub: `${expenses.filter(e => e.status === "cleared").length} entries` },
+          { label: "Sent to Auditing", value: totalAudit, color: C.purple, icon: "📁", sub: `${expenses.filter(e => e.status === "sent to auditing").length} entries` },
+        ].map((kpi, i) => (
+          <div key={i} style={{
+            background: C.card, border: `1px solid ${C.border}`, borderRadius: 14,
+            borderLeft: `3px solid ${kpi.color}`, padding: "16px 20px",
+            boxShadow: `0 0 18px ${kpi.color}10`,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              <span style={{ fontSize: 18 }}>{kpi.icon}</span>
+              <span style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, letterSpacing: .6, textTransform: "uppercase" }}>{kpi.label}</span>
+            </div>
+            <div style={{ fontSize: 26, fontWeight: 800, color: kpi.color, lineHeight: 1, marginBottom: 4 }}>{fmt$(kpi.value)}</div>
+            <div style={{ fontSize: 11, color: C.textMuted }}>{kpi.sub}</div>
           </div>
-        </Card>
+        ))}
       </div>
 
+      {/* ── Row 2: Monthly Chart + Payer Summary ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: 16 }}>
 
-      <Card>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: C.text }}>Monthly Trace</h3>
-          <div style={{ display: "flex", gap: 8 }}>
-            <Btn variant="ghost" small onClick={() => setChartOffset(o => o + 1)}>← Prev 6 Months</Btn>
-            <Btn variant="ghost" small onClick={() => setChartOffset(o => Math.max(0, o - 1))} disabled={chartOffset === 0}>Next 6 Months →</Btn>
+        {/* Monthly Trend Chart */}
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "20px 24px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: C.text }}>Monthly Expense Trend</h3>
+              <p style={{ margin: "2px 0 0", fontSize: 12, color: C.textMuted }}>Pending, Cleared & Auditing breakdown per month</p>
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <Btn variant="ghost" small onClick={() => setChartOffset(o => o + 1)}>← Prev</Btn>
+              <Btn variant="ghost" small onClick={() => setChartOffset(o => Math.max(0, o - 1))} disabled={chartOffset === 0}>Next →</Btn>
+            </div>
+          </div>
+          <div style={{ width: "100%", height: 240 }}>
+            <ResponsiveContainer>
+              <BarChart data={chartData} barCategoryGap="30%">
+                <XAxis dataKey="name" stroke={C.border} tick={{ fill: C.textMuted, fontSize: 11 }} />
+                <YAxis stroke={C.border} tick={{ fill: C.textMuted, fontSize: 11 }} tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`} width={52} />
+                <Tooltip contentStyle={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text }}
+                  formatter={(v, n) => [fmt$(v), n.charAt(0).toUpperCase() + n.slice(1)]} />
+                <Legend wrapperStyle={{ fontSize: 12, color: C.textMuted }} />
+                <Bar dataKey="pending" name="Pending" stackId="a" fill={C.amber} radius={[0, 0, 0, 0]} />
+                <Bar dataKey="cleared" name="Cleared" stackId="a" fill={C.green} radius={[0, 0, 0, 0]} />
+                <Bar dataKey="auditing" name="Auditing" stackId="a" fill={C.purple} radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
-        <div style={{ width: "100%", height: 260 }}>
-          <ResponsiveContainer>
-            <BarChart data={chartData}>
-              <XAxis dataKey="name" stroke={C.border} tick={{ fill: C.textMuted, fontSize: 12 }} />
-              <YAxis stroke={C.border} tick={{ fill: C.textMuted, fontSize: 12 }} tickFormatter={v => `₹${v / 1000}k`} />
-              <Tooltip contentStyle={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text }} itemStyle={{ color: C.amber }} />
-              <Bar dataKey="amount" fill={C.amber} radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </Card>
 
-      <Card>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: C.text }}>Company Expenses Ledger</h3>
-          <div style={{ display: "flex", gap: 8 }}>
-            <Btn variant="outline" onClick={handleDownloadCSV} disabled={!filteredList.length}>⬇ Export Excel</Btn>
+        {/* Payer Breakdown Panel */}
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "20px 24px", display: "flex", flexDirection: "column", gap: 12, overflow: "hidden" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: C.text }}>By Payer</h3>
+              <p style={{ margin: "2px 0 0", fontSize: 12, color: C.textMuted }}>Spend breakdown per payer</p>
+            </div>
+            <button onClick={() => setShowPayerBreakdown(v => !v)} style={{ background: "none", border: "none", color: C.accent, fontSize: 12, cursor: "pointer", fontWeight: 600 }}>
+              {showPayerBreakdown ? "Show Less" : "Show All"}
+            </button>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, overflowY: "auto", maxHeight: showPayerBreakdown ? 320 : 210 }}>
+            {payerBreakdown.length === 0 && <div style={{ fontSize: 13, color: C.textMuted, padding: "20px 0", textAlign: "center" }}>No data yet.</div>}
+            {(showPayerBreakdown ? payerBreakdown : payerBreakdown.slice(0, 4)).map((p, i) => {
+              const pct = totalAll > 0 ? (p.total / totalAll) * 100 : 0;
+              return (
+                <div key={p.payer} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ width: 28, height: 28, borderRadius: "50%", background: `${PALETTE[i % PALETTE.length]}22`, border: `1px solid ${PALETTE[i % PALETTE.length]}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, color: PALETTE[i % PALETTE.length] }}>
+                        {mkAvi(p.payer)}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{p.payer}</div>
+                        <div style={{ fontSize: 10, color: C.textMuted }}>{p.count} entries</div>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{fmt$(p.total)}</div>
+                      <div style={{ fontSize: 10, color: C.textMuted }}>{pct.toFixed(1)}%</div>
+                    </div>
+                  </div>
+                  <div style={{ height: 4, background: C.surface, borderRadius: 2, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${pct}%`, background: PALETTE[i % PALETTE.length], borderRadius: 2, transition: "width .4s ease" }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Row 3: Expense Ledger Table ── */}
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, overflow: "hidden" }}>
+
+        {/* Table header / filter bar */}
+        <div style={{ padding: "18px 24px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: C.text }}>Expense Ledger</h3>
+            <p style={{ margin: "2px 0 0", fontSize: 12, color: C.textMuted }}>
+              {filteredList.length} records · {fmt$(filteredTotal)} total
+            </p>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <Btn variant="outline" small onClick={handleDownloadCSV} disabled={!filteredList.length}>⬇ Export CSV</Btn>
+            <Btn small onClick={() => setModal("newExpense")}>+ Add Expense</Btn>
           </div>
         </div>
 
-        {err && <div style={{ background: C.red + "18", color: C.red, padding: "10px 14px", borderRadius: 8, fontSize: 13, border: `1px solid ${C.red}44`, marginBottom: 16 }}>⚠ {err}</div>}
+        {/* Filter strip */}
+        <div style={{ padding: "12px 24px", borderBottom: `1px solid ${C.border}`, background: C.surface, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <div style={{ position: "relative", flex: 1, minWidth: 160 }}>
+            <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: C.textMuted, fontSize: 13, pointerEvents: "none" }}>🔍</span>
+            <input value={searchPurpose} onChange={e => setSearchPurpose(e.target.value)} placeholder="Search purpose…"
+              style={{ ...selStyle, padding: "7px 10px 7px 30px", width: "100%", boxSizing: "border-box" }} />
+          </div>
+          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={selStyle}>
+            <option value="all">All Statuses</option>
+            <option value="pending">Pending</option>
+            <option value="cleared">Cleared</option>
+            <option value="sent to auditing">Sent to Auditing</option>
+          </select>
+          <select value={filterPayer} onChange={e => setFilterPayer(e.target.value)} style={selStyle}>
+            <option value="all">All Payers</option>
+            {payerOptions.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+          <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} style={selStyle}>
+            <option value="all">All Months</option>
+            {monthOptions.map(m => <option key={m} value={m}>{new Date(m + "-01T12:00:00").toLocaleDateString("en-US", { month: "short", year: "numeric" })}</option>)}
+          </select>
+          <select value={filterClearedMonth} onChange={e => setFilterClearedMonth(e.target.value)} style={selStyle}>
+            <option value="all">All Cleared Months</option>
+            {clearedMonthOptions.map(m => <option key={m} value={m}>{new Date(m + "-01T12:00:00").toLocaleDateString("en-US", { month: "short", year: "numeric" })}</option>)}
+          </select>
+          {(filterStatus !== "all" || filterPayer !== "all" || filterMonth !== "all" || filterClearedMonth !== "all" || searchPurpose) && (
+            <Btn variant="ghost" small onClick={() => { setFilterStatus("all"); setFilterPayer("all"); setFilterMonth("all"); setFilterClearedMonth("all"); setSearchPurpose(""); }}>✕ Clear</Btn>
+          )}
+        </div>
+
+        {err && <div style={{ margin: "12px 24px", background: C.red + "18", color: C.red, padding: "10px 14px", borderRadius: 8, fontSize: 13, border: `1px solid ${C.red}44` }}>⚠ {err}</div>}
 
         {!filteredList.length ? (
-          <div style={{ padding: "40px 20px", textAlign: "center", color: C.textMuted }}>No company expenses recorded yet.</div>
+          <div style={{ padding: "50px 20px", textAlign: "center", color: C.textMuted }}>
+            {searchPurpose || filterStatus !== "all" || filterPayer !== "all" || filterMonth !== "all"
+              ? "No expenses match your filters."
+              : "No company expenses recorded yet."}
+          </div>
         ) : (
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
-                <tr>
-                  <Th>Expense Date</Th>
+                <tr style={{ background: C.surface }}>
+                  <Th>Date</Th>
                   <Th>Purpose</Th>
-                  <Th>Amount</Th>
-                  <Th>GST Amount</Th>
-                  <Th>Total Amount</Th>
+                  <Th>Net Amount</Th>
+                  <Th>GST</Th>
+                  <Th>Total</Th>
                   <Th>Paid By</Th>
-                  <Th>ITR / Tax Type</Th>
+                  <Th>ITR / Tax</Th>
                   <Th>Status</Th>
                   <Th>Cleared Date</Th>
-                  <Th>Action</Th>
+                  <Th>Actions</Th>
                 </tr>
               </thead>
               <tbody>
-                {filteredList.map(exp => {
+                {filteredList.map((exp, idx) => {
                   const [yr, mo, da] = (exp.expense_date || "").split("-");
                   const fmtDmy = yr && mo && da ? `${da}-${mo}-${yr}` : exp.expense_date;
+                  const total = expTotal(exp);
+                  const statusColor = exp.status === "cleared" ? C.green : exp.status === "sent to auditing" ? C.purple : C.amber;
                   return (
-                    <tr key={exp.id} style={{ borderBottom: `1px solid ${C.border}` }}>
-                      <Td><div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{fmtDmy}</div></Td>
-                      <Td><div style={{ fontSize: 13, color: C.textMuted }}>{exp.purpose}</div></Td>
-                      <Td><div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{fmt$(exp.amount)}</div></Td>
-                      <Td><div style={{ fontSize: 13, color: C.textMuted }}>{fmt$(exp.gst_amount || 0)}</div></Td>
-                      <Td><div style={{ fontSize: 13, fontWeight: 700, color: C.green }}>{fmt$((parseFloat(exp.amount) || 0) + (parseFloat(exp.gst_amount) || 0))}</div></Td>
-                      <Td><div style={{ fontSize: 13, color: C.textMuted }}>{exp.paid_by}</div></Td>
+                    <tr key={exp.id} style={{ borderBottom: `1px solid ${C.border}22`, background: idx % 2 === 0 ? "transparent" : C.surface + "44" }}>
                       <Td>
-                        <div style={{ fontSize: 13, color: C.text }}>{exp.itr_type || "—"}</div>
-                        <div style={{ fontSize: 11, color: C.accent }}>{exp.tax_type || "—"}</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: C.text, whiteSpace: "nowrap" }}>{fmtDmy}</div>
                       </Td>
                       <Td>
-                        <Badge color={exp.status === "cleared" ? C.green : exp.status === "sent to auditing" ? C.purple : C.amber}>
-                          {exp.status}
-                        </Badge>
+                        <div style={{ fontSize: 13, color: C.text, maxWidth: 220, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{exp.purpose}</div>
+                      </Td>
+                      <Td><div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{fmt$(exp.amount)}</div></Td>
+                      <Td><div style={{ fontSize: 12, color: C.textMuted }}>{exp.gst_amount ? fmt$(exp.gst_amount) : "—"}</div></Td>
+                      <Td>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: statusColor }}>{fmt$(total)}</div>
+                      </Td>
+                      <Td>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <div style={{ width: 24, height: 24, borderRadius: "50%", background: `${C.accent}22`, border: `1px solid ${C.accent}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800, color: C.accent, flexShrink: 0 }}>
+                            {mkAvi(exp.paid_by)}
+                          </div>
+                          <span style={{ fontSize: 12, color: C.textDim }}>{exp.paid_by}</span>
+                        </div>
+                      </Td>
+                      <Td>
+                        <div style={{ fontSize: 12, color: C.text }}>{exp.itr_type || "—"}</div>
+                        {exp.tax_type && <div style={{ fontSize: 11, color: C.accent, marginTop: 2 }}>{exp.tax_type}</div>}
+                      </Td>
+                      <Td>
+                        <Badge color={statusColor}>{exp.status}</Badge>
                       </Td>
                       <Td>
                         {exp.cleared_date
-                          ? <div style={{ fontSize: 13, fontWeight: 600, color: C.green }}>{(() => { const [cy, cm, cd] = exp.cleared_date.split("T")[0].split("-"); return `${cd}-${cm}-${cy}`; })()}</div>
+                          ? <div style={{ fontSize: 12, fontWeight: 600, color: C.green, whiteSpace: "nowrap" }}>{(() => { const [cy, cm, cd] = exp.cleared_date.split("T")[0].split("-"); return `${cd}-${cm}-${cy}`; })()}</div>
                           : <div style={{ fontSize: 13, color: C.textMuted }}>—</div>
                         }
                       </Td>
                       <Td>
-                        <div style={{ display: "flex", gap: 6 }}>
-                          {(!exp.paid_by?.toUpperCase().includes('FIT') && exp.status !== "sent to auditing") && (
-                            <Btn small variant="outline" onClick={() => { setEditObj(exp); setModal("generateExpense"); }}>Generate Exp</Btn>
+                        <div style={{ display: "flex", gap: 5, flexWrap: "nowrap" }}>
+                          {(!exp.paid_by?.toUpperCase().includes("FIT") && exp.status !== "sent to auditing") && (
+                            <Btn small variant="outline" onClick={() => { setEditObj(exp); setModal("generateExpense"); }}>Gen Exp</Btn>
                           )}
                           {exp.status === "pending" && (
-                            <Btn small variant="success" onClick={() => setClearModal({ id: exp.id, clearedDate: new Date().toISOString().split("T")[0] })}>Mark Cleared</Btn>
+                            <Btn small variant="success" onClick={() => setClearModal({ id: exp.id, clearedDate: new Date().toISOString().split("T")[0] })}>Clear</Btn>
                           )}
                           {exp.status === "cleared" && (
-                            <Btn small style={{ background: C.purple, color: "#fff", border: "none" }} onClick={() => handleToggleStatus(exp.id, "sent to auditing")}>Send to Auditing</Btn>
+                            <Btn small style={{ background: C.purple, color: "#fff", border: "none", padding: "4px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer", fontWeight: 600 }} onClick={() => handleToggleStatus(exp.id, "sent to auditing")}>→ Audit</Btn>
                           )}
                           {exp.status !== "sent to auditing" && (
                             <>
@@ -1649,7 +1898,17 @@ function CompanyExpenses({ modal, setModal, currentUser, projects }) {
             </table>
           </div>
         )}
-      </Card>
+
+        {/* Footer totals row */}
+        {filteredList.length > 0 && (
+          <div style={{ borderTop: `1px solid ${C.border}`, padding: "12px 24px", background: C.surface, display: "flex", gap: 24, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 12, color: C.textMuted }}>Showing <strong style={{ color: C.text }}>{filteredList.length}</strong> of {expenses.length} records</div>
+            <div style={{ fontSize: 12, color: C.textMuted }}>Net: <strong style={{ color: C.text }}>{fmt$(filteredList.reduce((s, e) => s + (parseFloat(e.amount) || 0), 0))}</strong></div>
+            <div style={{ fontSize: 12, color: C.textMuted }}>GST: <strong style={{ color: C.accent }}>{fmt$(filteredList.reduce((s, e) => s + (parseFloat(e.gst_amount) || 0), 0))}</strong></div>
+            <div style={{ fontSize: 12, color: C.textMuted }}>Total: <strong style={{ color: C.green }}>{fmt$(filteredTotal)}</strong></div>
+          </div>
+        )}
+      </div>
 
       {clearModal && (
         <Modal title="Mark as Cleared" onClose={() => setClearModal(null)} maxWidth={360}>
