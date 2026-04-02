@@ -921,7 +921,16 @@ function ProjectManagement({ readOnly = false, currentUser }) {
 
   // List Filters
   const [filterProject, setFilterProject] = useState("all");
+  const [filterClient, setFilterClient] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
+  // Sort
+  const [sortField, setSortField] = useState("raised_date");
+  const [sortDir, setSortDir] = useState("desc");
+
+  const handleSort = (field) => {
+    if (sortField === field) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortField(field); setSortDir("asc"); }
+  };
 
   const load = useCallback(async () => {
     setLoading(true); setErr("");
@@ -1013,8 +1022,29 @@ function ProjectManagement({ readOnly = false, currentUser }) {
   const activeProjects = projects.filter(p => p.status === "active");
   const filteredInvoices = invoices.filter(i => {
     if (filterProject !== "all" && i.project_id.toString() !== filterProject) return false;
+    if (filterClient !== "all" && i.client_id?.toString() !== filterClient) return false;
     if (filterStatus !== "all" && i.status !== filterStatus) return false;
     return true;
+  });
+
+  const sortedInvoices = [...filteredInvoices].sort((a, b) => {
+    let va, vb;
+    if (sortField === "raised_date" || sortField === "payment_due_date") {
+      va = new Date(a[sortField] || 0).getTime();
+      vb = new Date(b[sortField] || 0).getTime();
+    } else if (sortField === "amount") {
+      va = parseFloat(a.amount || 0);
+      vb = parseFloat(b.amount || 0);
+    } else if (sortField === "status") {
+      va = a.status || "";
+      vb = b.status || "";
+    } else {
+      va = a[sortField] || "";
+      vb = b[sortField] || "";
+    }
+    if (va < vb) return sortDir === "asc" ? -1 : 1;
+    if (va > vb) return sortDir === "asc" ? 1 : -1;
+    return 0;
   });
 
   return (
@@ -1215,6 +1245,11 @@ function ProjectManagement({ readOnly = false, currentUser }) {
                 <div style={{ width: 3, height: 18, background: `linear-gradient(180deg, ${C.green}, ${C.accent})`, borderRadius: 2 }} />
                 <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Raised Invoices</span>
                 <div style={{ flex: 1 }} />
+                <select value={filterClient} onChange={e => setFilterClient(e.target.value)}
+                  style={{ padding: "7px 11px", borderRadius: 8, background: C.surface, border: `1px solid ${C.border}`, color: filterClient !== "all" ? C.text : C.textMuted, fontSize: 12, outline: "none", cursor: "pointer" }}>
+                  <option value="all">All Clients</option>
+                  {clients.map(c => <option key={c.id} value={c.id}>{c.client_name}</option>)}
+                </select>
                 <select value={filterProject} onChange={e => setFilterProject(e.target.value)}
                   style={{ padding: "7px 11px", borderRadius: 8, background: C.surface, border: `1px solid ${C.border}`, color: filterProject !== "all" ? C.text : C.textMuted, fontSize: 12, outline: "none", cursor: "pointer" }}>
                   <option value="all">All Projects</option>
@@ -1252,7 +1287,7 @@ function ProjectManagement({ readOnly = false, currentUser }) {
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredInvoices.map((inv, rowIdx) => (
+                        {sortedInvoices.map((inv, rowIdx) => (
                           <tr key={inv.id} style={{ borderBottom: `1px solid ${C.border}`, background: rowIdx % 2 === 0 ? "transparent" : C.card + "44" }}>
                             <Td>
                               <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{inv.invoice_number}</div>
