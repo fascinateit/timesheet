@@ -80,6 +80,30 @@ const Inp = ({ label, value, onChange, type = "text", options, required, placeho
   </div>
 );
 
+const PaginationControls = ({ page, setPage, perPage, setPerPage, total }) => {
+  const totalPages = Math.ceil(total / perPage) || 1;
+  if (total === 0) return null;
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 24px", borderTop: `1px solid ${C.border}`, background: C.surface }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <span style={{ fontSize: 12, color: C.textMuted }}>Rows per page:</span>
+        <select value={perPage} onChange={e => { setPerPage(Number(e.target.value)); setPage(1); }}
+          style={{ padding: "4px 8px", borderRadius: 6, background: C.bg, border: `1px solid ${C.border}`, color: C.text, fontSize: 12, outline: "none", cursor: "pointer" }}>
+          {[10, 15, 20, 100].map(n => <option key={n} value={n}>{n}</option>)}
+        </select>
+        <span style={{ fontSize: 12, color: C.textMuted }}>
+          Showing {Math.min((page - 1) * perPage + 1, total)} to {Math.min(page * perPage, total)} of {total}
+        </span>
+      </div>
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <Btn small variant="ghost" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>Prev</Btn>
+        <span style={{ fontSize: 12, fontWeight: 600, color: C.text, padding: "4px 8px" }}>Page {page} of {totalPages}</span>
+        <Btn small variant="ghost" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>Next</Btn>
+      </div>
+    </div>
+  );
+};
+
 const maskStr = v => {
   if (!v) return "—";
   const s = String(v);
@@ -286,6 +310,9 @@ function AdminClients() {
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState("cards");
+  // Pagination
+  const [cliPage, setCliPage] = useState(1);
+  const [cliPerPage, setCliPerPage] = useState(10);
 
   const load = useCallback(async () => {
     setLoading(true); setErr("");
@@ -327,7 +354,7 @@ function AdminClients() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <div style={{ position: "relative", flex: 1, maxWidth: 380 }}>
           <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: C.textMuted, fontSize: 14, pointerEvents: "none" }}>🔍</span>
-          <input value={search} onChange={e => setSearch(e.target.value)}
+          <input value={search} onChange={e => { setSearch(e.target.value); setCliPage(1); }}
             placeholder="Search by name, email or GST…"
             style={{ width: "100%", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, padding: "9px 12px 9px 36px", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
         </div>
@@ -354,7 +381,7 @@ function AdminClients() {
       {/* ── Card Grid View ── */}
       {viewMode === "cards" && filtered.length > 0 && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 }}>
-          {filtered.map((c, idx) => (
+          {filtered.slice((cliPage - 1) * cliPerPage, cliPage * cliPerPage).map((c, idx) => (
             <div key={c.id} style={{
               background: C.card, border: `1px solid ${C.border}`, borderRadius: 16,
               overflow: "hidden", transition: "transform .15s, box-shadow .15s",
@@ -435,7 +462,7 @@ function AdminClients() {
                 <tr><Th>Client</Th><Th>Email</Th><Th>Phone</Th><Th>Address</Th><Th>GST Number</Th><Th>Pay Day</Th><Th>Actions</Th></tr>
               </thead>
               <tbody>
-                {filtered.map((c, idx) => (
+                {filtered.slice((cliPage - 1) * cliPerPage, cliPage * cliPerPage).map((c, idx) => (
                   <tr key={c.id} style={{ borderBottom: `1px solid ${C.border}22` }}>
                     <Td>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -1360,25 +1387,7 @@ function ProjectManagement({ readOnly = false, currentUser }) {
                 )}
                 
                 {/* Pagination Controls */}
-                {filteredInvoices.length > 0 && (
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 24px", borderTop: `1px solid ${C.border}`, background: C.surface }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <span style={{ fontSize: 12, color: C.textMuted }}>Rows per page:</span>
-                      <select value={invPerPage} onChange={e => { setInvPerPage(Number(e.target.value)); setInvPage(1); }}
-                        style={{ padding: "4px 8px", borderRadius: 6, background: C.bg, border: `1px solid ${C.border}`, color: C.text, fontSize: 12, outline: "none", cursor: "pointer" }}>
-                        {[10, 15, 20, 100].map(n => <option key={n} value={n}>{n}</option>)}
-                      </select>
-                      <span style={{ fontSize: 12, color: C.textMuted }}>
-                        Showing {Math.min((invPage - 1) * invPerPage + 1, sortedInvoices.length)} to {Math.min(invPage * invPerPage, sortedInvoices.length)} of {sortedInvoices.length}
-                      </span>
-                    </div>
-                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                      <Btn small variant="ghost" onClick={() => setInvPage(p => Math.max(1, p - 1))} disabled={invPage === 1}>Prev</Btn>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: C.text, padding: "4px 8px" }}>Page {invPage} of {invTotalPages}</span>
-                      <Btn small variant="ghost" onClick={() => setInvPage(p => Math.min(invTotalPages, p + 1))} disabled={invPage === invTotalPages}>Next</Btn>
-                    </div>
-                  </div>
-                )}
+                <PaginationControls page={invPage} setPage={setInvPage} perPage={invPerPage} setPerPage={setInvPerPage} total={sortedInvoices.length} />
               </div>
             </div>
           </div>
@@ -1978,25 +1987,7 @@ function CompanyExpenses({ modal, setModal, currentUser, projects }) {
         )}
         
         {/* Pagination Controls */}
-        {filteredList.length > 0 && (
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 24px", borderTop: `1px solid ${C.border}`, background: C.surface }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <span style={{ fontSize: 12, color: C.textMuted }}>Rows per page:</span>
-              <select value={expPerPage} onChange={e => { setExpPerPage(Number(e.target.value)); setExpPage(1); }}
-                style={{ padding: "4px 8px", borderRadius: 6, background: C.bg, border: `1px solid ${C.border}`, color: C.text, fontSize: 12, outline: "none", cursor: "pointer" }}>
-                {[10, 15, 20, 100].map(n => <option key={n} value={n}>{n}</option>)}
-              </select>
-              <span style={{ fontSize: 12, color: C.textMuted }}>
-                Showing {Math.min((expPage - 1) * expPerPage + 1, filteredList.length)} to {Math.min(expPage * expPerPage, filteredList.length)} of {filteredList.length}
-              </span>
-            </div>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <Btn small variant="ghost" onClick={() => setExpPage(p => Math.max(1, p - 1))} disabled={expPage === 1}>Prev</Btn>
-              <span style={{ fontSize: 12, fontWeight: 600, color: C.text, padding: "4px 8px" }}>Page {expPage} of {expTotalPages}</span>
-              <Btn small variant="ghost" onClick={() => setExpPage(p => Math.min(expTotalPages, p + 1))} disabled={expPage === expTotalPages}>Next</Btn>
-            </div>
-          </div>
-        )}
+        <PaginationControls page={expPage} setPage={setExpPage} perPage={expPerPage} setPerPage={setExpPerPage} total={filteredList.length} />
       </div>
 
       {clearModal && (
@@ -3990,6 +3981,9 @@ function Leaves({ currentUser, viewOnly }) {
   const [editLeave, setEditLeave] = useState(null);   // leave row being edited
   const [editForm, setEditForm] = useState({ type: "Annual", startDate: "", endDate: "", reason: "" });
   const [editSaving, setEditSaving] = useState(false);
+  // Pagination
+  const [lvPage, setLvPage] = useState(1);
+  const [lvPerPage, setLvPerPage] = useState(10);
 
   // Compute days selected in the form
   const selectedDays = (() => {
@@ -4235,8 +4229,9 @@ function Leaves({ currentUser, viewOnly }) {
             No leave records yet.{viewOnly && " Click \u201c+ Request Leave\u201d to submit your first request."}
           </div>
         ) : (
+          <>
           <div className="lv-grid">
-            {rows.map(l => {
+            {rows.slice((lvPage - 1) * lvPerPage, lvPage * lvPerPage).map(l => {
               const s = new Date(l.start_date), e = new Date(l.end_date);
               const days = Math.round((e - s) / 86400000) + 1;
               const usesBalance = BALANCE_TYPES.has(l.leave_type);
@@ -4319,6 +4314,8 @@ function Leaves({ currentUser, viewOnly }) {
               );
             })}
           </div>
+          <PaginationControls page={lvPage} setPage={setLvPage} perPage={lvPerPage} setPerPage={setLvPerPage} total={rows.length} />
+          </>
         )}
 
         {/* ── Admin: Amend Leave Buckets Modal ── */}
@@ -4522,6 +4519,10 @@ function UserAccounts() {
     catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
   }
 
+  // Pagination
+  const [acctPage, setAcctPage] = useState(1);
+  const [acctPerPage, setAcctPerPage] = useState(10);
+
   if (loading) return <Spinner />;
   if (err) return <ErrBox msg={err} onRetry={load} />;
 
@@ -4547,7 +4548,7 @@ function UserAccounts() {
               {["Employee", "Group", "Username", "Role", "Status", "Actions"].map(h => <Th key={h}>{h}</Th>)}
             </tr></thead>
             <tbody>
-              {accounts.map((a, idx) => {
+              {accounts.slice((acctPage - 1) * acctPerPage, acctPage * acctPerPage).map((a, idx) => {
                 const grp = groups.find(g => g.id === a.group_id);
                 return (<tr key={a.id} style={{ borderBottom: `1px solid ${C.border}22`, background: idx % 2 === 0 ? "transparent" : C.bg + "44" }}>
                   <Td><div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -4570,6 +4571,7 @@ function UserAccounts() {
             </tbody>
           </table>
         </div>
+        <PaginationControls page={acctPage} setPage={setAcctPage} perPage={acctPerPage} setPerPage={setAcctPerPage} total={accounts.length} />
       </Card>
       {unlinked.length > 0 && (
         <div style={{ background: C.amber + "14", border: `1px solid ${C.amber}33`, borderRadius: 10, padding: "14px 18px" }}>
@@ -4631,6 +4633,9 @@ function UserAccounts() {
 function Reports() {
   const [projects, setProjects] = useState([]); const [selId, setSelId] = useState("");
   const [report, setReport] = useState(null); const [loading, setLoading] = useState(true); const [repLoading, setRepLoading] = useState(false);
+  // Pagination
+  const [repPage, setRepPage] = useState(1);
+  const [repPerPage, setRepPerPage] = useState(10);
 
   useEffect(() => { api.getProjects().then(p => { setProjects(p); if (p.length > 0) setSelId(String(p[0].id)); }).finally(() => setLoading(false)); }, []);
   useEffect(() => { if (!selId) return; setRepLoading(true); api.getProjectReport(selId).then(setReport).catch(() => setReport(null)).finally(() => setRepLoading(false)); }, [selId]);
@@ -4670,7 +4675,7 @@ function Reports() {
                 {["Employee", "Group", "Rate", "Hours", "Total Cost"].map(h => <Th key={h}>{h}</Th>)}
               </tr></thead>
               <tbody>
-                {(report.by_employee || []).map(e => (
+                {(report.by_employee || []).slice((repPage - 1) * repPerPage, repPage * repPerPage).map(e => (
                   <tr key={e.id} style={{ borderBottom: `1px solid ${C.border}22` }}>
                     <Td><div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <Avatar initials={e.avatar} color={e.group_color} size={28} />
@@ -4690,6 +4695,7 @@ function Reports() {
               </tbody>
             </table>
           </div>
+          <PaginationControls page={repPage} setPage={setRepPage} perPage={repPerPage} setPerPage={setRepPerPage} total={(report.by_employee || []).length} />
         </Card>
         {(report.by_task || []).length > 0 && (
           <Card>
@@ -5725,6 +5731,9 @@ function Expenses({ currentUser, viewOnly }) {
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [filterStatus, setFilterStatus] = useState("");
+  // Pagination
+  const [expPage, setExpPage] = useState(1);
+  const [expPerPage, setExpPerPage] = useState(10);
 
   const load = useCallback(async () => {
     setLoading(true); setErr("");
@@ -5831,7 +5840,7 @@ function Expenses({ currentUser, viewOnly }) {
           <span style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, letterSpacing: .5, textTransform: "uppercase" }}>Filter:</span>
           {["", "pending", "approved", "rejected", "needs_correction", "paid"].map(s => (
             <button key={s} className={`exp-filter-pill${filterStatus === s ? " active" : ""}`}
-              onClick={() => setFilterStatus(s)}
+              onClick={() => { setFilterStatus(s); setExpPage(1); }}
               style={{
                 background: filterStatus === s ? (EXP_STATUS_COLOR[s] || C.accent) + "22" : C.surface,
                 border: `1px solid ${filterStatus === s ? (EXP_STATUS_COLOR[s] || C.accent) + "66" : C.border}`,
@@ -5851,8 +5860,9 @@ function Expenses({ currentUser, viewOnly }) {
             No expense records found.{viewOnly && " Click \u201c+ Submit Expense\u201d to add your first claim."}
           </div>
         ) : (
+          <>
           <div className="exp-grid">
-            {rows.map(ex => {
+            {rows.slice((expPage - 1) * expPerPage, expPage * expPerPage).map(ex => {
               const statusColor = EXP_STATUS_COLOR[ex.status] || C.textMuted;
               const canEdit = viewOnly && (ex.status === "pending" || ex.status === "needs_correction");
               const catIcon = ex.category === "Travel" ? "✈️" : ex.category === "Meals" ? "🍽" : ex.category === "Software" ? "💻" : ex.category === "Hardware" ? "🖥" : ex.category === "Training" ? "📚" : "🧾";
@@ -5928,6 +5938,8 @@ function Expenses({ currentUser, viewOnly }) {
               );
             })}
           </div>
+          <PaginationControls page={expPage} setPage={setExpPage} perPage={expPerPage} setPerPage={setExpPerPage} total={rows.length} />
+          </>
         )}
 
         {/* ── Submit / Edit Modal ── */}
@@ -6037,6 +6049,9 @@ function AdminEmployees({ readOnly = false, currentUser }) {
   const [modal, setModal] = useState(null); // null | "new" | emp-object
   const [viewModal, setViewModal] = useState(null); // null | emp-object
   const [saving, setSaving] = useState(false);
+  // Pagination
+  const [empPage, setEmpPage] = useState(1);
+  const [empPerPage, setEmpPerPage] = useState(10);
 
   const load = useCallback(async () => {
     setLoading(true); setErr("");
@@ -6077,7 +6092,7 @@ function AdminEmployees({ readOnly = false, currentUser }) {
               {["Emp ID", "Employee", "Email", "Group", "Manager", "Joining Date", "CTC", ...(isAdminOnly ? ["Gratuity"] : []), "Actions"].map(h => <Th key={h}>{h}</Th>)}
             </tr></thead>
             <tbody>
-              {employees.map((emp, idx) => {
+              {employees.slice((empPage - 1) * empPerPage, empPage * empPerPage).map((emp, idx) => {
                 const grp = groups.find(g => g.id === emp.group_id);
                 return (
                   <tr key={emp.id} style={{ borderBottom: `1px solid ${C.border} 22`, background: idx % 2 === 0 ? "transparent" : C.bg + "44" }}>
@@ -6103,6 +6118,7 @@ function AdminEmployees({ readOnly = false, currentUser }) {
             </tbody>
           </table>
         </div>
+        <PaginationControls page={empPage} setPage={setEmpPage} perPage={empPerPage} setPerPage={setEmpPerPage} total={employees.length} />
       </Card>
 
       {/* Create / Edit employee modal */}
@@ -6674,6 +6690,9 @@ function AdminPayslips() {
   const [generating, setGenerating] = useState(false);
   const [filterEmp, setFilterEmp] = useState("");
   const [filterYear, setFilterYear] = useState("");
+  // Pagination
+  const [psPage, setPsPage] = useState(1);
+  const [psPerPage, setPsPerPage] = useState(10);
   const [form, setForm] = useState({
     employeeId: "", month: new Date().getMonth() + 1, year: new Date().getFullYear(),
     usePf: false, pfAmount: "", useTds: false, tdsAmount: "", useVp: true, vpAmount: "",
@@ -6859,12 +6878,12 @@ function AdminPayslips() {
       <Card style={{ padding: 0, overflow: "hidden" }}>
         <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: C.text, flex: 1 }}>Generated Payslips ({shown.length})</div>
-          <select value={filterEmp} onChange={e => setFilterEmp(e.target.value)}
+          <select value={filterEmp} onChange={e => { setFilterEmp(e.target.value); setPsPage(1); }}
             style={{ background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "7px 12px", fontSize: 13 }}>
             <option value="">All Employees</option>
             {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
           </select>
-          <select value={filterYear} onChange={e => setFilterYear(e.target.value)}
+          <select value={filterYear} onChange={e => { setFilterYear(e.target.value); setPsPage(1); }}
             style={{ background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "7px 12px", fontSize: 13 }}>
             <option value="">All Years</option>
             {years.map(y => <option key={y} value={y}>{y}</option>)}
@@ -6880,7 +6899,7 @@ function AdminPayslips() {
               ))}
             </tr></thead>
             <tbody>
-              {shown.map(ps => (
+              {shown.slice((psPage - 1) * psPerPage, psPage * psPerPage).map(ps => (
                 <tr key={ps.id} style={{ borderBottom: `1px solid ${C.border}22` }}>
                   <td style={{ padding: "12px 16px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
@@ -6916,6 +6935,7 @@ function AdminPayslips() {
             </tbody>
           </table>
         )}
+        <PaginationControls page={psPage} setPage={setPsPage} perPage={psPerPage} setPerPage={setPsPerPage} total={shown.length} />
       </Card>
     </div>
   );
@@ -6926,6 +6946,9 @@ function DocumentGrid({ type = "document", allowEdit = false }) {
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null); // { id, title, url }
   const [saving, setSaving] = useState(false);
+  // Pagination
+  const [docPage, setDocPage] = useState(1);
+  const [docPerPage, setDocPerPage] = useState(10);
 
   const titleText = type === "policy" ? "Company Policies" : "Documents";
   const descText = type === "policy" ? "Review important guidelines" : "Manage important links";
@@ -7002,8 +7025,9 @@ function DocumentGrid({ type = "document", allowEdit = false }) {
             </p>
           </div>
         ) : (
+          <>
           <div className="doc-grid">
-            {docs.map((d, i) => (
+            {docs.slice((docPage - 1) * docPerPage, docPage * docPerPage).map((d, i) => (
               <div key={d.id} className="doc-card">
                 {/* Card top accent bar */}
                 <div style={{ height: 4, background: `linear-gradient(90deg, ${accentColor}, ${accentColor}88)` }} />
@@ -7049,6 +7073,8 @@ function DocumentGrid({ type = "document", allowEdit = false }) {
               </div>
             ))}
           </div>
+          <PaginationControls page={docPage} setPage={setDocPage} perPage={docPerPage} setPerPage={setDocPerPage} total={docs.length} />
+          </>
         )}
 
         {/* ── Add/Edit Modal ── */}
@@ -7931,6 +7957,9 @@ function AdminAssets() {
   const [filterStatus, setFilterStatus] = useState("");
   const [filterType, setFilterType] = useState("");
   const [search, setSearch] = useState("");
+  // Pagination
+  const [aPage, setAPage] = useState(1);
+  const [aPerPage, setAPerPage] = useState(10);
 
   const EMPTY_FORM = { asset_tag: "", asset_type: "", brand: "", model: "", serial_number: "", purchase_date: "", purchase_cost: "", warranty_expiry: "", status: "available", notes: "", depreciation_amount: "" };
   const [form, setForm] = useState(EMPTY_FORM);
@@ -8018,9 +8047,9 @@ function AdminAssets() {
 
       {/* Filters */}
       <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
-        <input placeholder="Search tag / brand / employee…" value={search} onChange={e => setSearch(e.target.value)} style={{ ...inputStyle, width: 240 }} />
-        <input placeholder="Filter by type…" value={filterType} onChange={e => setFilterType(e.target.value)} style={{ ...inputStyle, width: 160 }} />
-        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ ...inputStyle, width: 150 }}>
+        <input placeholder="Search tag / brand / employee…" value={search} onChange={e => { setSearch(e.target.value); setAPage(1); }} style={{ ...inputStyle, width: 240 }} />
+        <input placeholder="Filter by type…" value={filterType} onChange={e => { setFilterType(e.target.value); setAPage(1); }} style={{ ...inputStyle, width: 160 }} />
+        <select value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setAPage(1); }} style={{ ...inputStyle, width: 150 }}>
           <option value="">All Statuses</option>
           {["available", "assigned", "maintenance", "retired"].map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
         </select>
@@ -8040,7 +8069,7 @@ function AdminAssets() {
             <tbody>
               {filtered.length === 0 ? (
                 <tr><td colSpan={10} style={{ padding: 32, textAlign: "center", color: C.textMuted }}>No assets found.</td></tr>
-              ) : filtered.map(a => (
+              ) : filtered.slice((aPage - 1) * aPerPage, aPage * aPerPage).map(a => (
                 <tr key={a.id} style={{ borderBottom: `1px solid ${C.border}55` }}
                   onMouseEnter={e => e.currentTarget.style.background = C.surface + "88"}
                   onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
@@ -8082,6 +8111,7 @@ function AdminAssets() {
             </tbody>
           </table>
         </div>
+        <PaginationControls page={aPage} setPage={setAPage} perPage={aPerPage} setPerPage={setAPerPage} total={filtered.length} />
       </Card>
 
       {/* Add / Edit Modal */}
