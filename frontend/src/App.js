@@ -926,6 +926,9 @@ function ProjectManagement({ readOnly = false, currentUser }) {
   // Sort
   const [sortField, setSortField] = useState("raised_date");
   const [sortDir, setSortDir] = useState("desc");
+  // Pagination
+  const [invPage, setInvPage] = useState(1);
+  const [invPerPage, setInvPerPage] = useState(10);
 
   const handleSort = (field) => {
     if (sortField === field) setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -1046,6 +1049,9 @@ function ProjectManagement({ readOnly = false, currentUser }) {
     if (va > vb) return sortDir === "asc" ? 1 : -1;
     return 0;
   });
+
+  const invTotalPages = Math.ceil(sortedInvoices.length / invPerPage) || 1;
+  const paginatedInvoices = sortedInvoices.slice((invPage - 1) * invPerPage, invPage * invPerPage);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
@@ -1245,17 +1251,17 @@ function ProjectManagement({ readOnly = false, currentUser }) {
                 <div style={{ width: 3, height: 18, background: `linear-gradient(180deg, ${C.green}, ${C.accent})`, borderRadius: 2 }} />
                 <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Raised Invoices</span>
                 <div style={{ flex: 1 }} />
-                <select value={filterClient} onChange={e => setFilterClient(e.target.value)}
+                <select value={filterClient} onChange={e => { setFilterClient(e.target.value); setInvPage(1); }}
                   style={{ padding: "7px 11px", borderRadius: 8, background: C.surface, border: `1px solid ${C.border}`, color: filterClient !== "all" ? C.text : C.textMuted, fontSize: 12, outline: "none", cursor: "pointer" }}>
                   <option value="all">All Clients</option>
                   {clients.map(c => <option key={c.id} value={c.id}>{c.client_name}</option>)}
                 </select>
-                <select value={filterProject} onChange={e => setFilterProject(e.target.value)}
+                <select value={filterProject} onChange={e => { setFilterProject(e.target.value); setInvPage(1); }}
                   style={{ padding: "7px 11px", borderRadius: 8, background: C.surface, border: `1px solid ${C.border}`, color: filterProject !== "all" ? C.text : C.textMuted, fontSize: 12, outline: "none", cursor: "pointer" }}>
                   <option value="all">All Projects</option>
                   {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
-                <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+                <select value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setInvPage(1); }}
                   style={{ padding: "7px 11px", borderRadius: 8, background: C.surface, border: `1px solid ${C.border}`, color: filterStatus !== "all" ? C.text : C.textMuted, fontSize: 12, outline: "none", cursor: "pointer" }}>
                   <option value="all">All Statuses</option>
                   <option value="pending">Pending</option>
@@ -1287,7 +1293,7 @@ function ProjectManagement({ readOnly = false, currentUser }) {
                         </tr>
                       </thead>
                       <tbody>
-                        {sortedInvoices.map((inv, rowIdx) => (
+                        {paginatedInvoices.map((inv, rowIdx) => (
                           <tr key={inv.id} style={{ borderBottom: `1px solid ${C.border}`, background: rowIdx % 2 === 0 ? "transparent" : C.card + "44" }}>
                             <Td>
                               <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{inv.invoice_number}</div>
@@ -1350,6 +1356,27 @@ function ProjectManagement({ readOnly = false, currentUser }) {
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                )}
+                
+                {/* Pagination Controls */}
+                {filteredInvoices.length > 0 && (
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 24px", borderTop: `1px solid ${C.border}`, background: C.surface }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <span style={{ fontSize: 12, color: C.textMuted }}>Rows per page:</span>
+                      <select value={invPerPage} onChange={e => { setInvPerPage(Number(e.target.value)); setInvPage(1); }}
+                        style={{ padding: "4px 8px", borderRadius: 6, background: C.bg, border: `1px solid ${C.border}`, color: C.text, fontSize: 12, outline: "none", cursor: "pointer" }}>
+                        {[10, 15, 20, 100].map(n => <option key={n} value={n}>{n}</option>)}
+                      </select>
+                      <span style={{ fontSize: 12, color: C.textMuted }}>
+                        Showing {Math.min((invPage - 1) * invPerPage + 1, sortedInvoices.length)} to {Math.min(invPage * invPerPage, sortedInvoices.length)} of {sortedInvoices.length}
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <Btn small variant="ghost" onClick={() => setInvPage(p => Math.max(1, p - 1))} disabled={invPage === 1}>Prev</Btn>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: C.text, padding: "4px 8px" }}>Page {invPage} of {invTotalPages}</span>
+                      <Btn small variant="ghost" onClick={() => setInvPage(p => Math.min(invTotalPages, p + 1))} disabled={invPage === invTotalPages}>Next</Btn>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1553,6 +1580,9 @@ function CompanyExpenses({ modal, setModal, currentUser, projects }) {
   const [chartOffset, setChartOffset] = useState(0);
   const [clearModal, setClearModal] = useState(null);
   const [showPayerBreakdown, setShowPayerBreakdown] = useState(false);
+  // Pagination
+  const [expPage, setExpPage] = useState(1);
+  const [expPerPage, setExpPerPage] = useState(10);
 
   const initForm = { expenseDate: "", purpose: "", amount: "", paidBy: "", itrType: "", taxType: "", gstAmount: "", status: "pending" };
   const [form, setForm] = useState({ ...initForm });
@@ -1665,6 +1695,9 @@ function CompanyExpenses({ modal, setModal, currentUser, projects }) {
     return true;
   });
   const filteredTotal = filteredList.reduce((s, e) => s + expTotal(e), 0);
+  
+  const expTotalPages = Math.ceil(filteredList.length / expPerPage) || 1;
+  const paginatedExpenses = filteredList.slice((expPage - 1) * expPerPage, expPage * expPerPage);
 
   // Monthly chart data (pending + cleared split)
   const last6Months = [];
@@ -1816,29 +1849,29 @@ function CompanyExpenses({ modal, setModal, currentUser, projects }) {
         <div style={{ padding: "12px 24px", borderBottom: `1px solid ${C.border}`, background: C.surface, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
           <div style={{ position: "relative", flex: 1, minWidth: 160 }}>
             <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: C.textMuted, fontSize: 13, pointerEvents: "none" }}>🔍</span>
-            <input value={searchPurpose} onChange={e => setSearchPurpose(e.target.value)} placeholder="Search purpose…"
+            <input value={searchPurpose} onChange={e => { setSearchPurpose(e.target.value); setExpPage(1); }} placeholder="Search purpose…"
               style={{ ...selStyle, padding: "7px 10px 7px 30px", width: "100%", boxSizing: "border-box" }} />
           </div>
-          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={selStyle}>
+          <select value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setExpPage(1); }} style={selStyle}>
             <option value="all">All Statuses</option>
             <option value="pending">Pending</option>
             <option value="cleared">Cleared</option>
             <option value="sent to auditing">Sent to Auditing</option>
           </select>
-          <select value={filterPayer} onChange={e => setFilterPayer(e.target.value)} style={selStyle}>
+          <select value={filterPayer} onChange={e => { setFilterPayer(e.target.value); setExpPage(1); }} style={selStyle}>
             <option value="all">All Payers</option>
             {payerOptions.map(p => <option key={p} value={p}>{p}</option>)}
           </select>
-          <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} style={selStyle}>
+          <select value={filterMonth} onChange={e => { setFilterMonth(e.target.value); setExpPage(1); }} style={selStyle}>
             <option value="all">All Months</option>
             {monthOptions.map(m => <option key={m} value={m}>{new Date(m + "-01T12:00:00").toLocaleDateString("en-US", { month: "short", year: "numeric" })}</option>)}
           </select>
-          <select value={filterClearedMonth} onChange={e => setFilterClearedMonth(e.target.value)} style={selStyle}>
+          <select value={filterClearedMonth} onChange={e => { setFilterClearedMonth(e.target.value); setExpPage(1); }} style={selStyle}>
             <option value="all">All Cleared Months</option>
             {clearedMonthOptions.map(m => <option key={m} value={m}>{new Date(m + "-01T12:00:00").toLocaleDateString("en-US", { month: "short", year: "numeric" })}</option>)}
           </select>
           {(filterStatus !== "all" || filterPayer !== "all" || filterMonth !== "all" || filterClearedMonth !== "all" || searchPurpose) && (
-            <Btn variant="ghost" small onClick={() => { setFilterStatus("all"); setFilterPayer("all"); setFilterMonth("all"); setFilterClearedMonth("all"); setSearchPurpose(""); }}>✕ Clear</Btn>
+            <Btn variant="ghost" small onClick={() => { setFilterStatus("all"); setFilterPayer("all"); setFilterMonth("all"); setFilterClearedMonth("all"); setSearchPurpose(""); setExpPage(1); }}>✕ Clear</Btn>
           )}
         </div>
 
@@ -1868,7 +1901,7 @@ function CompanyExpenses({ modal, setModal, currentUser, projects }) {
                 </tr>
               </thead>
               <tbody>
-                {filteredList.map((exp, idx) => {
+                {paginatedExpenses.map((exp, idx) => {
                   const [yr, mo, da] = (exp.expense_date || "").split("-");
                   const fmtDmy = yr && mo && da ? `${da}-${mo}-${yr}` : exp.expense_date;
                   const total = expTotal(exp);
@@ -1941,6 +1974,27 @@ function CompanyExpenses({ modal, setModal, currentUser, projects }) {
             <div style={{ fontSize: 12, color: C.textMuted }}>Net: <strong style={{ color: C.text }}>{fmt$(filteredList.reduce((s, e) => s + (parseFloat(e.amount) || 0), 0))}</strong></div>
             <div style={{ fontSize: 12, color: C.textMuted }}>GST: <strong style={{ color: C.accent }}>{fmt$(filteredList.reduce((s, e) => s + (parseFloat(e.gst_amount) || 0), 0))}</strong></div>
             <div style={{ fontSize: 12, color: C.textMuted }}>Total: <strong style={{ color: C.green }}>{fmt$(filteredTotal)}</strong></div>
+          </div>
+        )}
+        
+        {/* Pagination Controls */}
+        {filteredList.length > 0 && (
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 24px", borderTop: `1px solid ${C.border}`, background: C.surface }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ fontSize: 12, color: C.textMuted }}>Rows per page:</span>
+              <select value={expPerPage} onChange={e => { setExpPerPage(Number(e.target.value)); setExpPage(1); }}
+                style={{ padding: "4px 8px", borderRadius: 6, background: C.bg, border: `1px solid ${C.border}`, color: C.text, fontSize: 12, outline: "none", cursor: "pointer" }}>
+                {[10, 15, 20, 100].map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+              <span style={{ fontSize: 12, color: C.textMuted }}>
+                Showing {Math.min((expPage - 1) * expPerPage + 1, filteredList.length)} to {Math.min(expPage * expPerPage, filteredList.length)} of {filteredList.length}
+              </span>
+            </div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <Btn small variant="ghost" onClick={() => setExpPage(p => Math.max(1, p - 1))} disabled={expPage === 1}>Prev</Btn>
+              <span style={{ fontSize: 12, fontWeight: 600, color: C.text, padding: "4px 8px" }}>Page {expPage} of {expTotalPages}</span>
+              <Btn small variant="ghost" onClick={() => setExpPage(p => Math.min(expTotalPages, p + 1))} disabled={expPage === expTotalPages}>Next</Btn>
+            </div>
           </div>
         )}
       </div>
