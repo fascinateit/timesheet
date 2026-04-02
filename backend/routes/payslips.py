@@ -95,7 +95,7 @@ def _fmt(row):
 SLIP_SELECT = """
     SELECT ps.*, e.name AS employee_name, e.avatar, e.email,
            e.joining_date, e.pan_number, e.bank_name, e.bank_account_no,
-           e.designation, e.location,
+           e.designation, e.location, e.custom_employee_id,
            g.name AS group_name, g.color AS group_color
     FROM   payslips ps
     JOIN   employees e ON e.id = ps.employee_id

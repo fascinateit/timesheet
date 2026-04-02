@@ -87,6 +87,21 @@ def dashboard():
     pending_ts = query("SELECT COUNT(*) AS n FROM timesheets WHERE status='pending'", fetch="one")["n"]
     pending_lv = query("SELECT COUNT(*) AS n FROM leaves    WHERE status='pending'", fetch="one")["n"]
 
+    # Company expenses total (amount + GST, all statuses)
+    co_exp_row = query(
+        "SELECT COALESCE(SUM(amount + COALESCE(gst_amount, 0)), 0) AS total FROM company_expenses",
+        fetch="one"
+    ) or {}
+    total_company_expenses = float(co_exp_row.get("total") or 0)
+
+    # Employee claims expenses (all except rejected / needs_correction)
+    claims_row = query(
+        "SELECT COALESCE(SUM(amount), 0) AS total FROM expenses"
+        " WHERE status NOT IN ('rejected', 'needs_correction')",
+        fetch="one"
+    ) or {}
+    total_claims_expenses = float(claims_row.get("total") or 0)
+
     # Invoice summary
     inv_row = query(
         """
@@ -121,6 +136,8 @@ def dashboard():
         active_budget=active_budget,
         inactive_budget=inactive_budget,
         total_burned=total_burned,
+        total_company_expenses=total_company_expenses,
+        total_claims_expenses=total_claims_expenses,
         pending_timesheets=pending_ts,
         pending_leaves=pending_lv,
         invoice_total_raised=float(inv_row.get("total_raised") or 0),

@@ -1906,13 +1906,15 @@ function Dashboard() {
     projects = [],
     total_budget = 0, active_budget = 0, inactive_budget = 0,
     total_burned = 0,
+    total_company_expenses = 0, total_claims_expenses = 0,
     pending_timesheets = 0, pending_leaves = 0,
     invoice_total_raised = 0, invoice_cleared = 0, invoice_pending = 0,
     pending_invoices = [],
   } = data || {};
 
-  const burnPct = total_budget ? ((total_burned / total_budget) * 100).toFixed(1) : 0;
-  const remainingBudget = Math.max(0, total_budget - total_burned);
+  const total_burned_all = total_burned + total_company_expenses + total_claims_expenses;
+  const burnPct = total_budget ? ((total_burned_all / total_budget) * 100).toFixed(1) : 0;
+  const remainingBudget = Math.max(0, total_budget - total_burned_all);
   const collectionRate = invoice_total_raised ? ((invoice_cleared / invoice_total_raised) * 100).toFixed(1) : 0;
 
   const inactiveProjects = projects.filter(p => p.status !== "active");
@@ -1921,7 +1923,7 @@ function Dashboard() {
     { label: "Total Budget", value: fmt$(total_budget), sub: `${projects.length} projects total`, icon: "💰", color: C.accent },
     { label: "Active Budget", value: fmt$(active_budget), sub: `${projects.filter(p => p.status === "active").length} active projects`, icon: "🚀", color: C.green, tooltipLines: projects.filter(p => p.status === "active").map(p => `🚀 ${p.name} — ${fmt$(p.budget)}`) },
     { label: "Inactive Budget", value: fmt$(inactive_budget), sub: `${inactiveProjects.length} inactive projects`, icon: "📦", color: C.textMuted, tooltipLines: inactiveProjects.map(p => `📦 ${p.name} (${p.status}) — ${fmt$(p.budget)}`) },
-    { label: "Budget Burned", value: fmt$(total_burned), sub: `${burnPct}% of total utilized`, icon: "🔥", color: C.amber, bar: { value: total_burned, max: total_budget } },
+    { label: "Budget Burned", value: fmt$(total_burned_all), sub: `${burnPct}% of total utilized`, icon: "🔥", color: C.amber, bar: { value: total_burned_all, max: total_budget }, tooltipLines: [`🕐 Project Timesheets — ${fmt$(total_burned)}`, `🏢 Company Expenses — ${fmt$(total_company_expenses)}`, `💳 Claims Expenses — ${fmt$(total_claims_expenses)}`] },
     { label: "Remaining Budget", value: fmt$(remainingBudget), sub: `${(100 - +burnPct).toFixed(1)}% still available`, icon: "💎", color: "#06B6D4" },
   ];
 
@@ -2000,7 +2002,7 @@ function Dashboard() {
                   data={[
                     { name: "Active", value: active_budget },
                     { name: "Inactive", value: inactive_budget },
-                    { name: "Burned", value: total_burned },
+                    { name: "Burned", value: total_burned_all },
                   ]}
                   cx="50%" cy="50%" outerRadius={82} innerRadius={52} dataKey="value" paddingAngle={3}
                 >
@@ -5749,7 +5751,7 @@ function printPayslipData(ps) {
       </tr>
       <tr>
         <td style="width: 25%;">Employee Id</td>
-        <td style="width: 25%;" class="center">FASIT/${String(ps.employee_id).padStart(3, '0')}</td>
+        <td style="width: 25%;" class="center">${ps.custom_employee_id || 'FASIT/' + String(ps.employee_id).padStart(3, '0')}</td>
         <td style="width: 25%;">Employee Name</td>
         <td style="width: 25%;" class="center">${ps.employee_name || ''}</td>
       </tr>
