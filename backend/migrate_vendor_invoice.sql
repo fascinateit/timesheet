@@ -1,0 +1,1 @@
+ALTER TABLE invoices ADD COLUMN vendor_invoice_url VARCHAR(255) NULL DEFAULT NULL;

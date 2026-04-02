@@ -1,8 +1,13 @@
 import re
+import os
+import uuid
 from datetime import date
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 from db import query, execute
+
+VENDOR_INVOICES_DIR = os.path.join(os.path.dirname(__file__), "..", "receipts")
+ALLOWED_EXT = {"png", "jpg", "jpeg", "gif", "pdf", "webp"}
 
 
 def _root_invoice_number(inv_number):
@@ -10,6 +15,23 @@ def _root_invoice_number(inv_number):
     return re.sub(r'^(BAL-\d{4}-)+', '', inv_number or '') or inv_number
 
 invoices_bp = Blueprint("invoices", __name__)
+
+@invoices_bp.route("/upload-vendor-invoice", methods=["POST"])
+@jwt_required()
+def upload_vendor_invoice():
+    if "file" not in request.files:
+        return jsonify(error="No file provided"), 400
+    f = request.files["file"]
+    if not f.filename:
+        return jsonify(error="No file selected"), 400
+    ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else ""
+    if ext not in ALLOWED_EXT:
+        return jsonify(error="File type not allowed. Use PNG, JPG, GIF, PDF or WEBP"), 400
+    os.makedirs(VENDOR_INVOICES_DIR, exist_ok=True)
+    filename = f"{uuid.uuid4().hex}.{ext}"
+    f.save(os.path.join(VENDOR_INVOICES_DIR, filename))
+    return jsonify(filename=filename), 200
+
 
 @invoices_bp.route("/", methods=["GET"])
 @jwt_required()
@@ -38,9 +60,9 @@ def create_invoice():
         INSERT INTO invoices (
             client_id, invoice_number, project_id, amount, task_details, remarks,
             hours, rate, tax_rate, subtotal,
-            raised_date, payment_due_date, status
+            raised_date, payment_due_date, status, vendor_invoice_url
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
     params = (
         data.get("client_id") or None,
@@ -55,7 +77,8 @@ def create_invoice():
         data.get("subtotal") or None,
         data["raised_date"],
         data.get("payment_due_date") or None,
-        data.get("status", "pending")
+        data.get("status", "pending"),
+        data.get("vendor_invoice_url") or None,
     )
     res = execute(sql, params)
     return jsonify({"message": "Invoice created", "id": res}), 201
@@ -154,7 +177,7 @@ def update_invoice(invoice_id):
         UPDATE invoices
         SET client_id = %s, invoice_number = %s, project_id = %s, amount = %s, task_details = %s, remarks = %s,
             hours = %s, rate = %s, tax_rate = %s, subtotal = %s,
-            raised_date = %s, payment_due_date = %s, status = %s
+            raised_date = %s, payment_due_date = %s, status = %s, vendor_invoice_url = %s
         WHERE id = %s
     """
     params = (
@@ -171,6 +194,7 @@ def update_invoice(invoice_id):
         data["raised_date"],
         data.get("payment_due_date") or None,
         data.get("status", "pending"),
+        data.get("vendor_invoice_url") or None,
         invoice_id
     )
     execute(sql, params)

@@ -797,6 +797,12 @@ function ProjectManagement({ readOnly = false, currentUser }) {
                           )}
                           <div style={{ fontSize: 13, fontWeight: 700, color: C.accent }}>{inv.client_name || inv.project_name}</div>
                           <div style={{ fontSize: 11, color: C.textMuted }}>{inv.project_code}</div>
+                          {inv.vendor_invoice_url && (
+                            <a href={`${window.location.origin}/api/receipts/${inv.vendor_invoice_url}`} target="_blank" rel="noreferrer"
+                              style={{ fontSize: 11, color: C.purple, fontWeight: 600, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 3, marginTop: 3 }}>
+                              📎 Partner Invoice
+                            </a>
+                          )}
                         </Td>
                         <Td>
                           <div style={{ fontSize: 13, color: C.textMuted, maxWidth: 200, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={parseTaskNames(inv.task_details)}>{parseTaskNames(inv.task_details)}</div>
@@ -1380,8 +1386,11 @@ function InvoiceForm({ projects, clients, initialData, saving, onCancel, onSave 
     subtotal: initialData.subtotal || "",
     raised_date: parseDate(initialData.raised_date),
     payment_due_date: parseDate(initialData.payment_due_date),
-    status: initialData.status
-  } : { client_id: "", invoice_number: "", project_id: "", amount: "", items: [{ description: "", hours: "", rate: "" }], remarks: "", tax_rate: "18.00", subtotal: "", raised_date: new Date().toISOString().slice(0, 10), payment_due_date: "", status: "pending" });
+    status: initialData.status,
+    vendor_invoice_url: initialData.vendor_invoice_url || "",
+  } : { client_id: "", invoice_number: "", project_id: "", amount: "", items: [{ description: "", hours: "", rate: "" }], remarks: "", tax_rate: "18.00", subtotal: "", raised_date: new Date().toISOString().slice(0, 10), payment_due_date: "", status: "pending", vendor_invoice_url: "" });
+  const [vendorFile, setVendorFile] = useState(null);
+  const [vendorUploading, setVendorUploading] = useState(false);
 
   // Auto-calculate logic
   useEffect(() => {
@@ -1471,6 +1480,47 @@ function InvoiceForm({ projects, clients, initialData, saving, onCancel, onSave 
         <Inp label="Date Raised *" type="date" value={form.raised_date} onChange={v => setForm(f => ({ ...f, raised_date: v }))} required />
         <Inp label="Payment Due Date" type="date" value={form.payment_due_date} onChange={v => setForm(f => ({ ...f, payment_due_date: v }))} />
       </div>
+
+      {/* ── Partner / Vendor Invoice Upload ── */}
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: .5 }}>Partner / Vendor Invoice</div>
+        <div style={{ fontSize: 12, color: C.textDim }}>Upload the invoice received from your partner company for reference.</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <label style={{
+            display: "inline-flex", alignItems: "center", gap: 7, cursor: "pointer",
+            background: C.card, border: `1px solid ${C.border}`, borderRadius: 8,
+            padding: "7px 14px", fontSize: 12, fontWeight: 600, color: C.text,
+          }}>
+            📎 {vendorFile ? vendorFile.name : "Choose File"}
+            <input type="file" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp" style={{ display: "none" }}
+              onChange={e => setVendorFile(e.target.files[0] || null)} />
+          </label>
+          {vendorFile && (
+            <Btn small variant="outline" disabled={vendorUploading} onClick={async () => {
+              setVendorUploading(true);
+              try {
+                const res = await api.uploadVendorInvoice(vendorFile);
+                setForm(f => ({ ...f, vendor_invoice_url: res.filename }));
+                setVendorFile(null);
+              } catch (e) { alert(e.message); } finally { setVendorUploading(false); }
+            }}>{vendorUploading ? "Uploading…" : "Upload"}</Btn>
+          )}
+          {form.vendor_invoice_url && !vendorFile && (
+            <a href={`${window.location.origin}/api/receipts/${form.vendor_invoice_url}`} target="_blank" rel="noreferrer"
+              style={{ fontSize: 12, color: C.accent, fontWeight: 600, textDecoration: "none", display: "flex", alignItems: "center", gap: 4 }}>
+              📄 View uploaded invoice ↗
+            </a>
+          )}
+        </div>
+        {form.vendor_invoice_url && (
+          <div style={{ fontSize: 11, color: C.textMuted }}>
+            Saved: {form.vendor_invoice_url}
+            <button onClick={() => setForm(f => ({ ...f, vendor_invoice_url: "" }))}
+              style={{ marginLeft: 8, background: "none", border: "none", color: C.red, cursor: "pointer", fontSize: 11 }}>✕ Remove</button>
+          </div>
+        )}
+      </div>
+
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
         <Btn variant="ghost" onClick={onCancel}>Cancel</Btn>
         <Btn onClick={() => onSave({ ...form, task_details: JSON.stringify(form.items), hours: 0, rate: 0 })} disabled={saving || !form.client_id}>{saving ? "Submitting…" : "Save Invoice"}</Btn>

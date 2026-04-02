@@ -129,6 +129,19 @@ export const api = {
   updateInvoiceStatus: (id, status, payment_received_date, payment_received) => req("PUT", `/invoices/${id}/status`, { status, payment_received_date, payment_received }),
   deleteInvoice: (id) => req("DELETE", `/invoices/${id}`),
 
+  uploadVendorInvoice: async (file) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch(`${BASE}/invoices/upload-vendor-invoice`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token()}` },
+      body: fd,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    return data;
+  },
+
   // Company Expenses
   getCompanyExpenses: () => req("GET", "/company-expenses/"),
   createCompanyExpense: (d) => req("POST", "/company-expenses/", d),
