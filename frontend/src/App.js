@@ -389,6 +389,22 @@ function ClientForm({ init, saving, onCancel, onSave }) {
   );
 }
 
+// ── Shared SVG ring gauge ────────────────────────────────────────────────────
+const Ring = ({ pct, color, size = 64, stroke = 6 }) => {
+  const r = (size - stroke) / 2;
+  const circ = 2 * Math.PI * r;
+  const dash = (pct / 100) * circ;
+  return (
+    <svg width={size} height={size} style={{ transform: "rotate(-90deg)", flexShrink: 0 }}>
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={C.border} strokeWidth={stroke} />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke}
+        strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
+        style={{ transition: "stroke-dasharray .5s ease" }} />
+    </svg>
+  );
+};
+const PALETTE = [C.accent, C.green, C.purple, "#f97316", "#ec4899", "#06b6d4", "#84cc16"];
+
 // ════════════════════════════════════════════════════════
 // PROJECT MANAGEMENT & INVOICES
 function ProjectDashboard({ projects, invoices }) {
@@ -401,185 +417,371 @@ function ProjectDashboard({ projects, invoices }) {
     return true;
   });
 
-  const totalBudget = filtered.reduce((acc, p) => p.status === 'active' ? acc + parseFloat(p.budget || 0) : acc, 0);
-  const totalBurned = filtered.reduce((acc, p) => p.status === 'active' ? acc + parseFloat(p.burned || 0) : acc, 0);
-  const { totalRaised, pendingRaised, clearedRaised } = filtered.reduce((acc, p) => {
-    const pInvoices = invoices.filter(i => i.project_id === p.id);
-    const pTotal = pInvoices.reduce((s, i) => s + parseFloat(i.amount || 0), 0);
-    const pPending = pInvoices.filter(i => i.status === "pending").reduce((s, i) => s + parseFloat(i.amount || 0), 0);
-    const pCleared = pInvoices.filter(i => i.status === "cleared").reduce((s, i) => s + parseFloat(i.amount || 0), 0);
+  // ── Global aggregates ─────────────────────────────────────────────────
+  const totalBudget  = projects.reduce((a, p) => p.status === "active" ? a + parseFloat(p.budget || 0) : a, 0);
+  const totalBurned  = projects.reduce((a, p) => p.status === "active" ? a + parseFloat(p.burned || 0) : a, 0);
+  const totalRaised  = invoices.reduce((a, i) => a + parseFloat(i.amount || 0), 0);
+  const totalCleared = invoices.filter(i => i.status === "cleared").reduce((a, i) => a + parseFloat(i.amount || 0), 0);
+  const totalPending = invoices.filter(i => i.status !== "cleared").reduce((a, i) => a + parseFloat(i.amount || 0), 0);
+  const collectPct   = totalRaised > 0 ? Math.round((totalCleared / totalRaised) * 100) : 0;
+  const activeCount  = projects.filter(p => p.status === "active").length;
+  const pendingCount = invoices.filter(i => i.status !== "cleared").length;
+
+  // ── Chart helpers ─────────────────────────────────────────────────────
+  const tooltipStyle = { backgroundColor: C.card, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, boxShadow: "0 8px 32px rgba(0,0,0,0.4)" };
+  const tickFmt = v => `₹${v >= 100000 ? (v / 100000).toFixed(1) + "L" : v >= 1000 ? (v / 1000).toFixed(1) + "k" : v}`;
+
+  // ── Per-client aggregates ─────────────────────────────────────────────
+  const clientStats = {};
+  invoices.forEach(inv => {
+    const key = inv.client_name || "Unknown";
+    if (!clientStats[key]) clientStats[key] = { name: key, raised: 0, cleared: 0, pending: 0, count: 0 };
+    const amt = parseFloat(inv.amount || 0);
+    clientStats[key].raised += amt;
+    clientStats[key].count += 1;
+    if (inv.status === "cleared") clientStats[key].cleared += amt;
+    else clientStats[key].pending += amt;
+  });
+  const clientList = Object.values(clientStats).sort((a, b) => b.raised - a.raised);
+
+  // ── Chart data ────────────────────────────────────────────────────────
+  const budgetChartData = filtered.filter(p => p.status === "active").map(p => ({
+    name: p.code, fullName: p.name,
+    Budget: parseFloat(p.budget || 0),
+    Raised: invoices.filter(i => i.project_id === p.id).reduce((s, i) => s + parseFloat(i.amount || 0), 0),
+    Burned: parseFloat(p.burned || 0),
+  }));
+
+  const projectInvData = filtered.map(p => {
+    const pInvs = invoices.filter(i => i.project_id === p.id);
     return {
-      totalRaised: acc.totalRaised + pTotal,
-      pendingRaised: acc.pendingRaised + pPending,
-      clearedRaised: acc.clearedRaised + pCleared
+      name: p.code, fullName: p.name,
+      Raised:  pInvs.reduce((s, i) => s + parseFloat(i.amount || 0), 0),
+      Cleared: pInvs.filter(i => i.status === "cleared").reduce((s, i) => s + parseFloat(i.amount || 0), 0),
+      Pending: pInvs.filter(i => i.status !== "cleared").reduce((s, i) => s + parseFloat(i.amount || 0), 0),
     };
-  }, { totalRaised: 0, pendingRaised: 0, clearedRaised: 0 });
+  }).filter(d => d.Raised > 0);
+
+  const clientInvData = clientList.map(cl => ({
+    name: cl.name.length > 14 ? cl.name.slice(0, 14) + "…" : cl.name,
+    fullName: cl.name, Raised: cl.raised, Cleared: cl.cleared, Pending: cl.pending,
+  }));
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      {/* Global Summary Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 16 }}>
-        <Card style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 8, background: `linear-gradient(145deg, ${C.surface}, ${C.card})`, border: `1px solid ${C.border}` }}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <span style={{ fontSize: 13, color: C.textDim, fontWeight: 700, textTransform: "uppercase" }}>Total Client Budget</span>
-            <span style={{ background: C.accent + "33", color: C.accent, padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 800 }}>{filtered.length} Projects</span>
-          </div>
-          <div style={{ fontSize: 32, fontWeight: 800, color: C.text }}>{fmt$(totalBudget)}</div>
-        </Card>
+    <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
 
-        <Card style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 12, background: `linear-gradient(145deg, ${C.surface}, ${C.card})`, border: `1px solid ${C.border}` }}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <span style={{ fontSize: 13, color: C.textDim, fontWeight: 700, textTransform: "uppercase" }}>Total Amount Raised</span>
-            <span style={{ background: C.green + "33", color: C.green, padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 800 }}>Via Invoices</span>
-          </div>
-          <div style={{ fontSize: 32, fontWeight: 800, color: C.green }}>{fmt$(totalRaised)}</div>
+      {/* ── SECTION 1: Hero KPI row ──────────────────────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
 
-          <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 4 }}>
-            <div style={{ background: C.bg, padding: "8px 12px", borderRadius: 6, border: `1px solid ${C.border}` }}>
-              <div style={{ fontSize: 10, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Pending</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.amber }}>{fmt$(pendingRaised)}</div>
+        {/* Card: Total Budget */}
+        <div style={{ background: `linear-gradient(135deg, ${C.surface} 0%, ${C.card} 100%)`, border: `1px solid ${C.border}`, borderLeft: `3px solid ${C.accent}`, borderRadius: 14, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 10, position: "relative", overflow: "hidden" }}>
+          <div style={{ position: "absolute", top: -20, right: -20, width: 80, height: 80, borderRadius: "50%", background: `radial-gradient(circle, ${C.accent}15 0%, transparent 70%)`, pointerEvents: "none" }} />
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .6 }}>Total Client Budget</div>
+            <span style={{ background: C.accent + "22", color: C.accent, borderRadius: 20, padding: "2px 9px", fontSize: 10, fontWeight: 800 }}>{activeCount} active</span>
+          </div>
+          <div style={{ fontSize: 28, fontWeight: 900, color: C.text, letterSpacing: -.5 }}>{fmt$(totalBudget)}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ flex: 1, height: 3, borderRadius: 4, background: C.border, overflow: "hidden" }}>
+              <div style={{ width: `${totalBudget > 0 ? Math.min((totalBurned / totalBudget) * 100, 100) : 0}%`, height: "100%", background: `linear-gradient(90deg, ${C.accent}, ${C.purple})`, borderRadius: 4 }} />
             </div>
-            <div style={{ background: C.bg, padding: "8px 12px", borderRadius: 6, border: `1px solid ${C.border}` }}>
-              <div style={{ fontSize: 10, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>Cleared</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.green }}>{fmt$(clearedRaised)}</div>
+            <span style={{ fontSize: 10, color: C.textMuted, fontWeight: 600, whiteSpace: "nowrap" }}>{totalBudget > 0 ? Math.round((totalBurned / totalBudget) * 100) : 0}% utilized</span>
+          </div>
+        </div>
+
+        {/* Card: Total Raised */}
+        <div style={{ background: `linear-gradient(135deg, ${C.surface} 0%, ${C.card} 100%)`, border: `1px solid ${C.border}`, borderLeft: `3px solid ${C.green}`, borderRadius: 14, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 10, position: "relative", overflow: "hidden" }}>
+          <div style={{ position: "absolute", top: -20, right: -20, width: 80, height: 80, borderRadius: "50%", background: `radial-gradient(circle, ${C.green}15 0%, transparent 70%)`, pointerEvents: "none" }} />
+          <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .6 }}>Total Raised</div>
+          <div style={{ fontSize: 28, fontWeight: 900, color: C.green, letterSpacing: -.5 }}>{fmt$(totalRaised)}</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+            <div style={{ background: C.green + "12", borderRadius: 7, padding: "6px 10px", border: `1px solid ${C.green}28` }}>
+              <div style={{ fontSize: 9, color: C.green, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>Cleared</div>
+              <div style={{ fontSize: 12, fontWeight: 800, color: C.green, marginTop: 2 }}>{fmt$(totalCleared)}</div>
+            </div>
+            <div style={{ background: C.amber + "12", borderRadius: 7, padding: "6px 10px", border: `1px solid ${C.amber}28` }}>
+              <div style={{ fontSize: 9, color: C.amber, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>Pending</div>
+              <div style={{ fontSize: 12, fontWeight: 800, color: C.amber, marginTop: 2 }}>{fmt$(totalPending)}</div>
             </div>
           </div>
-        </Card>
+        </div>
 
-        <Card style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 12, background: `linear-gradient(145deg, ${C.surface}, ${C.card})`, border: `1px solid ${C.border}` }}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <span style={{ fontSize: 13, color: C.textDim, fontWeight: 700, textTransform: "uppercase" }}>Total Burned Cost</span>
-            <span style={{ background: C.amber + "33", color: C.amber, padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 800 }}>Via Timesheets</span>
+        {/* Card: Collection Rate */}
+        <div style={{ background: `linear-gradient(135deg, ${C.surface} 0%, ${C.card} 100%)`, border: `1px solid ${C.border}`, borderLeft: `3px solid ${C.purple}`, borderRadius: 14, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .6 }}>Collection Rate</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <div style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+              <Ring pct={collectPct} color={collectPct >= 80 ? C.green : collectPct >= 50 ? C.accent : C.amber} size={64} stroke={6} />
+              <div style={{ position: "absolute", fontSize: 13, fontWeight: 900, color: C.text }}>{collectPct}%</div>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <div style={{ fontSize: 11, color: C.textMuted }}>
+                <span style={{ color: C.green, fontWeight: 700 }}>{invoices.filter(i => i.status === "cleared").length}</span> cleared
+              </div>
+              <div style={{ fontSize: 11, color: C.textMuted }}>
+                <span style={{ color: C.amber, fontWeight: 700 }}>{pendingCount}</span> pending
+              </div>
+              <div style={{ fontSize: 11, color: C.textMuted }}>
+                <span style={{ color: C.textDim, fontWeight: 700 }}>{invoices.length}</span> total
+              </div>
+            </div>
           </div>
-          <div style={{ fontSize: 32, fontWeight: 800, color: C.amber }}>{fmt$(totalBurned)}</div>
-        </Card>
+        </div>
+
+        {/* Card: Burned Cost */}
+        <div style={{ background: `linear-gradient(135deg, ${C.surface} 0%, ${C.card} 100%)`, border: `1px solid ${C.border}`, borderLeft: `3px solid ${C.amber}`, borderRadius: 14, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 10, position: "relative", overflow: "hidden" }}>
+          <div style={{ position: "absolute", top: -20, right: -20, width: 80, height: 80, borderRadius: "50%", background: `radial-gradient(circle, ${C.amber}15 0%, transparent 70%)`, pointerEvents: "none" }} />
+          <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .6 }}>Burned Cost</div>
+          <div style={{ fontSize: 28, fontWeight: 900, color: C.amber, letterSpacing: -.5 }}>{fmt$(totalBurned)}</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: C.textMuted }}>
+              <span>vs Budget</span>
+              <span style={{ fontWeight: 700, color: totalBurned > totalBudget ? C.red : C.textDim }}>
+                {totalBudget > 0 ? Math.round((totalBurned / totalBudget) * 100) : 0}%
+              </span>
+            </div>
+            <div style={{ height: 3, borderRadius: 4, background: C.border, overflow: "hidden" }}>
+              <div style={{ width: `${totalBudget > 0 ? Math.min((totalBurned / totalBudget) * 100, 100) : 0}%`, height: "100%", background: `linear-gradient(90deg, ${C.amber}, ${C.red})`, borderRadius: 4 }} />
+            </div>
+          </div>
+        </div>
       </div>
-      {/* Aggregate Recharts Visualization */}
-      {
-        filtered.length > 0 && (
-          <Card style={{ padding: "24px 24px", display: "flex", flexDirection: "column", gap: 16, background: C.surface, border: `1px solid ${C.border}` }}>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.text }}>Budget vs Raised Analytics</h3>
-            <div style={{ width: "100%", height: 350 }}>
+
+      {/* ── SECTION 2: Client Invoice KPI Cards ─────────────────────────── */}
+      {clientList.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {/* Section label */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 3, height: 18, background: `linear-gradient(180deg, ${C.accent}, ${C.purple})`, borderRadius: 2 }} />
+            <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Client Invoice Overview</span>
+            <span style={{ background: C.accent + "1a", color: C.accent, borderRadius: 20, padding: "2px 10px", fontSize: 10, fontWeight: 700 }}>{clientList.length} clients</span>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14 }}>
+            {clientList.map((cl, idx) => {
+              const pct = cl.raised > 0 ? Math.round((cl.cleared / cl.raised) * 100) : 0;
+              const col = PALETTE[idx % PALETTE.length];
+              const hColor = pct === 100 ? C.green : pct >= 60 ? C.accent : C.amber;
+              const initials = cl.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+              return (
+                <div key={cl.name} style={{
+                  background: `linear-gradient(145deg, ${C.surface}, ${C.card})`,
+                  border: `1px solid ${hColor}33`,
+                  borderRadius: 16, padding: "18px 20px",
+                  display: "flex", flexDirection: "column", gap: 14,
+                  position: "relative", overflow: "hidden"
+                }}>
+                  {/* Ambient glow */}
+                  <div style={{ position: "absolute", top: -40, right: -40, width: 120, height: 120, borderRadius: "50%", background: `radial-gradient(circle, ${col}12 0%, transparent 70%)`, pointerEvents: "none" }} />
+
+                  {/* Row 1: avatar + name + badge */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, zIndex: 1 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: 12, background: `linear-gradient(135deg, ${col}33, ${col}15)`, border: `1.5px solid ${col}55`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 900, color: col, flexShrink: 0 }}>{initials}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{cl.name}</div>
+                      <div style={{ fontSize: 11, color: C.textMuted, marginTop: 1 }}>{cl.count} invoice{cl.count !== 1 ? "s" : ""}</div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                      <Ring pct={pct} color={hColor} size={40} stroke={4} />
+                      <span style={{ fontSize: 13, fontWeight: 800, color: hColor }}>{pct}%</span>
+                    </div>
+                  </div>
+
+                  {/* Row 2: 3 stat chips */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 7, zIndex: 1 }}>
+                    <div style={{ background: C.bg, borderRadius: 9, padding: "8px", border: `1px solid ${C.border}`, textAlign: "center" }}>
+                      <div style={{ fontSize: 9, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>Raised</div>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: C.text, marginTop: 3 }}>{fmt$(cl.raised)}</div>
+                    </div>
+                    <div style={{ background: C.green + "0e", borderRadius: 9, padding: "8px", border: `1px solid ${C.green}2a`, textAlign: "center" }}>
+                      <div style={{ fontSize: 9, color: C.green, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>Cleared</div>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: C.green, marginTop: 3 }}>{fmt$(cl.cleared)}</div>
+                    </div>
+                    <div style={{ background: C.amber + "0e", borderRadius: 9, padding: "8px", border: `1px solid ${C.amber}2a`, textAlign: "center" }}>
+                      <div style={{ fontSize: 9, color: C.amber, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>Pending</div>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: C.amber, marginTop: 3 }}>{fmt$(cl.pending)}</div>
+                    </div>
+                  </div>
+
+                  {/* Row 3: stacked bar */}
+                  <div style={{ zIndex: 1 }}>
+                    <div style={{ height: 6, borderRadius: 6, background: C.border, overflow: "hidden", display: "flex" }}>
+                      <div style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${hColor === C.green ? C.green : C.accent}, ${C.green})`, transition: "width .4s ease" }} />
+                      <div style={{ flex: 1, background: C.amber + "55" }} />
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5, fontSize: 10, color: C.textMuted }}>
+                      <span>Clearance progress</span>
+                      <span style={{ fontWeight: 700, color: hColor }}>{pct}% cleared</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── SECTION 3: Project Cards ─────────────────────────────────────── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {/* Header + filters inline */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ width: 3, height: 18, background: `linear-gradient(180deg, ${C.amber}, ${C.accent})`, borderRadius: 2 }} />
+          <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Project Breakdown</span>
+          <div style={{ flex: 1 }} />
+          <input type="text" placeholder="Search projects…" value={filterStr} onChange={e => setFilterStr(e.target.value)}
+            style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "7px 12px", fontSize: 12, outline: "none", width: 200 }} />
+          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+            style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "7px 12px", fontSize: 12, outline: "none", cursor: "pointer" }}>
+            <option value="all">All Statuses</option>
+            <option value="active">Active</option>
+            <option value="on-hold">On Hold</option>
+            <option value="completed">Completed</option>
+            <option value="closed">Closed</option>
+          </select>
+        </div>
+
+        {filtered.length === 0
+          ? <div style={{ padding: 48, textAlign: "center", color: C.textMuted, background: C.surface, borderRadius: 16, fontSize: 13 }}>No projects match your filters.</div>
+          : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 14 }}>
+              {filtered.map((p, idx) => {
+                const raised  = invoices.filter(i => i.project_id === p.id).reduce((s, i) => s + parseFloat(i.amount || 0), 0);
+                const budget  = parseFloat(p.budget || 0);
+                const burned  = parseFloat(p.burned || 0);
+                const highest = Math.max(budget, raised, burned, 1);
+                const isOver  = raised > budget;
+                const col     = PALETTE[idx % PALETTE.length];
+                const utilPct = budget > 0 ? Math.min(Math.round((raised / budget) * 100), 999) : 0;
+
+                return (
+                  <div key={p.id} style={{
+                    background: C.card, border: `1px solid ${C.border}`,
+                    borderRadius: 16, overflow: "hidden",
+                    display: "flex", flexDirection: "column"
+                  }}>
+                    {/* Colored header strip */}
+                    <div style={{ background: `linear-gradient(90deg, ${col}33, ${col}0a)`, borderBottom: `1px solid ${col}22`, padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>{p.name}</div>
+                        <div style={{ fontSize: 11, color: col, fontWeight: 600, marginTop: 2 }}>{p.code}</div>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                        <StatusBadge status={p.status} />
+                        <span style={{ fontSize: 10, color: C.textMuted }}>
+                          {isOver ? "⚠ Over budget" : `${fmt$(budget - raised)} pending`}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Body */}
+                    <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
+                      {[
+                        { label: "BUDGET", value: budget, color: C.accent },
+                        { label: "RAISED", value: raised, color: isOver ? C.red : C.green },
+                        { label: "BURNED", value: burned, color: C.amber },
+                      ].map(row => (
+                        <div key={row.label} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <div style={{ width: 52, fontSize: 10, color: C.textMuted, fontWeight: 700, letterSpacing: .5, textAlign: "right" }}>{row.label}</div>
+                          <div style={{ flex: 1, height: 8, borderRadius: 6, background: C.surface, overflow: "hidden", border: `1px solid ${C.border}` }}>
+                            <div style={{ width: `${(row.value / highest) * 100}%`, height: "100%", background: row.color, borderRadius: 6, transition: "width .35s ease" }} />
+                          </div>
+                          <div style={{ width: 82, fontSize: 12, fontWeight: 700, color: row.color, textAlign: "right" }}>{fmt$(row.value)}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Footer: utilization */}
+                    <div style={{ borderTop: `1px solid ${C.border}`, padding: "10px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", background: C.surface }}>
+                      <span style={{ fontSize: 11, color: C.textMuted }}>Budget utilization</span>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: isOver ? C.red : utilPct >= 85 ? C.amber : C.green }}>{utilPct}%</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+        }
+      </div>
+
+      {/* ── SECTION 4: Analytics Charts ─────────────────────────────────── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 3, height: 18, background: `linear-gradient(180deg, ${C.green}, ${C.accent})`, borderRadius: 2 }} />
+          <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Analytics</span>
+        </div>
+
+        {/* Row 1: Budget vs Raised vs Burned */}
+        {budgetChartData.length > 0 && (
+          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: "22px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Budget vs Raised vs Burned</div>
+                <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>Active projects only</div>
+              </div>
+              <div style={{ display: "flex", gap: 16 }}>
+                {[{ label: "Budget", color: C.accent }, { label: "Raised", color: C.green }, { label: "Burned", color: C.amber }].map(l => (
+                  <div key={l.label} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: C.textDim }}>
+                    <div style={{ width: 8, height: 8, borderRadius: 2, background: l.color }} />
+                    {l.label}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div style={{ width: "100%", height: 300 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={filtered.filter(p => p.status === 'active').map(p => ({
-                    name: p.code,
-                    fullName: p.name,
-                    Budget: parseFloat(p.budget || 0),
-                    Raised: invoices.filter(i => i.project_id === p.id).reduce((s, i) => s + parseFloat(i.amount || 0), 0),
-                    Burned: parseFloat(p.burned || 0)
-                  }))}
-                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                >
-                  <XAxis dataKey="name" stroke={C.textMuted} fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis stroke={C.textMuted} fontSize={12} tickLine={false} axisLine={false} tickFormatter={v => `₹${v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v}`} />
-                  <Tooltip
-                    cursor={{ fill: C.surface, opacity: 0.8 }}
-                    contentStyle={{ backgroundColor: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text }}
-                    itemStyle={{ fontSize: 13, fontWeight: 700 }}
-                    formatter={(value, name) => [fmt$(value), name]}
-                    labelStyle={{ color: C.textDim, fontWeight: 700, marginBottom: 8, fontSize: 12 }}
-                    labelFormatter={(name, payload) => payload?.[0]?.payload?.fullName || name}
-                  />
-                  <Legend iconType="circle" wrapperStyle={{ paddingTop: 20, fontSize: 13, color: C.text }} />
-                  <Bar dataKey="Budget" fill={C.accent} radius={[4, 4, 0, 0]} barSize={25} />
-                  <Bar dataKey="Raised" fill={C.green} radius={[4, 4, 0, 0]} barSize={25} />
-                  <Bar dataKey="Burned" fill={C.amber} radius={[4, 4, 0, 0]} barSize={25} />
+                <BarChart data={budgetChartData} margin={{ top: 10, right: 20, left: 10, bottom: 5 }} barGap={3}>
+                  <XAxis dataKey="name" stroke={C.textMuted} fontSize={11} tickLine={false} axisLine={false} />
+                  <YAxis stroke={C.textMuted} fontSize={11} tickLine={false} axisLine={false} tickFormatter={tickFmt} />
+                  <Tooltip contentStyle={tooltipStyle} itemStyle={{ fontSize: 12, fontWeight: 700 }}
+                    formatter={(v, n) => [fmt$(v), n]}
+                    labelStyle={{ color: C.textDim, fontWeight: 700, fontSize: 12, marginBottom: 6 }}
+                    labelFormatter={(n, pl) => pl?.[0]?.payload?.fullName || n}
+                    cursor={{ fill: C.accentGlow }} />
+                  <Bar dataKey="Budget" fill={C.accent} radius={[5, 5, 0, 0]} barSize={22} />
+                  <Bar dataKey="Raised"  fill={C.green}  radius={[5, 5, 0, 0]} barSize={22} />
+                  <Bar dataKey="Burned"  fill={C.amber}  radius={[5, 5, 0, 0]} barSize={22} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          </Card>
-        )
-      }
+          </div>
+        )}
 
-      {/* Filters */}
-      <Card style={{ padding: 16, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", background: C.surface }}>
-        <input
-          type="text"
-          placeholder="Search by project name or code..."
-          value={filterStr}
-          onChange={e => setFilterStr(e.target.value)}
-          style={{ flex: 1, minWidth: 200, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "10px 14px", fontSize: 13, outline: "none" }}
-        />
-        <select
-          value={filterStatus}
-          onChange={e => setFilterStatus(e.target.value)}
-          style={{ width: 160, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: filterStatus !== "all" ? C.text : C.textMuted, padding: "10px 14px", fontSize: 13, outline: "none", cursor: "pointer" }}
-        >
-          <option value="all">All Statuses</option>
-          <option value="active">Active</option>
-          <option value="on-hold">On Hold</option>
-          <option value="completed">Completed</option>
-          <option value="closed">Closed</option>
-        </select>
-      </Card>
-
-      {/* Project Bar Chart Grid */}
-      <div className="grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
-        {filtered.length === 0 ? (
-          <div style={{ padding: 40, textAlign: "center", color: C.textMuted, background: C.card, borderRadius: 12 }}>No projects match your filters.</div>
-        ) : (
-          filtered.map(p => {
-            const raised = invoices.filter(i => i.project_id === p.id).reduce((s, i) => s + parseFloat(i.amount || 0), 0);
-            const budget = parseFloat(p.budget || 0);
-            const burned = parseFloat(p.burned || 0);
-            const highest = Math.max(budget, raised, burned, 1); // Avoid div by zero
-            const budgetPct = (budget / highest) * 100;
-            const raisedPct = (raised / highest) * 100;
-            const burnedPct = (burned / highest) * 100;
-            const isOverBudget = raised > budget;
-
-            return (
-              <Card key={p.id} style={{ display: "flex", flexDirection: "column", gap: 14, padding: "20px 24px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                  <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ fontSize: 16, fontWeight: 800, color: C.text }}>{p.name}</span>
-                      <StatusBadge status={p.status} />
-                    </div>
-                    <div style={{ fontSize: 12, color: C.textDim, marginTop: 4 }}>{p.code}</div>
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
-                    <span style={{ fontSize: 11, color: C.textMuted }}>Balance Pending View</span>
-                    <span style={{ fontSize: 14, fontWeight: 800, color: isOverBudget ? C.red : C.text }}>{fmt$(budget - raised)}</span>
-                  </div>
+        {/* Row 2: Invoice Status — Project + Client side by side */}
+        {invoices.length > 0 && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            {[
+              { title: "Invoice Status by Project", sub: "Raised · Cleared · Pending per project", data: projectInvData },
+              { title: "Invoice Status by Client",  sub: "Raised · Cleared · Pending per client",  data: clientInvData  },
+            ].map(({ title, sub, data }) => (
+              <div key={title} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: "22px 22px", display: "flex", flexDirection: "column", gap: 14 }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{title}</div>
+                  <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>{sub}</div>
                 </div>
-
-                {/* Dual Bar System */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
-                  {/* Row: Budget */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <div style={{ width: 70, fontSize: 11, color: C.textDim, fontWeight: 700, textAlign: "right", letterSpacing: .5 }}>BUDGET</div>
-                    <div style={{ flex: 1, background: C.surface, height: 24, borderRadius: 12, overflow: "hidden", border: `1px solid ${C.border}` }}>
-                      <div style={{ width: `${budgetPct}%`, height: "100%", background: C.accent, borderRadius: 12, transition: "width .3s ease" }} />
+                {data.length === 0
+                  ? <div style={{ padding: 32, textAlign: "center", color: C.textMuted, fontSize: 12 }}>No invoice data available</div>
+                  : <div style={{ width: "100%", height: 260 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={data} margin={{ top: 6, right: 12, left: 0, bottom: 4 }} barGap={2}>
+                          <XAxis dataKey="name" stroke={C.textMuted} fontSize={10} tickLine={false} axisLine={false} />
+                          <YAxis stroke={C.textMuted} fontSize={10} tickLine={false} axisLine={false} tickFormatter={tickFmt} />
+                          <Tooltip contentStyle={tooltipStyle} itemStyle={{ fontSize: 12, fontWeight: 700 }}
+                            formatter={(v, n) => [fmt$(v), n]}
+                            labelStyle={{ color: C.textDim, fontWeight: 700, fontSize: 12, marginBottom: 6 }}
+                            labelFormatter={(n, pl) => pl?.[0]?.payload?.fullName || n}
+                            cursor={{ fill: C.accentGlow }} />
+                          <Legend iconType="circle" wrapperStyle={{ fontSize: 11, color: C.text, paddingTop: 10 }} />
+                          <Bar dataKey="Raised"  fill={C.accent} radius={[4, 4, 0, 0]} barSize={16} />
+                          <Bar dataKey="Cleared" fill={C.green}  radius={[4, 4, 0, 0]} barSize={16} />
+                          <Bar dataKey="Pending" fill={C.amber}  radius={[4, 4, 0, 0]} barSize={16} />
+                        </BarChart>
+                      </ResponsiveContainer>
                     </div>
-                    <div style={{ width: 90, fontSize: 13, fontWeight: 700, color: C.accent }}>{fmt$(budget)}</div>
-                  </div>
-
-                  {/* Row: Raised */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <div style={{ width: 70, fontSize: 11, color: C.textDim, fontWeight: 700, textAlign: "right", letterSpacing: .5 }}>RAISED</div>
-                    <div style={{ flex: 1, background: C.surface, height: 20, borderRadius: 10, overflow: "hidden", border: `1px solid ${C.border}` }}>
-                      <div style={{ width: `${raisedPct}%`, height: "100%", background: isOverBudget ? C.red : C.green, borderRadius: 10, transition: "width .3s ease" }} />
-                    </div>
-                    <div style={{ width: 90, fontSize: 13, fontWeight: 700, color: isOverBudget ? C.red : C.green }}>{fmt$(raised)}</div>
-                  </div>
-
-                  {/* Row: Burned */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <div style={{ width: 70, fontSize: 11, color: C.textDim, fontWeight: 700, textAlign: "right", letterSpacing: .5 }}>BURNED</div>
-                    <div style={{ flex: 1, background: C.surface, height: 20, borderRadius: 10, overflow: "hidden", border: `1px solid ${C.border}` }}>
-                      <div style={{ width: `${burnedPct}%`, height: "100%", background: C.amber, borderRadius: 10, transition: "width .3s ease" }} />
-                    </div>
-                    <div style={{ width: 90, fontSize: 13, fontWeight: 700, color: C.amber }}>{fmt$(burned)}</div>
-                  </div>
-                </div>
-              </Card>
-            );
-          })
+                }
+              </div>
+            ))}
+          </div>
         )}
       </div>
-    </div >
+    </div>
   );
 }
 
@@ -615,7 +817,12 @@ function ProjectManagement({ readOnly = false, currentUser }) {
     if (inv.status !== "cleared") {
       // Show modal to collect payment received date (pending or partial)
       setPaymentDate(new Date().toISOString().slice(0, 10));
-      setPaymentAmount(inv.status === "partial" && inv.balance_amount != null ? inv.balance_amount : (inv.amount || ""));
+      const tds = parseFloat(inv.tds_amount || 0);
+      const amt = parseFloat(inv.amount || 0);
+      const expectedPayment = tds > 0 ? (amt - tds) : amt;
+      setPaymentAmount(inv.status === "partial" && inv.balance_amount != null
+        ? inv.balance_amount
+        : expectedPayment.toFixed(2));
       setClearModal(inv);
     } else {
       // Revert to pending immediately
@@ -696,7 +903,6 @@ function ProjectManagement({ readOnly = false, currentUser }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
         <div><h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>Project Management & Ledger</h2>
           <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>Monitor client budgets & track company expenses or invoices</p></div>
-        {!readOnly && tab === "invoices" && <Btn onClick={() => setModal(true)}>+ Raise Invoice</Btn>}
         {!readOnly && tab === "company_expenses" && <Btn onClick={() => setModal("newExpense")}>+ Add Expense</Btn>}
       </div>
 
@@ -712,151 +918,299 @@ function ProjectManagement({ readOnly = false, currentUser }) {
 
       {tab === "dashboard" && <ProjectDashboard projects={projects} invoices={invoices} />}
 
-      {tab === "invoices" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-          {/* Project Budget Cards */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(320px,1fr))", gap: 16 }}>
-            {activeProjects.map(p => {
-              const projectInvoices = invoices.filter(i => i.project_id === p.id);
-              const amountRaised = projectInvoices.reduce((acc, i) => acc + parseFloat(i.amount || 0), 0);
-              const balancePending = p.budget - amountRaised;
-              const pct = ((amountRaised / p.budget) * 100).toFixed(1);
-              return (
-                <Card key={p.id} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                    <div>
-                      <div style={{ fontSize: 11, color: C.accent, fontWeight: 700, letterSpacing: .5 }}>{p.code}</div>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginTop: 4 }}>{p.name}</div>
-                    </div>
-                  </div>
-                  <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                    <div style={{ background: C.surface, borderRadius: 8, padding: "8px 12px" }}>
-                      <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>Client Budget</div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{fmt$(p.budget)}</div>
-                    </div>
-                    <div style={{ background: C.surface, borderRadius: 8, padding: "8px 12px", border: `1px solid ${pct > 95 ? C.amber : 'transparent'}` }}>
-                      <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>Amount Raised</div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: C.green }}>{fmt$(amountRaised)}</div>
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ fontSize: 12, color: C.textMuted }}>Pending to Raise: <span style={{ fontWeight: 600, color: C.text }}>{fmt$(balancePending)}</span></div>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: pct > 85 ? C.red : C.accent }}>{pct}% utilized</div>
-                  </div>
-                  <ProgressBar value={amountRaised} max={p.budget} />
-                </Card>
-              );
-            })}
-          </div>
+      {tab === "invoices" && (() => {
+        // ── Per-client aggregates for this tab ────────────────────────────
+        const clientMap = {};
+        invoices.forEach(inv => {
+          const key = inv.client_name || "Unknown";
+          if (!clientMap[key]) clientMap[key] = { name: key, raised: 0, cleared: 0, pending: 0, count: 0 };
+          const amt = parseFloat(inv.amount || 0);
+          clientMap[key].raised += amt;
+          clientMap[key].count += 1;
+          if (inv.status === "cleared") clientMap[key].cleared += amt;
+          else clientMap[key].pending += amt;
+        });
+        const clientList = Object.values(clientMap).sort((a, b) => b.raised - a.raised);
 
-          <Card style={{ padding: 0, overflow: "hidden" }}>
-            <div style={{ padding: "18px 24px", borderBottom: `1px solid ${C.border}`, display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center", justifyContent: "space-between" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: C.text }}>Raised Invoices</h3>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <select value={filterProject} onChange={e => setFilterProject(e.target.value)} style={{ padding: "6px 10px", borderRadius: 6, background: C.bg, border: `1px solid ${C.border}`, color: filterProject !== "all" ? C.text : C.textMuted, fontSize: 12, outline: "none", cursor: "pointer" }}>
-                    <option value="all">All Projects</option>
-                    {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                  <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ padding: "6px 10px", borderRadius: 6, background: C.bg, border: `1px solid ${C.border}`, color: filterStatus !== "all" ? C.text : C.textMuted, fontSize: 12, outline: "none", cursor: "pointer" }}>
-                    <option value="all">All Statuses</option>
-                    <option value="pending">Pending</option>
-                    <option value="partial">Partial</option>
-                    <option value="cleared">Cleared</option>
-                  </select>
+        // ── Global KPI aggregates ─────────────────────────────────────────
+        const totalRaised  = invoices.reduce((a, i) => a + parseFloat(i.amount || 0), 0);
+        const totalCleared = invoices.filter(i => i.status === "cleared").reduce((a, i) => a + parseFloat(i.amount || 0), 0);
+        const totalPending = invoices.filter(i => i.status !== "cleared").reduce((a, i) => a + parseFloat(i.amount || 0), 0);
+        const collectPct   = totalRaised > 0 ? Math.round((totalCleared / totalRaised) * 100) : 0;
+
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+
+            {/* ── Row 1: Global KPI strip ──────────────────────────────────── */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
+              {[
+                { label: "Total Raised",  value: fmt$(totalRaised),  color: C.accent, sub: `${invoices.length} invoices` },
+                { label: "Total Cleared", value: fmt$(totalCleared), color: C.green,  sub: `${invoices.filter(i => i.status === "cleared").length} invoices` },
+                { label: "Total Pending", value: fmt$(totalPending), color: C.amber,  sub: `${invoices.filter(i => i.status !== "cleared").length} outstanding` },
+              ].map(k => (
+                <div key={k.label} style={{ background: `linear-gradient(135deg, ${C.surface}, ${C.card})`, border: `1px solid ${k.color}33`, borderLeft: `3px solid ${k.color}`, borderRadius: 14, padding: "18px 20px", position: "relative", overflow: "hidden" }}>
+                  <div style={{ position: "absolute", top: -16, right: -16, width: 70, height: 70, borderRadius: "50%", background: `radial-gradient(circle, ${k.color}15 0%, transparent 70%)`, pointerEvents: "none" }} />
+                  <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .6 }}>{k.label}</div>
+                  <div style={{ fontSize: 26, fontWeight: 900, color: k.color, marginTop: 8, letterSpacing: -.5 }}>{k.value}</div>
+                  <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4 }}>{k.sub}</div>
+                </div>
+              ))}
+              {/* Collection Rate ring card */}
+              <div style={{ background: `linear-gradient(135deg, ${C.surface}, ${C.card})`, border: `1px solid ${C.purple}33`, borderLeft: `3px solid ${C.purple}`, borderRadius: 14, padding: "18px 20px", display: "flex", alignItems: "center", gap: 14 }}>
+                <div style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                  <Ring pct={collectPct} color={collectPct >= 80 ? C.green : collectPct >= 50 ? C.accent : C.amber} size={60} stroke={5} />
+                  <div style={{ position: "absolute", fontSize: 12, fontWeight: 900, color: C.text }}>{collectPct}%</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .6 }}>Collection Rate</div>
+                  <div style={{ fontSize: 13, color: C.textDim, marginTop: 4 }}>
+                    <span style={{ color: C.green, fontWeight: 700 }}>{invoices.filter(i => i.status === "cleared").length}</span> cleared /&nbsp;
+                    <span style={{ color: C.amber, fontWeight: 700 }}>{invoices.filter(i => i.status !== "cleared").length}</span> pending
+                  </div>
                 </div>
               </div>
-              <Btn small variant="ghost" onClick={() => handleDownloadCSV(filteredInvoices)}>⬇ Download CSV</Btn>
             </div>
-            {filteredInvoices.length === 0 ? (
-              <div style={{ padding: 40, textAlign: "center", color: C.textMuted, fontSize: 13 }}>No invoices match your filters.</div>
-            ) : (
-              <div className="resp-table-wrap">
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead>
-                    <tr>
-                      <Th>Project & Client</Th>
-                      <Th>Task / Deliverables</Th>
-                      <Th>Amount Raised</Th>
-                      <Th>Date Raised</Th>
-                      <Th>Payment Due Date</Th>
-                      <Th>Payment Received</Th>
-                      <Th>Clearance Status</Th>
-                      {!readOnly && <Th>Action</Th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredInvoices.map(inv => (
-                      <tr key={inv.id} style={{ borderBottom: `1px solid ${C.border}` }}>
-                        <Td>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{inv.invoice_number}</div>
-                          {inv.parent_invoice_number && (
-                            <div style={{ fontSize: 11, color: "#f97316", marginBottom: 2 }}>
-                              ↳ Balance of {inv.parent_invoice_number}
-                            </div>
-                          )}
-                          <div style={{ fontSize: 13, fontWeight: 700, color: C.accent }}>{inv.client_name || inv.project_name}</div>
-                          <div style={{ fontSize: 11, color: C.textMuted }}>{inv.project_code}</div>
-                          {inv.vendor_invoice_url && (
-                            <a href={`${window.location.origin}/api/receipts/${inv.vendor_invoice_url}`} target="_blank" rel="noreferrer"
-                              style={{ fontSize: 11, color: C.purple, fontWeight: 600, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 3, marginTop: 3 }}>
-                              📎 Partner Invoice
-                            </a>
-                          )}
-                        </Td>
-                        <Td>
-                          <div style={{ fontSize: 13, color: C.textMuted, maxWidth: 200, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={parseTaskNames(inv.task_details)}>{parseTaskNames(inv.task_details)}</div>
-                        </Td>
-                        <Td>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{fmt$(inv.amount)}</div>
-                        </Td>
-                        <Td><div style={{ fontSize: 13, color: C.textMuted }}>{fmtD(inv.raised_date)}</div></Td>
-                        <Td><div style={{ fontSize: 13, color: C.textMuted }}>{inv.payment_due_date ? fmtD(inv.payment_due_date) : "—"}</div></Td>
-                        <Td>
-                          {inv.payment_received_date || inv.payment_received
-                            ? <div>
-                              {inv.payment_received != null && <div style={{ fontSize: 13, fontWeight: 700, color: C.green }}>{fmt$(inv.payment_received)}</div>}
-                              {inv.payment_received_date && <div style={{ fontSize: 12, color: C.textMuted }}>{fmtD(inv.payment_received_date)}</div>}
-                            </div>
-                            : <span style={{ fontSize: 12, color: C.textMuted }}>—</span>}
-                        </Td>
-                        <Td>
-                          <Badge color={inv.status === "cleared" ? C.green : inv.status === "partial" ? "#f97316" : C.amber}>
-                            {inv.status}
-                          </Badge>
-                          {inv.status === "partial" && inv.balance_amount != null && (
-                            <div style={{ fontSize: 11, color: "#f97316", marginTop: 3, fontWeight: 600 }}>
-                              Balance: {fmt$(inv.balance_amount)}
-                            </div>
-                          )}
-                        </Td>
-                        {!readOnly && (
-                          <Td>
-                            <div style={{ display: "flex", gap: 8 }}>
-                              <Btn small variant="ghost" onClick={() => setViewInvoice(inv)}>👁</Btn>
-                              <Btn small variant={inv.status === "cleared" ? "ghost" : "success"}
-                                onClick={() => handleToggleStatus(inv)}>
-                                {inv.status === "cleared" ? "Mark Pending" : "Mark Cleared"}
-                              </Btn>
-                              <Btn small variant="ghost" onClick={() => { setEditInvoice(inv); setModal("edit"); }}>✏</Btn>
-                              <Btn small variant="danger" onClick={() => handleDelete(inv.id)}>🗑</Btn>
-                            </div>
-                          </Td>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+
+            {/* ── Row 2: Client Invoice Overview KPI Cards ─────────────────── */}
+            {clientList.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ width: 3, height: 18, background: `linear-gradient(180deg, ${C.accent}, ${C.purple})`, borderRadius: 2 }} />
+                  <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Client Invoice Overview</span>
+                  <span style={{ background: C.accent + "1a", color: C.accent, borderRadius: 20, padding: "2px 10px", fontSize: 10, fontWeight: 700 }}>{clientList.length} clients</span>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14 }}>
+                  {clientList.map((cl, idx) => {
+                    const pct = cl.raised > 0 ? Math.round((cl.cleared / cl.raised) * 100) : 0;
+                    const col = PALETTE[idx % PALETTE.length];
+                    const hColor = pct === 100 ? C.green : pct >= 60 ? C.accent : C.amber;
+                    const initials = cl.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+                    return (
+                      <div key={cl.name} style={{ background: `linear-gradient(145deg, ${C.surface}, ${C.card})`, border: `1px solid ${hColor}33`, borderRadius: 16, padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14, position: "relative", overflow: "hidden" }}>
+                        <div style={{ position: "absolute", top: -40, right: -40, width: 120, height: 120, borderRadius: "50%", background: `radial-gradient(circle, ${col}12 0%, transparent 70%)`, pointerEvents: "none" }} />
+                        {/* Header */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 12, zIndex: 1 }}>
+                          <div style={{ width: 44, height: 44, borderRadius: 12, background: `linear-gradient(135deg, ${col}33, ${col}15)`, border: `1.5px solid ${col}55`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 900, color: col, flexShrink: 0 }}>{initials}</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{cl.name}</div>
+                            <div style={{ fontSize: 11, color: C.textMuted, marginTop: 1 }}>{cl.count} invoice{cl.count !== 1 ? "s" : ""}</div>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                            <Ring pct={pct} color={hColor} size={40} stroke={4} />
+                            <span style={{ fontSize: 13, fontWeight: 800, color: hColor }}>{pct}%</span>
+                          </div>
+                        </div>
+                        {/* 3 chips */}
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 7, zIndex: 1 }}>
+                          <div style={{ background: C.bg, borderRadius: 9, padding: "8px", border: `1px solid ${C.border}`, textAlign: "center" }}>
+                            <div style={{ fontSize: 9, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>Raised</div>
+                            <div style={{ fontSize: 12, fontWeight: 800, color: C.text, marginTop: 3 }}>{fmt$(cl.raised)}</div>
+                          </div>
+                          <div style={{ background: C.green + "0e", borderRadius: 9, padding: "8px", border: `1px solid ${C.green}2a`, textAlign: "center" }}>
+                            <div style={{ fontSize: 9, color: C.green, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>Cleared</div>
+                            <div style={{ fontSize: 12, fontWeight: 800, color: C.green, marginTop: 3 }}>{fmt$(cl.cleared)}</div>
+                          </div>
+                          <div style={{ background: C.amber + "0e", borderRadius: 9, padding: "8px", border: `1px solid ${C.amber}2a`, textAlign: "center" }}>
+                            <div style={{ fontSize: 9, color: C.amber, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>Pending</div>
+                            <div style={{ fontSize: 12, fontWeight: 800, color: C.amber, marginTop: 3 }}>{fmt$(cl.pending)}</div>
+                          </div>
+                        </div>
+                        {/* Stacked bar */}
+                        <div style={{ zIndex: 1 }}>
+                          <div style={{ height: 6, borderRadius: 6, background: C.border, overflow: "hidden", display: "flex" }}>
+                            <div style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${hColor === C.green ? C.green : C.accent}, ${C.green})`, transition: "width .4s ease" }} />
+                            <div style={{ flex: 1, background: C.amber + "55" }} />
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5, fontSize: 10, color: C.textMuted }}>
+                            <span>Clearance progress</span>
+                            <span style={{ fontWeight: 700, color: hColor }}>{pct}% cleared</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
-          </Card>
-        </div>
-      )}
+
+            {/* ── Row 3: Project Budget Cards ──────────────────────────────── */}
+            {activeProjects.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ width: 3, height: 18, background: `linear-gradient(180deg, ${C.amber}, ${C.accent})`, borderRadius: 2 }} />
+                  <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Active Project Budgets</span>
+                  <span style={{ background: C.amber + "1a", color: C.amber, borderRadius: 20, padding: "2px 10px", fontSize: 10, fontWeight: 700 }}>{activeProjects.length} active</span>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14 }}>
+                  {activeProjects.map((p, idx) => {
+                    const projectInvoices = invoices.filter(i => i.project_id === p.id);
+                    const raised  = projectInvoices.reduce((a, i) => a + parseFloat(i.amount || 0), 0);
+                    const budget  = parseFloat(p.budget || 0);
+                    const utilPct = budget > 0 ? Math.min(Math.round((raised / budget) * 100), 999) : 0;
+                    const isOver  = raised > budget;
+                    const col     = PALETTE[idx % PALETTE.length];
+                    return (
+                      <div key={p.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, overflow: "hidden" }}>
+                        {/* Colour strip header */}
+                        <div style={{ background: `linear-gradient(90deg, ${col}2a, ${col}08)`, borderBottom: `1px solid ${col}22`, padding: "12px 18px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div>
+                            <div style={{ fontSize: 14, fontWeight: 800, color: C.text }}>{p.name}</div>
+                            <div style={{ fontSize: 11, color: col, fontWeight: 600, marginTop: 2 }}>{p.code}</div>
+                          </div>
+                          <div style={{ textAlign: "right" }}>
+                            <div style={{ fontSize: 10, color: C.textMuted }}>Pending to raise</div>
+                            <div style={{ fontSize: 13, fontWeight: 800, color: isOver ? C.red : C.text }}>{fmt$(budget - raised)}</div>
+                          </div>
+                        </div>
+                        {/* Body */}
+                        <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                            <div style={{ background: C.surface, borderRadius: 8, padding: "8px 12px" }}>
+                              <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .4 }}>Budget</div>
+                              <div style={{ fontSize: 14, fontWeight: 800, color: C.accent, marginTop: 3 }}>{fmt$(budget)}</div>
+                            </div>
+                            <div style={{ background: C.green + "0e", borderRadius: 8, padding: "8px 12px", border: `1px solid ${utilPct > 95 ? C.amber + "55" : "transparent"}` }}>
+                              <div style={{ fontSize: 10, color: C.green, fontWeight: 700, textTransform: "uppercase", letterSpacing: .4 }}>Raised</div>
+                              <div style={{ fontSize: 14, fontWeight: 800, color: isOver ? C.red : C.green, marginTop: 3 }}>{fmt$(raised)}</div>
+                            </div>
+                          </div>
+                          <div>
+                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5, fontSize: 11 }}>
+                              <span style={{ color: C.textMuted }}>Budget utilization</span>
+                              <span style={{ fontWeight: 700, color: isOver ? C.red : utilPct >= 85 ? C.amber : C.green }}>{utilPct}%</span>
+                            </div>
+                            <div style={{ height: 6, borderRadius: 6, background: C.border, overflow: "hidden" }}>
+                              <div style={{ width: `${Math.min(utilPct, 100)}%`, height: "100%", background: isOver ? C.red : utilPct >= 85 ? `linear-gradient(90deg, ${C.amber}, ${C.red})` : `linear-gradient(90deg, ${C.accent}, ${C.green})`, borderRadius: 6, transition: "width .35s ease" }} />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ── Row 4: Invoice Table ──────────────────────────────────────── */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <div style={{ width: 3, height: 18, background: `linear-gradient(180deg, ${C.green}, ${C.accent})`, borderRadius: 2 }} />
+                <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Raised Invoices</span>
+                <div style={{ flex: 1 }} />
+                <select value={filterProject} onChange={e => setFilterProject(e.target.value)}
+                  style={{ padding: "7px 11px", borderRadius: 8, background: C.surface, border: `1px solid ${C.border}`, color: filterProject !== "all" ? C.text : C.textMuted, fontSize: 12, outline: "none", cursor: "pointer" }}>
+                  <option value="all">All Projects</option>
+                  {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+                <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+                  style={{ padding: "7px 11px", borderRadius: 8, background: C.surface, border: `1px solid ${C.border}`, color: filterStatus !== "all" ? C.text : C.textMuted, fontSize: 12, outline: "none", cursor: "pointer" }}>
+                  <option value="all">All Statuses</option>
+                  <option value="pending">Pending</option>
+                  <option value="partial">Partial</option>
+                  <option value="cleared">Cleared</option>
+                </select>
+                <Btn small variant="ghost" onClick={() => handleDownloadCSV(filteredInvoices)}>⬇ Export CSV</Btn>
+                {!readOnly && <Btn small onClick={() => setModal(true)}>+ Raise Invoice</Btn>}
+              </div>
+
+              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, overflow: "hidden" }}>
+                {filteredInvoices.length === 0 ? (
+                  <div style={{ padding: 48, textAlign: "center", color: C.textMuted, fontSize: 13 }}>No invoices match your filters.</div>
+                ) : (
+                  <div className="resp-table-wrap">
+                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr style={{ background: C.card, borderBottom: `1px solid ${C.border}` }}>
+                          <Th>Project & Client</Th>
+                          <Th>Task / Deliverables</Th>
+                          <Th>Subtotal</Th>
+                          <Th>TDS (10%)</Th>
+                          <Th>Total Raised</Th>
+                          <Th>Date Raised</Th>
+                          <Th>Payment Due</Th>
+                          <Th>Payment Received</Th>
+                          <Th>Status</Th>
+                          {!readOnly && <Th>Actions</Th>}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredInvoices.map((inv, rowIdx) => (
+                          <tr key={inv.id} style={{ borderBottom: `1px solid ${C.border}`, background: rowIdx % 2 === 0 ? "transparent" : C.card + "44" }}>
+                            <Td>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{inv.invoice_number}</div>
+                              {inv.parent_invoice_number && (
+                                <div style={{ fontSize: 10, color: "#f97316", marginTop: 1 }}>↳ Balance of {inv.parent_invoice_number}</div>
+                              )}
+                              <div style={{ fontSize: 12, fontWeight: 700, color: C.accent, marginTop: 2 }}>{inv.client_name || inv.project_name}</div>
+                              <div style={{ fontSize: 10, color: C.textMuted }}>{inv.project_code}</div>
+                              {inv.vendor_invoice_url && (
+                                <a href={`${window.location.origin}/api/receipts/${inv.vendor_invoice_url}`} target="_blank" rel="noreferrer"
+                                  style={{ fontSize: 10, color: C.purple, fontWeight: 600, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 3, marginTop: 3 }}>
+                                  📎 Partner Invoice
+                                </a>
+                              )}
+                            </Td>
+                            <Td>
+                              <div style={{ fontSize: 12, color: C.textMuted, maxWidth: 180, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={parseTaskNames(inv.task_details)}>{parseTaskNames(inv.task_details)}</div>
+                            </Td>
+                            <Td><div style={{ fontSize: 12, color: C.textDim }}>{inv.subtotal ? fmt$(inv.subtotal) : "—"}</div></Td>
+                            <Td>
+                              {inv.tds_amount
+                                ? <div><div style={{ fontSize: 12, fontWeight: 700, color: C.amber }}>− {fmt$(inv.tds_amount)}</div><div style={{ fontSize: 10, color: C.textMuted }}>@10%</div></div>
+                                : <span style={{ fontSize: 11, color: C.textMuted }}>—</span>}
+                            </Td>
+                            <Td>
+                              <div style={{ fontSize: 13, fontWeight: 800, color: C.text }}>{fmt$(inv.amount)}</div>
+                              {inv.tds_amount && <div style={{ fontSize: 10, color: C.textMuted }}>excl. TDS: {fmt$(parseFloat(inv.amount || 0) - parseFloat(inv.tds_amount || 0))}</div>}
+                            </Td>
+                            <Td><div style={{ fontSize: 12, color: C.textMuted }}>{fmtD(inv.raised_date)}</div></Td>
+                            <Td><div style={{ fontSize: 12, color: inv.payment_due_date && new Date(inv.payment_due_date) < new Date() && inv.status !== "cleared" ? C.red : C.textMuted }}>{inv.payment_due_date ? fmtD(inv.payment_due_date) : "—"}</div></Td>
+                            <Td>
+                              {inv.payment_received_date || inv.payment_received
+                                ? <div>
+                                    <div style={{ fontSize: 12, fontWeight: 700, color: C.green }}>{inv.payment_received != null ? fmt$(inv.payment_received) : "—"}</div>
+                                    <div style={{ fontSize: 10, color: C.textMuted }}>{inv.payment_received_date ? fmtD(inv.payment_received_date) : ""}</div>
+                                  </div>
+                                : <span style={{ fontSize: 11, color: C.textMuted }}>—</span>}
+                            </Td>
+                            <Td>
+                              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                                <Badge color={inv.status === "cleared" ? C.green : inv.status === "partial" ? "#f97316" : C.amber}>{inv.status}</Badge>
+                                {inv.status === "partial" && inv.balance_amount != null && (
+                                  <div style={{ fontSize: 10, color: "#f97316", fontWeight: 600 }}>Bal: {fmt$(inv.balance_amount)}</div>
+                                )}
+                              </div>
+                            </Td>
+                            {!readOnly && (
+                              <Td>
+                                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                                  <Btn small variant="ghost" onClick={() => setViewInvoice(inv)}>👁</Btn>
+                                  <Btn small variant={inv.status === "cleared" ? "ghost" : "success"} onClick={() => handleToggleStatus(inv)}>
+                                    {inv.status === "cleared" ? "Revert" : "Clear"}
+                                  </Btn>
+                                  <Btn small variant="ghost" onClick={() => { setEditInvoice(inv); setModal("edit"); }}>✏</Btn>
+                                  <Btn small variant="danger" onClick={() => handleDelete(inv.id)}>🗑</Btn>
+                                </div>
+                              </Td>
+                            )}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {clearModal && (() => {
         const raisedAmt = parseFloat(clearModal.amount || 0);
+        const tdsAmt = parseFloat(clearModal.tds_amount || 0);
         const receivedAmt = parseFloat(paymentAmount || 0);
-        const diff = raisedAmt - receivedAmt;
+        const effectiveAmt = receivedAmt + tdsAmt;
+        const diff = raisedAmt - effectiveAmt;
         const hasShortfall = paymentAmount !== "" && diff > 0.005;
         const hasOverpay = paymentAmount !== "" && diff < -0.005;
         return (
@@ -866,11 +1220,23 @@ function ProjectManagement({ readOnly = false, currentUser }) {
               <div style={{ background: C.surface, borderRadius: 10, padding: "14px 16px" }}>
                 <div style={{ fontSize: 12, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>Invoice</div>
                 <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{clearModal.invoice_number || clearModal.client_name || clearModal.project_name}</div>
-                <div style={{ display: "flex", gap: 20, marginTop: 6 }}>
+                <div style={{ display: "flex", gap: 20, marginTop: 8, flexWrap: "wrap" }}>
                   <div>
-                    <div style={{ fontSize: 11, color: C.textMuted }}>Amount Raised</div>
+                    <div style={{ fontSize: 11, color: C.textMuted }}>Total Raised</div>
                     <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{fmt$(raisedAmt)}</div>
                   </div>
+                  {tdsAmt > 0 && (
+                    <div>
+                      <div style={{ fontSize: 11, color: C.textMuted }}>TDS (10%)</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: C.amber }}>− {fmt$(tdsAmt)}</div>
+                    </div>
+                  )}
+                  {tdsAmt > 0 && (
+                    <div>
+                      <div style={{ fontSize: 11, color: C.textMuted }}>Expected from Client</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: C.accent }}>{fmt$(raisedAmt - tdsAmt)}</div>
+                    </div>
+                  )}
                   {clearModal.parent_invoice_number && (
                     <div>
                       <div style={{ fontSize: 11, color: C.textMuted }}>Parent Invoice</div>
@@ -880,34 +1246,56 @@ function ProjectManagement({ readOnly = false, currentUser }) {
                 </div>
               </div>
 
+              {tdsAmt > 0 && (
+                <div style={{ background: C.amber + "11", border: `1px solid ${C.amber}44`, borderRadius: 8, padding: "10px 14px", fontSize: 12, color: C.amber }}>
+                  ℹ TDS of {fmt$(tdsAmt)} will be credited. Client pays {fmt$(raisedAmt - tdsAmt)} + TDS credit = {fmt$(raisedAmt)} total.
+                </div>
+              )}
+
               <Inp label="Payment Received Date" type="date" value={paymentDate} onChange={v => setPaymentDate(v)} required />
               <Inp
-                label="Payment Received Amount (₹)"
+                label={tdsAmt > 0 ? `Payment Received from Client (₹) — excl. TDS ${fmt$(tdsAmt)}` : "Payment Received Amount (₹)"}
                 type="number"
                 value={paymentAmount}
                 onChange={v => setPaymentAmount(v)}
-                placeholder={`Full amount: ${fmt$(raisedAmt)}`}
+                placeholder={tdsAmt > 0 ? `Expected: ${(raisedAmt - tdsAmt).toFixed(2)}` : `Full amount: ${fmt$(raisedAmt)}`}
               />
+
+              {/* TDS reconciliation line when TDS exists */}
+              {tdsAmt > 0 && paymentAmount !== "" && (
+                <div style={{ background: C.surface, borderRadius: 8, padding: "10px 14px", fontSize: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", color: C.textDim, marginBottom: 4 }}>
+                    <span>Payment Received</span><span style={{ fontWeight: 700, color: C.green }}>{fmt$(receivedAmt)}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", color: C.textDim, marginBottom: 4 }}>
+                    <span>TDS Credit (10%)</span><span style={{ fontWeight: 700, color: C.amber }}>{fmt$(tdsAmt)}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", borderTop: `1px solid ${C.border}`, paddingTop: 6, fontWeight: 700 }}>
+                    <span style={{ color: C.text }}>Effective Total</span>
+                    <span style={{ color: effectiveAmt >= raisedAmt - 0.005 ? C.green : "#f97316" }}>{fmt$(effectiveAmt)} / {fmt$(raisedAmt)}</span>
+                  </div>
+                </div>
+              )}
 
               {/* Difference indicator */}
               {hasShortfall && (
                 <div style={{ background: "#f9731622", border: "1px solid #f97316", borderRadius: 8, padding: "12px 14px" }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: "#f97316", marginBottom: 4 }}>⚠ Shortfall Detected</div>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.textDim }}>
-                    <span>Amount Raised</span><span style={{ fontWeight: 700 }}>{fmt$(raisedAmt)}</span>
+                    <span>Total Raised</span><span style={{ fontWeight: 700 }}>{fmt$(raisedAmt)}</span>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.textDim }}>
-                    <span>Payment Received</span><span style={{ fontWeight: 700, color: C.green }}>{fmt$(receivedAmt)}</span>
+                    <span>Effective Payment{tdsAmt > 0 ? " (cash + TDS)" : ""}</span><span style={{ fontWeight: 700, color: C.green }}>{fmt$(effectiveAmt)}</span>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, borderTop: `1px solid #f9731644`, marginTop: 6, paddingTop: 6 }}>
-                    <span style={{ fontWeight: 700, color: "#f97316" }}>Balance Due</span>
+                    <span style={{ fontWeight: 700, color: "#f97316" }}>Balance Due (Pending)</span>
                     <span style={{ fontWeight: 800, color: "#f97316" }}>{fmt$(diff)}</span>
                   </div>
                   <div style={{ fontSize: 11, color: C.textMuted, marginTop: 6 }}>
                     {(() => {
                       const rootNum = (clearModal.invoice_number || "").replace(/^(BAL-\d{4}-)+/, "");
                       const mmdd = new Date().toLocaleDateString("en-GB", { month: "2-digit", day: "2-digit" }).replace("/", "");
-                      return <>Invoice will be marked <strong>partial</strong>. A new balance invoice <strong>BAL-{mmdd}-{rootNum}</strong> (₹{diff.toLocaleString("en-IN", { minimumFractionDigits: 2 })}) will be auto-created and linked to this invoice.</>;
+                      return <>Invoice will be marked <strong>partial</strong>. A new balance invoice <strong>BAL-{mmdd}-{rootNum}</strong> ({fmt$(diff)}) will be auto-created and linked to this invoice.</>;
                     })()}
                   </div>
                 </div>
@@ -919,7 +1307,7 @@ function ProjectManagement({ readOnly = false, currentUser }) {
               )}
               {paymentAmount !== "" && !hasShortfall && !hasOverpay && (
                 <div style={{ background: C.green + "22", border: `1px solid ${C.green}`, borderRadius: 8, padding: "10px 14px", fontSize: 12, color: C.green }}>
-                  ✓ Full payment. Invoice will be marked cleared.
+                  ✓ {tdsAmt > 0 ? `Payment ${fmt$(receivedAmt)} + TDS ${fmt$(tdsAmt)} = ${fmt$(effectiveAmt)} — matches invoice total.` : "Full payment. Invoice will be marked cleared."}
                 </div>
               )}
 
@@ -1384,11 +1772,12 @@ function InvoiceForm({ projects, clients, initialData, saving, onCancel, onSave 
     remarks: initialData.remarks || "",
     tax_rate: initialData.tax_rate || "18.00",
     subtotal: initialData.subtotal || "",
+    tds_amount: initialData.tds_amount || "",
     raised_date: parseDate(initialData.raised_date),
     payment_due_date: parseDate(initialData.payment_due_date),
     status: initialData.status,
     vendor_invoice_url: initialData.vendor_invoice_url || "",
-  } : { client_id: "", invoice_number: "", project_id: "", amount: "", items: [{ description: "", hours: "", rate: "" }], remarks: "", tax_rate: "18.00", subtotal: "", raised_date: new Date().toISOString().slice(0, 10), payment_due_date: "", status: "pending", vendor_invoice_url: "" });
+  } : { client_id: "", invoice_number: "", project_id: "", amount: "", items: [{ description: "", hours: "", rate: "" }], remarks: "", tax_rate: "18.00", subtotal: "", tds_amount: "", raised_date: new Date().toISOString().slice(0, 10), payment_due_date: "", status: "pending", vendor_invoice_url: "" });
   const [vendorFile, setVendorFile] = useState(null);
   const [vendorUploading, setVendorUploading] = useState(false);
 
@@ -1403,7 +1792,8 @@ function InvoiceForm({ projects, clients, initialData, saving, onCancel, onSave 
     const t = parseFloat(form.tax_rate) || 0;
     const taxAmt = sub * (t / 100);
     const tot = sub + taxAmt;
-    setForm(f => ({ ...f, subtotal: sub.toFixed(2), amount: tot.toFixed(2) }));
+    const tds = sub * 0.10; // TDS @ 10% of subtotal
+    setForm(f => ({ ...f, subtotal: sub.toFixed(2), tds_amount: tds.toFixed(2), amount: tot.toFixed(2) }));
   }, [form.items, form.tax_rate]);
 
   useEffect(() => {
@@ -1470,8 +1860,29 @@ function InvoiceForm({ projects, clients, initialData, saving, onCancel, onSave 
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 12, alignItems: "center", justifyContent: "flex-end" }}>
-        <div style={{ fontSize: 12, color: C.textMuted }}>Subtotal: <b>₹{form.subtotal || "0.00"}</b></div>
+      {/* Invoice Summary Breakdown */}
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: .5, marginBottom: 4 }}>Invoice Summary</div>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.textDim }}>
+          <span>Subtotal (Hours × Rate)</span>
+          <span style={{ fontWeight: 700, color: C.text }}>₹{form.subtotal || "0.00"}</span>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.textDim }}>
+          <span>TDS Deductible (10% of Subtotal)</span>
+          <span style={{ fontWeight: 700, color: C.amber }}>− ₹{form.tds_amount || "0.00"}</span>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.textDim }}>
+          <span>Tax / GST ({form.tax_rate || 0}%)</span>
+          <span style={{ fontWeight: 700, color: C.textDim }}>+ ₹{((parseFloat(form.amount || 0) - parseFloat(form.subtotal || 0)) || 0).toFixed(2)}</span>
+        </div>
+        <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 8, display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 800 }}>
+          <span style={{ color: C.text }}>Total Invoice Amount</span>
+          <span style={{ color: C.green }}>₹{form.amount || "0.00"}</span>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.textMuted, borderTop: `1px dashed ${C.border}`, paddingTop: 6, marginTop: 2 }}>
+          <span>Expected Payment from Client (after TDS)</span>
+          <span style={{ fontWeight: 700, color: C.accent }}>₹{((parseFloat(form.amount || 0) - parseFloat(form.tds_amount || 0)) || 0).toFixed(2)}</span>
+        </div>
       </div>
 
       <Inp label="Total Amount (INR) *" type="number" step="0.01" value={form.amount} onChange={v => setForm(f => ({ ...f, amount: v }))} required />

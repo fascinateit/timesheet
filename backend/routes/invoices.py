@@ -59,10 +59,10 @@ def create_invoice():
     sql = """
         INSERT INTO invoices (
             client_id, invoice_number, project_id, amount, task_details, remarks,
-            hours, rate, tax_rate, subtotal,
+            hours, rate, tax_rate, subtotal, tds_amount,
             raised_date, payment_due_date, status, vendor_invoice_url
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
     params = (
         data.get("client_id") or None,
@@ -75,6 +75,7 @@ def create_invoice():
         data.get("rate") or None,
         data.get("tax_rate", 18.00),
         data.get("subtotal") or None,
+        data.get("tds_amount") or None,
         data["raised_date"],
         data.get("payment_due_date") or None,
         data.get("status", "pending"),
@@ -101,10 +102,12 @@ def update_invoice_status(invoice_id):
         payment_received = float(payment_received) if payment_received not in (None, "") else None
 
         raised_amount = float(invoice["amount"] or 0)
+        tds_amount = float(invoice.get("tds_amount") or 0)
+        effective_payment = (payment_received if payment_received is not None else 0) + tds_amount
 
-        if payment_received is not None and payment_received < raised_amount:
+        if payment_received is not None and effective_payment < raised_amount - 0.005:
             # Partial payment — mark as partial, auto-create balance invoice
-            balance = round(raised_amount - payment_received, 2)
+            balance = round(raised_amount - effective_payment, 2)
 
             execute(
                 "UPDATE invoices SET status=%s, payment_received_date=%s, payment_received=%s, balance_amount=%s WHERE id=%s",
@@ -176,7 +179,7 @@ def update_invoice(invoice_id):
     sql = """
         UPDATE invoices
         SET client_id = %s, invoice_number = %s, project_id = %s, amount = %s, task_details = %s, remarks = %s,
-            hours = %s, rate = %s, tax_rate = %s, subtotal = %s,
+            hours = %s, rate = %s, tax_rate = %s, subtotal = %s, tds_amount = %s,
             raised_date = %s, payment_due_date = %s, status = %s, vendor_invoice_url = %s
         WHERE id = %s
     """
@@ -191,6 +194,7 @@ def update_invoice(invoice_id):
         data.get("rate") or None,
         data.get("tax_rate", 18.00),
         data.get("subtotal") or None,
+        data.get("tds_amount") or None,
         data["raised_date"],
         data.get("payment_due_date") or None,
         data.get("status", "pending"),
