@@ -13,7 +13,7 @@ const C = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmt$ = n => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 0 }).format(n || 0);
-const fmtD = d => { try { return new Date(d).toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric" }); } catch { return d || "—"; } };
+const fmtD = d => { try { const dt = (typeof d === "string" && /^\d{4}-\d{2}-\d{2}/.test(d)) ? new Date(d.slice(0, 10) + "T00:00:00") : new Date(d); return dt.toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric" }); } catch { return d || "—"; } };
 const mkAvi = n => (n || "??").split(" ").map(x => x[0]).join("").slice(0, 2).toUpperCase();
 
 // ── Shared UI ─────────────────────────────────────────────────────────────────
@@ -974,7 +974,7 @@ function ProjectManagement({ readOnly = false, currentUser }) {
   async function handleToggleStatus(inv) {
     if (inv.status !== "cleared") {
       // Show modal to collect payment received date (pending or partial)
-      setPaymentDate(new Date().toISOString().slice(0, 10));
+      setPaymentDate(isoDate(new Date()));
       const tds = parseFloat(inv.tds_amount || 0);
       const amt = parseFloat(inv.amount || 0);
       const expectedPayment = tds > 0 ? (amt - tds) : amt;
@@ -1041,7 +1041,7 @@ function ProjectManagement({ readOnly = false, currentUser }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `invoices-export-${new Date().toISOString().split("T")[0]}.csv`;
+    a.download = `invoices-export-${isoDate(new Date())}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -1557,7 +1557,7 @@ function ProjectManagement({ readOnly = false, currentUser }) {
               const oldTitle = document.title;
               const safeClient = (viewInvoice?.client_name || "Client").replace(/[^a-zA-Z0-9]/g, "_");
               const safeInv = (viewInvoice?.invoice_number || "Invoice").replace(/[^a-zA-Z0-9]/g, "_");
-              const today = new Date().toISOString().split('T')[0];
+              const today = isoDate(new Date());
               document.title = `${safeClient}_${safeInv}_${today}`;
               document.body.innerHTML = `<style>${STYLE}</style><div style="padding: 40px; box-sizing: border-box; width: 100%; min-height: 100vh;">` + printContent + `</div>`;
               setTimeout(() => {
@@ -1677,7 +1677,7 @@ function CompanyExpenses({ modal, setModal, currentUser, projects }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `company-expenses-export-${new Date().toISOString().split("T")[0]}.csv`;
+    a.download = `company-expenses-export-${isoDate(new Date())}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -1955,7 +1955,7 @@ function CompanyExpenses({ modal, setModal, currentUser, projects }) {
                             <Btn small variant="outline" onClick={() => { setEditObj(exp); setModal("generateExpense"); }}>Gen Exp</Btn>
                           )}
                           {exp.status === "pending" && (
-                            <Btn small variant="success" onClick={() => setClearModal({ id: exp.id, clearedDate: new Date().toISOString().split("T")[0] })}>Clear</Btn>
+                            <Btn small variant="success" onClick={() => setClearModal({ id: exp.id, clearedDate: isoDate(new Date()) })}>Clear</Btn>
                           )}
                           {exp.status === "cleared" && (
                             <Btn small style={{ background: C.purple, color: "#fff", border: "none", padding: "4px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer", fontWeight: 600 }} onClick={() => handleToggleStatus(exp.id, "sent to auditing")}>→ Audit</Btn>
@@ -2100,7 +2100,7 @@ function InvoiceForm({ projects, clients, initialData, saving, onCancel, onSave 
   };
   const parseDate = (d) => {
     if (!d) return "";
-    try { return new Date(d).toISOString().slice(0, 10); } catch { return ""; }
+    try { const dt = (typeof d === "string" && /^\d{4}-\d{2}-\d{2}/.test(d)) ? new Date(d.slice(0, 10) + "T00:00:00") : new Date(d); const p = n => String(n).padStart(2, "0"); return `${dt.getFullYear()}-${p(dt.getMonth()+1)}-${p(dt.getDate())}`; } catch { return ""; }
   };
   const [form, setForm] = useState(initialData ? {
     client_id: initialData.client_id || "",
@@ -2116,7 +2116,7 @@ function InvoiceForm({ projects, clients, initialData, saving, onCancel, onSave 
     payment_due_date: parseDate(initialData.payment_due_date),
     status: initialData.status,
     vendor_invoice_url: initialData.vendor_invoice_url || "",
-  } : { client_id: "", invoice_number: "", project_id: "", amount: "", items: [{ description: "", hours: "", rate: "" }], remarks: "", tax_rate: "18.00", subtotal: "", tds_amount: "", raised_date: new Date().toISOString().slice(0, 10), payment_due_date: "", status: "pending", vendor_invoice_url: "" });
+  } : { client_id: "", invoice_number: "", project_id: "", amount: "", items: [{ description: "", hours: "", rate: "" }], remarks: "", tax_rate: "18.00", subtotal: "", tds_amount: "", raised_date: isoDate(new Date()), payment_due_date: "", status: "pending", vendor_invoice_url: "" });
   const [vendorFile, setVendorFile] = useState(null);
   const [vendorUploading, setVendorUploading] = useState(false);
 
@@ -2139,9 +2139,9 @@ function InvoiceForm({ projects, clients, initialData, saving, onCancel, onSave 
     if (form.client_id && form.raised_date) {
       const client = clients.find(c => String(c.id) === String(form.client_id));
       if (client && client.pay_day) {
-        const raised = new Date(form.raised_date);
+        const raised = new Date(form.raised_date + "T00:00:00");
         raised.setDate(raised.getDate() + parseInt(client.pay_day));
-        const newDate = raised.toISOString().slice(0, 10);
+        const newDate = isoDate(raised);
         if (form.payment_due_date !== newDate) setForm(f => ({ ...f, payment_due_date: newDate }));
       }
     }
@@ -3377,7 +3377,7 @@ function weekStart(date) {
   d.setDate(d.getDate() + diff); d.setHours(0, 0, 0, 0); return d;
 }
 function addDays(date, n) { const d = new Date(date); d.setDate(d.getDate() + n); return d; }
-function isoDate(d) { return d.toISOString().slice(0, 10); }
+function isoDate(d) { const p = n => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; }
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -3458,7 +3458,7 @@ function Timesheets({ currentUser, viewOnly }) {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `timesheets_${weekOf.toISOString().split("T")[0]}.csv`);
+    link.setAttribute("download", `timesheets_${isoDate(weekOf)}.csv`);
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -3632,7 +3632,7 @@ function Timesheets({ currentUser, viewOnly }) {
 
     // Monthly summary
     const monthRows = rows.filter(r => {
-      const d = new Date(r.work_date);
+      const d = new Date(String(r.work_date).slice(0, 10) + "T00:00:00");
       return d.getFullYear() === y && d.getMonth() === m;
     });
     const totalMonthHrs = monthRows.reduce((s, r) => s + (+r.hours || 0), 0);

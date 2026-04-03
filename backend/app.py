@@ -3,6 +3,7 @@ ProjectPulse – Flask Backend
 Entry point: app.py
 """
 import os
+import time
 from datetime import timedelta
 from flask import Flask, send_from_directory
 from flask_cors import CORS
@@ -10,6 +11,10 @@ from flask_jwt_extended import JWTManager
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Force IST (UTC+5:30) for all Python date/time operations
+os.environ.setdefault("TZ", "Asia/Kolkata")
+time.tzset()
 
 def create_app():
     app = Flask(__name__)

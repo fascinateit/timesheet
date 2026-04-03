@@ -15,6 +15,7 @@ def get_conn():
         cursorclass=pymysql.cursors.DictCursor,
         charset="utf8mb4",
         autocommit=False,
+        init_command="SET time_zone='+05:30'",
     )
 
 
