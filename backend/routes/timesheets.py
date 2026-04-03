@@ -200,7 +200,9 @@ def approve_timesheet(tid):
     user = json.loads(get_jwt_identity())
     ts = query("SELECT employee_id FROM timesheets WHERE id=%s", (tid,), fetch="one")
     if not ts: return jsonify(error="Not found"), 404
-    if user["role"] == "manager" and ts["employee_id"] != user["employee_id"]:
+    if user["role"] == "manager":
+        if ts["employee_id"] == user["employee_id"]:
+            return jsonify(error="You cannot approve your own timesheet"), 403
         emp = query("SELECT manager_id FROM employees WHERE id=%s", (ts["employee_id"],), fetch="one")
         if not emp or emp.get("manager_id") != user["employee_id"]:
             return jsonify(error="Forbidden"), 403
@@ -215,7 +217,9 @@ def reject_timesheet(tid):
     user = json.loads(get_jwt_identity())
     ts = query("SELECT employee_id FROM timesheets WHERE id=%s", (tid,), fetch="one")
     if not ts: return jsonify(error="Not found"), 404
-    if user["role"] == "manager" and ts["employee_id"] != user["employee_id"]:
+    if user["role"] == "manager":
+        if ts["employee_id"] == user["employee_id"]:
+            return jsonify(error="You cannot reject your own timesheet"), 403
         emp = query("SELECT manager_id FROM employees WHERE id=%s", (ts["employee_id"],), fetch="one")
         if not emp or emp.get("manager_id") != user["employee_id"]:
             return jsonify(error="Forbidden"), 403

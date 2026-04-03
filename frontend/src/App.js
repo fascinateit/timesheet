@@ -3569,7 +3569,7 @@ function Timesheets({ currentUser, viewOnly }) {
                               onMouseEnter={e => e.currentTarget.style.color = C.red}
                               onMouseLeave={e => e.currentTarget.style.color = C.textMuted}>🗑</button>
                           )}
-                          {!viewOnly && r.status === "pending" && (<>
+                          {!viewOnly && r.status === "pending" && r.employee_id !== currentUser.employee_id && (<>
                             <button onClick={() => handleApprove(r.id)} title="Approve"
                               style={{ background: C.green + "18", border: `1px solid ${C.green}44`, cursor: "pointer", color: C.green, fontSize: 11, padding: "2px 5px", borderRadius: 5, fontWeight: 700, lineHeight: 1 }}>✓</button>
                             <button onClick={() => handleReject(r.id)} title="Reject"
@@ -3808,7 +3808,7 @@ function Timesheets({ currentUser, viewOnly }) {
                   </div>
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <StatusBadge status={r.status} />
-                    {!viewOnly && r.status === "pending" && (<>
+                    {!viewOnly && r.status === "pending" && r.employee_id !== currentUser.employee_id && (<>
                       <Btn small variant="success" onClick={async () => { await handleApprove(r.id); setDayPanel(null); }}>✓ Approve</Btn>
                       <Btn small variant="danger" onClick={async () => { await handleReject(r.id); setDayPanel(null); }}>✕ Reject</Btn>
                     </>)}
@@ -3895,7 +3895,7 @@ function Timesheets({ currentUser, viewOnly }) {
                   <div style={{ fontSize: 12, color: C.textDim, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.task || "—"}</div>
                   <div><StatusBadge status={r.status} /></div>
                   <div>
-                    {r.status === "pending" && (
+                    {r.status === "pending" && r.employee_id !== currentUser.employee_id && (
                       <div style={{ display: "flex", gap: 6 }}>
                         <button onClick={() => handleApprove(r.id)}
                           style={{ background: C.green + "18", border: `1px solid ${C.green}44`, borderRadius: 8, color: C.green, fontSize: 12, fontWeight: 700, padding: "4px 10px", cursor: "pointer" }}>✓ Approve</button>
