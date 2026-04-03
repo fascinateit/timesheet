@@ -47,9 +47,10 @@ def list_timesheets():
     if user["role"] == "manager" and not emp_id:
         sql += " AND (t.employee_id = %s OR e.manager_id = %s)"
         args.extend([user["employee_id"], user["employee_id"]])
-    # Managers and admins should not see draft entries (not yet submitted by employee)
+    # Managers and admins should not see OTHER employees' draft entries, but can see their own
     if user["role"] in ("manager", "admin"):
-        sql += " AND t.status != 'draft'"
+        sql += " AND (t.status != 'draft' OR t.employee_id = %s)"
+        args.append(user["employee_id"])
     sql += " ORDER BY t.work_date DESC, t.id DESC"
 
     return jsonify([_fmt(r) for r in query(sql, args)]), 200
