@@ -22,7 +22,7 @@ def list_timesheets():
     proj_id  = request.args.get("project_id")
     status   = request.args.get("status")
 
-    # Employees can only see their own timesheets. Managers see own + subordinates.
+    # Employees can only see their own timesheets.
     if user["role"] == "employee":
         emp_id = user["employee_id"]
 
@@ -44,9 +44,11 @@ def list_timesheets():
         sql += " AND t.project_id = %s";  args.append(proj_id)
     if status:
         sql += " AND t.status = %s";      args.append(status)
+    # Manager approval dashboard (no emp_id filter): show ONLY subordinates' timesheets, not own.
+    # Manager's own timesheets are viewed via viewOnly=true which passes employee_id param explicitly.
     if user["role"] == "manager" and not emp_id:
-        sql += " AND (t.employee_id = %s OR e.manager_id = %s)"
-        args.extend([user["employee_id"], user["employee_id"]])
+        sql += " AND e.manager_id = %s"
+        args.append(user["employee_id"])
     # Managers and admins should not see OTHER employees' draft entries, but can see their own
     if user["role"] in ("manager", "admin"):
         sql += " AND (t.status != 'draft' OR t.employee_id = %s)"
