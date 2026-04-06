@@ -556,6 +556,12 @@ const PALETTE = [C.accent, C.green, C.purple, "#f97316", "#ec4899", "#06b6d4", "
 function ProjectDashboard({ projects, invoices }) {
   const [filterStr, setFilterStr] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [tdsEdits, setTdsEdits] = useState({});     // { clientName: overrideAmount }
+  const [editingTds, setEditingTds] = useState(null); // clientName being edited
+  const [tdsInput, setTdsInput] = useState("");
+  const [tdsExpectedOverride, setTdsExpectedOverride] = useState(null); // override for global Expected chip
+  const [editingTdsExpected, setEditingTdsExpected] = useState(false);
+  const [tdsExpectedInput, setTdsExpectedInput] = useState("");
 
   const filtered = projects.filter(p => {
     if (filterStatus !== "all" && p.status !== filterStatus) return false;
@@ -566,12 +572,18 @@ function ProjectDashboard({ projects, invoices }) {
   // ── Global aggregates ─────────────────────────────────────────────────
   const totalBudget  = projects.reduce((a, p) => p.status === "active" ? a + parseFloat(p.budget || 0) : a, 0);
   const totalBurned  = projects.reduce((a, p) => p.status === "active" ? a + parseFloat(p.burned || 0) : a, 0);
-  const totalRaised  = invoices.reduce((a, i) => a + parseFloat(i.amount || 0), 0);
-  const totalCleared = invoices.filter(i => i.status === "cleared").reduce((a, i) => a + parseFloat(i.amount || 0), 0);
-  const totalPending = invoices.filter(i => i.status !== "cleared").reduce((a, i) => a + parseFloat(i.amount || 0), 0);
-  const collectPct   = totalRaised > 0 ? Math.round((totalCleared / totalRaised) * 100) : 0;
+  const rootInvs     = invoices.filter(i => !i.parent_invoice_id);
+  const totalRaised  = rootInvs.reduce((a, i) => a + parseFloat(i.amount || 0), 0);
+  const totalTdsSum  = rootInvs.reduce((a, i) => a + parseFloat(i.tds_amount || 0), 0);
+  const tdsDeducted  = rootInvs.filter(i => i.status === "cleared").reduce((a, i) => a + parseFloat(i.tds_amount || 0), 0);
+  const tdsExpected  = rootInvs.filter(i => i.status !== "cleared").reduce((a, i) => a + parseFloat(i.tds_amount || 0), 0);
+  const totalCleared = rootInvs.filter(i => i.status === "cleared").reduce((a, i) => a + (parseFloat(i.amount || 0) - parseFloat(i.tds_amount || 0)), 0)
+                     + rootInvs.filter(i => i.status === "partial").reduce((a, i) => a + parseFloat(i.payment_received || 0), 0);
+  const totalPending = rootInvs.filter(i => i.status === "partial").reduce((a, i) => a + parseFloat(i.balance_amount || 0), 0)
+                     + rootInvs.filter(i => i.status === "pending").reduce((a, i) => a + parseFloat(i.amount || 0), 0);
+  const collectPct   = (totalRaised - totalTdsSum) > 0 ? Math.min(Math.round((totalCleared / (totalRaised - totalTdsSum)) * 100), 100) : 0;
   const activeCount  = projects.filter(p => p.status === "active").length;
-  const pendingCount = invoices.filter(i => i.status !== "cleared").length;
+  const pendingCount = rootInvs.filter(i => i.status !== "cleared").length;
 
   // ── Chart helpers ─────────────────────────────────────────────────────
   const tooltipStyle = { backgroundColor: C.card, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, boxShadow: "0 8px 32px rgba(0,0,0,0.4)" };
@@ -580,13 +592,22 @@ function ProjectDashboard({ projects, invoices }) {
   // ── Per-client aggregates ─────────────────────────────────────────────
   const clientStats = {};
   invoices.forEach(inv => {
+    if (inv.parent_invoice_id) return; // BAL invoices are tracked via balance_amount on the parent
     const key = inv.client_name || "Unknown";
-    if (!clientStats[key]) clientStats[key] = { name: key, raised: 0, cleared: 0, pending: 0, count: 0 };
+    if (!clientStats[key]) clientStats[key] = { name: key, raised: 0, cleared: 0, pending: 0, count: 0, tds: 0 };
     const amt = parseFloat(inv.amount || 0);
+    const tds = parseFloat(inv.tds_amount || 0);
     clientStats[key].raised += amt;
+    clientStats[key].tds += tds;
     clientStats[key].count += 1;
-    if (inv.status === "cleared") clientStats[key].cleared += amt;
-    else clientStats[key].pending += amt;
+    if (inv.status === "cleared") {
+      clientStats[key].cleared += amt - tds; // full settled value (BAL payments included via invoice amount)
+    } else if (inv.status === "partial") {
+      clientStats[key].cleared += parseFloat(inv.payment_received || 0);
+      clientStats[key].pending += parseFloat(inv.balance_amount || 0);
+    } else {
+      clientStats[key].pending += amt;
+    }
   });
   const clientList = Object.values(clientStats).sort((a, b) => b.raised - a.raised);
 
@@ -594,17 +615,19 @@ function ProjectDashboard({ projects, invoices }) {
   const budgetChartData = filtered.filter(p => p.status === "active").map(p => ({
     name: p.code, fullName: p.name,
     Budget: parseFloat(p.budget || 0),
-    Raised: invoices.filter(i => i.project_id === p.id).reduce((s, i) => s + parseFloat(i.amount || 0), 0),
+    Raised: invoices.filter(i => i.project_id === p.id && !i.parent_invoice_id).reduce((s, i) => s + parseFloat(i.amount || 0), 0),
     Burned: parseFloat(p.burned || 0),
   }));
 
   const projectInvData = filtered.map(p => {
-    const pInvs = invoices.filter(i => i.project_id === p.id);
+    const pInvs = invoices.filter(i => i.project_id === p.id && !i.parent_invoice_id);
     return {
       name: p.code, fullName: p.name,
       Raised:  pInvs.reduce((s, i) => s + parseFloat(i.amount || 0), 0),
-      Cleared: pInvs.filter(i => i.status === "cleared").reduce((s, i) => s + parseFloat(i.amount || 0), 0),
-      Pending: pInvs.filter(i => i.status !== "cleared").reduce((s, i) => s + parseFloat(i.amount || 0), 0),
+      Cleared: pInvs.filter(i => i.status === "cleared").reduce((s, i) => s + (parseFloat(i.amount || 0) - parseFloat(i.tds_amount || 0)), 0)
+             + pInvs.filter(i => i.status === "partial").reduce((s, i) => s + parseFloat(i.payment_received || 0), 0),
+      Pending: pInvs.filter(i => i.status === "partial").reduce((s, i) => s + parseFloat(i.balance_amount || 0), 0)
+             + pInvs.filter(i => i.status === "pending").reduce((s, i) => s + parseFloat(i.amount || 0), 0),
     };
   }).filter(d => d.Raised > 0);
 
@@ -674,6 +697,41 @@ function ProjectDashboard({ projects, invoices }) {
           </div>
         </div>
 
+        {/* Card: TDS Summary */}
+        {totalTdsSum > 0 && (
+          <div style={{ background: `linear-gradient(135deg, ${C.surface} 0%, ${C.card} 100%)`, border: `1px solid ${C.border}`, borderLeft: `3px solid ${C.red}`, borderRadius: 14, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 10, position: "relative", overflow: "hidden" }}>
+            <div style={{ position: "absolute", top: -20, right: -20, width: 80, height: 80, borderRadius: "50%", background: `radial-gradient(circle, ${C.red}15 0%, transparent 70%)`, pointerEvents: "none" }} />
+            <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .6 }}>Total TDS (10%)</div>
+            <div style={{ fontSize: 28, fontWeight: 900, color: C.red, letterSpacing: -.5 }}>{fmt$(totalTdsSum)}</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+              <div style={{ background: C.red + "12", borderRadius: 7, padding: "6px 10px", border: `1px solid ${C.red}28` }}>
+                <div style={{ fontSize: 9, color: C.red, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>Deducted</div>
+                <div style={{ fontSize: 12, fontWeight: 800, color: C.red, marginTop: 2 }}>{fmt$(tdsDeducted)}</div>
+              </div>
+              <div style={{ background: C.amber + "12", borderRadius: 7, padding: "6px 10px", border: `1px solid ${C.amber}28` }}>
+                <div style={{ fontSize: 9, color: C.amber, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5, display: "flex", alignItems: "center", gap: 4 }}>
+                  Expected
+                  {!editingTdsExpected && (
+                    <span title="Enter expected TDS" style={{ cursor: "pointer", opacity: 0.65, fontSize: 9 }}
+                      onClick={() => { setEditingTdsExpected(true); setTdsExpectedInput(String(tdsExpectedOverride ?? tdsExpected)); }}>✏</span>
+                  )}
+                </div>
+                {editingTdsExpected ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 3, marginTop: 3 }}>
+                    <input type="number" value={tdsExpectedInput} onChange={e => setTdsExpectedInput(e.target.value)} autoFocus
+                      onKeyDown={e => { if (e.key === "Enter") { setTdsExpectedOverride(parseFloat(tdsExpectedInput) || 0); setEditingTdsExpected(false); } if (e.key === "Escape") setEditingTdsExpected(false); }}
+                      style={{ flex: 1, width: 0, background: C.bg, border: `1px solid ${C.amber}`, borderRadius: 4, color: C.text, padding: "2px 4px", fontSize: 11, outline: "none", textAlign: "center" }} />
+                    <span style={{ cursor: "pointer", color: C.green, fontWeight: 900, fontSize: 12 }} onClick={() => { setTdsExpectedOverride(parseFloat(tdsExpectedInput) || 0); setEditingTdsExpected(false); }}>✓</span>
+                    <span style={{ cursor: "pointer", color: C.red, fontWeight: 900, fontSize: 12 }} onClick={() => setEditingTdsExpected(false)}>✕</span>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 12, fontWeight: 800, color: C.amber, marginTop: 2 }}>{fmt$(tdsExpectedOverride ?? tdsExpected)}</div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Card: Burned Cost */}
         <div style={{ background: `linear-gradient(135deg, ${C.surface} 0%, ${C.card} 100%)`, border: `1px solid ${C.border}`, borderLeft: `3px solid ${C.amber}`, borderRadius: 14, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 10, position: "relative", overflow: "hidden" }}>
           <div style={{ position: "absolute", top: -20, right: -20, width: 80, height: 80, borderRadius: "50%", background: `radial-gradient(circle, ${C.amber}15 0%, transparent 70%)`, pointerEvents: "none" }} />
@@ -705,7 +763,8 @@ function ProjectDashboard({ projects, invoices }) {
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14 }}>
             {clientList.map((cl, idx) => {
-              const pct = cl.raised > 0 ? Math.round((cl.cleared / cl.raised) * 100) : 0;
+              const netRaised = cl.raised - cl.tds;
+              const pct = netRaised > 0 ? Math.min(Math.round((cl.cleared / netRaised) * 100), 100) : 0;
               const col = PALETTE[idx % PALETTE.length];
               const hColor = pct === 100 ? C.green : pct >= 60 ? C.accent : C.amber;
               const initials = cl.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
@@ -733,12 +792,33 @@ function ProjectDashboard({ projects, invoices }) {
                     </div>
                   </div>
 
-                  {/* Row 2: 3 stat chips */}
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 7, zIndex: 1 }}>
+                  {/* Row 2: stat chips */}
+                  <div style={{ display: "grid", gridTemplateColumns: cl.tds > 0 ? "1fr 1fr" : "1fr 1fr 1fr", gap: 7, zIndex: 1 }}>
                     <div style={{ background: C.bg, borderRadius: 9, padding: "8px", border: `1px solid ${C.border}`, textAlign: "center" }}>
                       <div style={{ fontSize: 9, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>Raised</div>
                       <div style={{ fontSize: 12, fontWeight: 800, color: C.text, marginTop: 3 }}>{fmt$(cl.raised)}</div>
                     </div>
+                    {cl.tds > 0 && (
+                      <div style={{ background: C.red + "0e", borderRadius: 9, padding: "8px", border: `1px solid ${C.red}2a`, textAlign: "center" }}>
+                        <div style={{ fontSize: 9, color: C.red, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5, display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+                          TDS (10%)
+                          {editingTds !== cl.name && (
+                            <span title="Edit expected TDS" style={{ cursor: "pointer", opacity: 0.6, fontSize: 9 }} onClick={() => { setEditingTds(cl.name); setTdsInput(String(tdsEdits[cl.name] ?? cl.tds)); }}>✏</span>
+                          )}
+                        </div>
+                        {editingTds === cl.name ? (
+                          <div style={{ display: "flex", alignItems: "center", gap: 3, marginTop: 3 }}>
+                            <input type="number" value={tdsInput} onChange={e => setTdsInput(e.target.value)} autoFocus
+                              onKeyDown={e => { if (e.key === "Enter") { setTdsEdits(p => ({ ...p, [cl.name]: parseFloat(tdsInput) || 0 })); setEditingTds(null); } if (e.key === "Escape") setEditingTds(null); }}
+                              style={{ flex: 1, width: 0, background: C.bg, border: `1px solid ${C.red}`, borderRadius: 4, color: C.text, padding: "2px 4px", fontSize: 11, outline: "none", textAlign: "center" }} />
+                            <span style={{ cursor: "pointer", color: C.green, fontWeight: 900, fontSize: 12 }} onClick={() => { setTdsEdits(p => ({ ...p, [cl.name]: parseFloat(tdsInput) || 0 })); setEditingTds(null); }}>✓</span>
+                            <span style={{ cursor: "pointer", color: C.red, fontWeight: 900, fontSize: 12 }} onClick={() => setEditingTds(null)}>✕</span>
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: 12, fontWeight: 800, color: C.red, marginTop: 3 }}>{fmt$(tdsEdits[cl.name] ?? cl.tds)}</div>
+                        )}
+                      </div>
+                    )}
                     <div style={{ background: C.green + "0e", borderRadius: 9, padding: "8px", border: `1px solid ${C.green}2a`, textAlign: "center" }}>
                       <div style={{ fontSize: 9, color: C.green, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>Cleared</div>
                       <div style={{ fontSize: 12, fontWeight: 800, color: C.green, marginTop: 3 }}>{fmt$(cl.cleared)}</div>
@@ -945,6 +1025,12 @@ function ProjectManagement({ readOnly = false, currentUser }) {
   const [clearModal, setClearModal] = useState(null);  // null | invoice object
   const [paymentDate, setPaymentDate] = useState("");
   const [paymentAmount, setPaymentAmount] = useState("");
+  const [tdsEditsTab, setTdsEditsTab] = useState({});     // { clientName: overrideAmount }
+  const [editingTdsTab, setEditingTdsTab] = useState(null);
+  const [tdsInputTab, setTdsInputTab] = useState("");
+  const [tdsExpectedOverrideTab, setTdsExpectedOverrideTab] = useState(null);
+  const [editingTdsExpectedTab, setEditingTdsExpectedTab] = useState(false);
+  const [tdsExpectedInputTab, setTdsExpectedInputTab] = useState("");
 
   // List Filters
   const [filterProject, setFilterProject] = useState("all");
@@ -1103,21 +1189,36 @@ function ProjectManagement({ readOnly = false, currentUser }) {
         // ── Per-client aggregates for this tab ────────────────────────────
         const clientMap = {};
         invoices.forEach(inv => {
+          if (inv.parent_invoice_id) return; // BAL invoices tracked via balance_amount on parent
           const key = inv.client_name || "Unknown";
-          if (!clientMap[key]) clientMap[key] = { name: key, raised: 0, cleared: 0, pending: 0, count: 0 };
+          if (!clientMap[key]) clientMap[key] = { name: key, raised: 0, cleared: 0, pending: 0, count: 0, tds: 0 };
           const amt = parseFloat(inv.amount || 0);
+          const tds = parseFloat(inv.tds_amount || 0);
           clientMap[key].raised += amt;
+          clientMap[key].tds += tds;
           clientMap[key].count += 1;
-          if (inv.status === "cleared") clientMap[key].cleared += amt;
-          else clientMap[key].pending += amt;
+          if (inv.status === "cleared") {
+            clientMap[key].cleared += amt - tds; // full settled value (BAL payments included via invoice amount)
+          } else if (inv.status === "partial") {
+            clientMap[key].cleared += parseFloat(inv.payment_received || 0);
+            clientMap[key].pending += parseFloat(inv.balance_amount || 0);
+          } else {
+            clientMap[key].pending += amt;
+          }
         });
         const clientList = Object.values(clientMap).sort((a, b) => b.raised - a.raised);
 
         // ── Global KPI aggregates ─────────────────────────────────────────
-        const totalRaised  = invoices.reduce((a, i) => a + parseFloat(i.amount || 0), 0);
-        const totalCleared = invoices.filter(i => i.status === "cleared").reduce((a, i) => a + parseFloat(i.amount || 0), 0);
-        const totalPending = invoices.filter(i => i.status !== "cleared").reduce((a, i) => a + parseFloat(i.amount || 0), 0);
-        const collectPct   = totalRaised > 0 ? Math.round((totalCleared / totalRaised) * 100) : 0;
+        const rootInvList  = invoices.filter(i => !i.parent_invoice_id);
+        const totalRaised  = rootInvList.reduce((a, i) => a + parseFloat(i.amount || 0), 0);
+        const totalTdsList = rootInvList.reduce((a, i) => a + parseFloat(i.tds_amount || 0), 0);
+        const tdsDeducted  = rootInvList.filter(i => i.status === "cleared").reduce((a, i) => a + parseFloat(i.tds_amount || 0), 0);
+        const tdsExpected  = rootInvList.filter(i => i.status !== "cleared").reduce((a, i) => a + parseFloat(i.tds_amount || 0), 0);
+        const totalCleared = rootInvList.filter(i => i.status === "cleared").reduce((a, i) => a + (parseFloat(i.amount || 0) - parseFloat(i.tds_amount || 0)), 0)
+                           + rootInvList.filter(i => i.status === "partial").reduce((a, i) => a + parseFloat(i.payment_received || 0), 0);
+        const totalPending = rootInvList.filter(i => i.status === "partial").reduce((a, i) => a + parseFloat(i.balance_amount || 0), 0)
+                           + rootInvList.filter(i => i.status === "pending").reduce((a, i) => a + parseFloat(i.amount || 0), 0);
+        const collectPct   = (totalRaised - totalTdsList) > 0 ? Math.min(Math.round((totalCleared / (totalRaised - totalTdsList)) * 100), 100) : 0;
 
         return (
           <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
@@ -1125,9 +1226,9 @@ function ProjectManagement({ readOnly = false, currentUser }) {
             {/* ── Row 1: Global KPI strip ──────────────────────────────────── */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
               {[
-                { label: "Total Raised",  value: fmt$(totalRaised),  color: C.accent, sub: `${invoices.length} invoices` },
-                { label: "Total Cleared", value: fmt$(totalCleared), color: C.green,  sub: `${invoices.filter(i => i.status === "cleared").length} invoices` },
-                { label: "Total Pending", value: fmt$(totalPending), color: C.amber,  sub: `${invoices.filter(i => i.status !== "cleared").length} outstanding` },
+                { label: "Total Raised",  value: fmt$(totalRaised),  color: C.accent, sub: `${rootInvList.length} invoices` },
+                { label: "Total Cleared", value: fmt$(totalCleared), color: C.green,  sub: `${rootInvList.filter(i => i.status === "cleared").length} invoices` },
+                { label: "Total Pending", value: fmt$(totalPending), color: C.amber,  sub: `${rootInvList.filter(i => i.status !== "cleared").length} outstanding` },
               ].map(k => (
                 <div key={k.label} style={{ background: `linear-gradient(135deg, ${C.surface}, ${C.card})`, border: `1px solid ${k.color}33`, borderLeft: `3px solid ${k.color}`, borderRadius: 14, padding: "18px 20px", position: "relative", overflow: "hidden" }}>
                   <div style={{ position: "absolute", top: -16, right: -16, width: 70, height: 70, borderRadius: "50%", background: `radial-gradient(circle, ${k.color}15 0%, transparent 70%)`, pointerEvents: "none" }} />
@@ -1136,6 +1237,40 @@ function ProjectManagement({ readOnly = false, currentUser }) {
                   <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4 }}>{k.sub}</div>
                 </div>
               ))}
+              {/* TDS card */}
+              {totalTdsList > 0 && (
+                <div style={{ background: `linear-gradient(135deg, ${C.surface}, ${C.card})`, border: `1px solid ${C.red}33`, borderLeft: `3px solid ${C.red}`, borderRadius: 14, padding: "18px 20px", position: "relative", overflow: "hidden" }}>
+                  <div style={{ position: "absolute", top: -16, right: -16, width: 70, height: 70, borderRadius: "50%", background: `radial-gradient(circle, ${C.red}15 0%, transparent 70%)`, pointerEvents: "none" }} />
+                  <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .6 }}>Total TDS (10%)</div>
+                  <div style={{ fontSize: 26, fontWeight: 900, color: C.red, marginTop: 8, letterSpacing: -.5 }}>{fmt$(totalTdsList)}</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5, marginTop: 6 }}>
+                    <div style={{ background: C.red + "12", borderRadius: 6, padding: "4px 8px", border: `1px solid ${C.red}28` }}>
+                      <div style={{ fontSize: 9, color: C.red, fontWeight: 700, textTransform: "uppercase" }}>Deducted</div>
+                      <div style={{ fontSize: 11, fontWeight: 800, color: C.red, marginTop: 1 }}>{fmt$(tdsDeducted)}</div>
+                    </div>
+                    <div style={{ background: C.amber + "12", borderRadius: 6, padding: "4px 8px", border: `1px solid ${C.amber}28` }}>
+                      <div style={{ fontSize: 9, color: C.amber, fontWeight: 700, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 4 }}>
+                        Expected
+                        {!editingTdsExpectedTab && (
+                          <span title="Enter expected TDS" style={{ cursor: "pointer", opacity: 0.65, fontSize: 9 }}
+                            onClick={() => { setEditingTdsExpectedTab(true); setTdsExpectedInputTab(String(tdsExpectedOverrideTab ?? tdsExpected)); }}>✏</span>
+                        )}
+                      </div>
+                      {editingTdsExpectedTab ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: 3, marginTop: 2 }}>
+                          <input type="number" value={tdsExpectedInputTab} onChange={e => setTdsExpectedInputTab(e.target.value)} autoFocus
+                            onKeyDown={e => { if (e.key === "Enter") { setTdsExpectedOverrideTab(parseFloat(tdsExpectedInputTab) || 0); setEditingTdsExpectedTab(false); } if (e.key === "Escape") setEditingTdsExpectedTab(false); }}
+                            style={{ flex: 1, width: 0, background: C.bg, border: `1px solid ${C.amber}`, borderRadius: 4, color: C.text, padding: "2px 4px", fontSize: 11, outline: "none", textAlign: "center" }} />
+                          <span style={{ cursor: "pointer", color: C.green, fontWeight: 900, fontSize: 12 }} onClick={() => { setTdsExpectedOverrideTab(parseFloat(tdsExpectedInputTab) || 0); setEditingTdsExpectedTab(false); }}>✓</span>
+                          <span style={{ cursor: "pointer", color: C.red, fontWeight: 900, fontSize: 12 }} onClick={() => setEditingTdsExpectedTab(false)}>✕</span>
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: 11, fontWeight: 800, color: C.amber, marginTop: 1 }}>{fmt$(tdsExpectedOverrideTab ?? tdsExpected)}</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
               {/* Collection Rate ring card */}
               <div style={{ background: `linear-gradient(135deg, ${C.surface}, ${C.card})`, border: `1px solid ${C.purple}33`, borderLeft: `3px solid ${C.purple}`, borderRadius: 14, padding: "18px 20px", display: "flex", alignItems: "center", gap: 14 }}>
                 <div style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
@@ -1145,8 +1280,8 @@ function ProjectManagement({ readOnly = false, currentUser }) {
                 <div>
                   <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .6 }}>Collection Rate</div>
                   <div style={{ fontSize: 13, color: C.textDim, marginTop: 4 }}>
-                    <span style={{ color: C.green, fontWeight: 700 }}>{invoices.filter(i => i.status === "cleared").length}</span> cleared /&nbsp;
-                    <span style={{ color: C.amber, fontWeight: 700 }}>{invoices.filter(i => i.status !== "cleared").length}</span> pending
+                    <span style={{ color: C.green, fontWeight: 700 }}>{rootInvList.filter(i => i.status === "cleared").length}</span> cleared /&nbsp;
+                    <span style={{ color: C.amber, fontWeight: 700 }}>{rootInvList.filter(i => i.status !== "cleared").length}</span> pending
                   </div>
                 </div>
               </div>
@@ -1162,7 +1297,8 @@ function ProjectManagement({ readOnly = false, currentUser }) {
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14 }}>
                   {clientList.map((cl, idx) => {
-                    const pct = cl.raised > 0 ? Math.round((cl.cleared / cl.raised) * 100) : 0;
+                    const netRaised = cl.raised - cl.tds;
+                    const pct = netRaised > 0 ? Math.min(Math.round((cl.cleared / netRaised) * 100), 100) : 0;
                     const col = PALETTE[idx % PALETTE.length];
                     const hColor = pct === 100 ? C.green : pct >= 60 ? C.accent : C.amber;
                     const initials = cl.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
@@ -1181,12 +1317,33 @@ function ProjectManagement({ readOnly = false, currentUser }) {
                             <span style={{ fontSize: 13, fontWeight: 800, color: hColor }}>{pct}%</span>
                           </div>
                         </div>
-                        {/* 3 chips */}
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 7, zIndex: 1 }}>
+                        {/* stat chips */}
+                        <div style={{ display: "grid", gridTemplateColumns: cl.tds > 0 ? "1fr 1fr" : "1fr 1fr 1fr", gap: 7, zIndex: 1 }}>
                           <div style={{ background: C.bg, borderRadius: 9, padding: "8px", border: `1px solid ${C.border}`, textAlign: "center" }}>
                             <div style={{ fontSize: 9, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>Raised</div>
                             <div style={{ fontSize: 12, fontWeight: 800, color: C.text, marginTop: 3 }}>{fmt$(cl.raised)}</div>
                           </div>
+                          {cl.tds > 0 && (
+                            <div style={{ background: C.red + "0e", borderRadius: 9, padding: "8px", border: `1px solid ${C.red}2a`, textAlign: "center" }}>
+                              <div style={{ fontSize: 9, color: C.red, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5, display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+                                TDS (10%)
+                                {editingTdsTab !== cl.name && (
+                                  <span title="Edit expected TDS" style={{ cursor: "pointer", opacity: 0.6, fontSize: 9 }} onClick={() => { setEditingTdsTab(cl.name); setTdsInputTab(String(tdsEditsTab[cl.name] ?? cl.tds)); }}>✏</span>
+                                )}
+                              </div>
+                              {editingTdsTab === cl.name ? (
+                                <div style={{ display: "flex", alignItems: "center", gap: 3, marginTop: 3 }}>
+                                  <input type="number" value={tdsInputTab} onChange={e => setTdsInputTab(e.target.value)} autoFocus
+                                    onKeyDown={e => { if (e.key === "Enter") { setTdsEditsTab(p => ({ ...p, [cl.name]: parseFloat(tdsInputTab) || 0 })); setEditingTdsTab(null); } if (e.key === "Escape") setEditingTdsTab(null); }}
+                                    style={{ flex: 1, width: 0, background: C.bg, border: `1px solid ${C.red}`, borderRadius: 4, color: C.text, padding: "2px 4px", fontSize: 11, outline: "none", textAlign: "center" }} />
+                                  <span style={{ cursor: "pointer", color: C.green, fontWeight: 900, fontSize: 12 }} onClick={() => { setTdsEditsTab(p => ({ ...p, [cl.name]: parseFloat(tdsInputTab) || 0 })); setEditingTdsTab(null); }}>✓</span>
+                                  <span style={{ cursor: "pointer", color: C.red, fontWeight: 900, fontSize: 12 }} onClick={() => setEditingTdsTab(null)}>✕</span>
+                                </div>
+                              ) : (
+                                <div style={{ fontSize: 12, fontWeight: 800, color: C.red, marginTop: 3 }}>{fmt$(tdsEditsTab[cl.name] ?? cl.tds)}</div>
+                              )}
+                            </div>
+                          )}
                           <div style={{ background: C.green + "0e", borderRadius: 9, padding: "8px", border: `1px solid ${C.green}2a`, textAlign: "center" }}>
                             <div style={{ fontSize: 9, color: C.green, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>Cleared</div>
                             <div style={{ fontSize: 12, fontWeight: 800, color: C.green, marginTop: 3 }}>{fmt$(cl.cleared)}</div>
