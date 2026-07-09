@@ -4,12 +4,24 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, PieC
 import { api } from "./api";
 
 // ── Design Tokens ────────────────────────────────────────────────────────────
-const C = {
+const DARK = {
   bg: "#0A0D14", surface: "#111520", card: "#161B2A", border: "#1E2740",
   accent: "#3B82F6", accentGlow: "rgba(59,130,246,0.18)", accentDim: "#1D4ED8",
   green: "#10B981", amber: "#F59E0B", red: "#EF4444", purple: "#8B5CF6",
   text: "#E2E8F0", textMuted: "#64748B", textDim: "#94A3B8",
+  _nav: "linear-gradient(180deg,#0D1119 0%,#0F1420 100%)",
+  _navSection: "#2A3550", _navItem: "#4A5A7A", _navHover: "#8899BB",
 };
+const LIGHT = {
+  bg: "#F1F5F9", surface: "#FFFFFF", card: "#F8FAFC", border: "#CBD5E1",
+  accent: "#2563EB", accentGlow: "rgba(37,99,235,0.15)", accentDim: "#1D4ED8",
+  green: "#059669", amber: "#D97706", red: "#DC2626", purple: "#7C3AED",
+  text: "#0F172A", textMuted: "#64748B", textDim: "#475569",
+  _nav: "linear-gradient(180deg,#F8FAFC 0%,#F1F5F9 100%)",
+  _navSection: "#94A3B8", _navItem: "#64748B", _navHover: "#1E293B",
+};
+// Mutable token object — Object.assign'd at render time by App
+const C = { ...DARK };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmt$ = n => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 0 }).format(n || 0);
@@ -4123,7 +4135,7 @@ function Leaves({ currentUser, viewOnly }) {
   const [rows, setRows] = useState([]); const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true); const [err, setErr] = useState("");
   const [modal, setModal] = useState(false);
-  const [form, setForm] = useState({ employeeId: "", type: "Annual", startDate: "", endDate: "", reason: "" });
+  const [form, setForm] = useState({ employeeId: "", type: "Annual", startDate: "", endDate: "", reason: "", isHalfDay: false });
   const [saving, setSaving] = useState(false);
   const [balance, setBalance] = useState(null);   // { balance, total_credited, total_used, last_credited_month }
   const [crediting, setCrediting] = useState(false);
@@ -4136,7 +4148,7 @@ function Leaves({ currentUser, viewOnly }) {
   const [editBalanceTarget, setEditBalanceTarget] = useState(null);
   const [editBalanceSaving, setEditBalanceSaving] = useState(false);
   const [editLeave, setEditLeave] = useState(null);   // leave row being edited
-  const [editForm, setEditForm] = useState({ type: "Annual", startDate: "", endDate: "", reason: "" });
+  const [editForm, setEditForm] = useState({ type: "Annual", startDate: "", endDate: "", reason: "", isHalfDay: false });
   const [editSaving, setEditSaving] = useState(false);
   // Pagination
   const [lvPage, setLvPage] = useState(1);
@@ -4145,6 +4157,7 @@ function Leaves({ currentUser, viewOnly }) {
   // Compute days selected in the form
   const selectedDays = (() => {
     if (!form.startDate || !form.endDate) return 0;
+    if (form.isHalfDay && form.startDate === form.endDate) return 0.5;
     const s = new Date(form.startDate), e = new Date(form.endDate);
     const d = Math.round((e - s) / 86400000) + 1;
     return d > 0 ? d : 0;
@@ -4189,7 +4202,7 @@ function Leaves({ currentUser, viewOnly }) {
     try {
       const empId = viewOnly ? currentUser.employee_id : +form.employeeId;
       await api.createLeave({ employeeId: empId, ...form });
-      setModal(false); setForm({ employeeId: "", type: "Annual", startDate: "", endDate: "", reason: "" });
+      setModal(false); setForm({ employeeId: "", type: "Annual", startDate: "", endDate: "", reason: "", isHalfDay: false });
       await load();
     } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setSaving(false); }
   }
@@ -4201,6 +4214,7 @@ function Leaves({ currentUser, viewOnly }) {
       startDate: String(l.start_date).slice(0, 10),
       endDate: String(l.end_date).slice(0, 10),
       reason: l.reason || "",
+      isHalfDay: !!l.is_half_day,
     });
   }
 
@@ -4390,7 +4404,7 @@ function Leaves({ currentUser, viewOnly }) {
           <div className="lv-grid">
             {rows.slice((lvPage - 1) * lvPerPage, lvPage * lvPerPage).map(l => {
               const s = new Date(l.start_date), e = new Date(l.end_date);
-              const days = Math.round((e - s) / 86400000) + 1;
+              const days = l.is_half_day ? 0.5 : Math.round((e - s) / 86400000) + 1;
               const usesBalance = BALANCE_TYPES.has(l.leave_type);
               const typeColor = l.leave_type === "Sick" ? C.red : l.leave_type === "Annual" ? C.accent : l.leave_type === "Reserve" ? "#06B6D4" : C.textMuted;
               const statusBorderColor = l.status === "approved" ? C.green : l.status === "rejected" ? C.red : C.amber;
@@ -4410,6 +4424,7 @@ function Leaves({ currentUser, viewOnly }) {
                         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
                           <span style={{ fontSize: 17 }}>{typeIcon}</span>
                           <Badge color={typeColor}>{l.leave_type}</Badge>
+                          {l.is_half_day && <span style={{ fontSize: 10, color: C.amber, background: C.amber + "18", padding: "1px 6px", borderRadius: 10, border: `1px solid ${C.amber}44` }}>🌗 Half Day</span>}
                           {usesBalance && <span style={{ fontSize: 10, color: C.textMuted, background: C.surface, padding: "1px 6px", borderRadius: 10, border: `1px solid ${C.border}` }}>−bucket</span>}
                         </div>
                       </div>
@@ -4545,9 +4560,15 @@ function Leaves({ currentUser, viewOnly }) {
                   { value: "Reserve", label: "Reserve / Floating 🗓️" },
                 ]} />
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <Inp label="Start Date" type="date" value={editForm.startDate} onChange={v => setEditForm(f => ({ ...f, startDate: v }))} required />
-                <Inp label="End Date" type="date" value={editForm.endDate} onChange={v => setEditForm(f => ({ ...f, endDate: v }))} required />
+                <Inp label="Start Date" type="date" value={editForm.startDate} onChange={v => setEditForm(f => ({ ...f, startDate: v, endDate: f.isHalfDay ? v : f.endDate }))} required />
+                <Inp label="End Date" type="date" value={editForm.endDate} onChange={v => setEditForm(f => ({ ...f, endDate: v }))} required disabled={editForm.isHalfDay} />
               </div>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: C.text }}>
+                <input type="checkbox" checked={editForm.isHalfDay} disabled={!editForm.startDate}
+                  onChange={e => setEditForm(f => ({ ...f, isHalfDay: e.target.checked, endDate: e.target.checked ? f.startDate : f.endDate }))}
+                  style={{ cursor: "pointer", width: 16, height: 16 }} />
+                🌗 Half Day (0.5 day)
+              </label>
               <Inp label="Reason" value={editForm.reason} onChange={v => setEditForm(f => ({ ...f, reason: v }))} placeholder="Optional reason…" />
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
                 <Btn variant="ghost" onClick={() => setEditLeave(null)}>Cancel</Btn>
@@ -4611,9 +4632,15 @@ function Leaves({ currentUser, viewOnly }) {
                 </div>
               )}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <Inp label="Start Date" type="date" value={form.startDate} onChange={v => setForm(f => ({ ...f, startDate: v }))} required />
-                <Inp label="End Date" type="date" value={form.endDate} onChange={v => setForm(f => ({ ...f, endDate: v }))} required />
+                <Inp label="Start Date" type="date" value={form.startDate} onChange={v => setForm(f => ({ ...f, startDate: v, endDate: f.isHalfDay ? v : f.endDate }))} required />
+                <Inp label="End Date" type="date" value={form.endDate} onChange={v => setForm(f => ({ ...f, endDate: v }))} required disabled={form.isHalfDay} />
               </div>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: C.text }}>
+                <input type="checkbox" checked={form.isHalfDay} disabled={!form.startDate}
+                  onChange={e => setForm(f => ({ ...f, isHalfDay: e.target.checked, endDate: e.target.checked ? f.startDate : f.endDate }))}
+                  style={{ cursor: "pointer", width: 16, height: 16 }} />
+                🌗 Half Day (0.5 day)
+              </label>
               {selectedDays > 0 && (
                 <div style={{ fontSize: 12, color: C.textDim, textAlign: "center" }}>
                   📅 {selectedDays} day{selectedDays !== 1 ? "s" : ""} selected
@@ -5267,7 +5294,7 @@ function EmployeeDashboard({ currentUser, navFn }) {
 
         {/* ── Greeting banner ── */}
         <div style={{
-          background: "linear-gradient(135deg,#0D1525 0%,#111D30 60%,#0F1820 100%)",
+          background: `linear-gradient(135deg,${C.surface} 0%,${C.card} 60%,${C.surface} 100%)`,
           border: `1px solid ${C.border}`, borderRadius: 20,
           padding: "26px 32px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16,
           position: "relative", overflow: "hidden",
@@ -5453,6 +5480,7 @@ function EmployeeDashboard({ currentUser, navFn }) {
   );
 }
 
+// ════════════════════════════════════════════════════════
 function EmployeeHome({ currentUser, defaultTab, navFn }) {
   const [tab, setTab] = useState("profile");
   useEffect(() => { if (defaultTab) setTab(defaultTab); }, [defaultTab]);
@@ -5473,8 +5501,13 @@ function EmployeeHome({ currentUser, defaultTab, navFn }) {
     { key: "leave", icon: "🌴", label: "My Leave" },
     { key: "expenses", icon: "💳", label: "My Expenses" },
     { key: "pay", icon: "💰", label: "My Pay" },
+    { key: "performance", icon: "🎯", label: "My Performance" },
     { key: "policies", icon: "📋", label: "Company Policy" },
-  ].filter(t => t.key !== "pay" || currentUser.role !== "intras");
+  ].filter(t => {
+    if (t.key === "pay" && currentUser.role === "intras") return false;
+    if (t.key === "performance" && currentUser.role === "intras") return false;
+    return true;
+  });
 
   return (
     <>
@@ -5615,6 +5648,7 @@ function EmployeeHome({ currentUser, defaultTab, navFn }) {
             {tab === "leave" && <Leaves currentUser={currentUser} viewOnly />}
             {tab === "expenses" && <Expenses currentUser={currentUser} viewOnly />}
             {tab === "pay" && currentUser.role !== "intras" && <MyPay currentUser={currentUser} />}
+            {tab === "performance" && <EmployeePerformance currentUser={currentUser} />}
             {tab === "policies" && <DocumentGrid type="policy" allowEdit={false} />}
           </div>
         </div>
@@ -6194,9 +6228,528 @@ function ExpenseForm({ init, projects, employees, saving, onCancel, onSave, btnL
   );
 }
 
+
+// EMPLOYEE PERFORMANCE (Employee-facing) — Live API
 // ════════════════════════════════════════════════════════
-// ADMIN EMPLOYEES TAB
-// ════════════════════════════════════════════════════════
+function EmployeePerformance({ currentUser }) {
+  const TABS = [
+    { id: "goals",    label: "My Goals",            icon: "🎯" },
+    { id: "self",     label: "Self-Assessment",     icon: "🪞" },
+    { id: "feedback", label: "Manager Feedback",    icon: "💬" },
+    { id: "reviews",  label: "Performance Reviews", icon: "📋" },
+  ];
+  const [tab, setTab] = useState("goals");
+
+  // ── Goals ──────────────────────────────────────────────
+  const [goals, setGoals] = useState([]);
+  const [goalsLoading, setGoalsLoading] = useState(true);
+  const [goalModal, setGoalModal] = useState(false);
+  const [editGoal, setEditGoal] = useState(null);
+  const [goalSaving, setGoalSaving] = useState(false);
+  const emptyGoal = { title: "", type: "OKR", target: "", current: "", due: "", status: "on-track", priority: "medium", description: "" };
+  const [goalForm, setGoalForm] = useState(emptyGoal);
+
+  // ── Self-Assessment ────────────────────────────────────
+  const PERIODS = ["Q1 2026","Q2 2026","Q3 2026","Q4 2026","Annual 2025","Annual 2026"];
+  const [selfPeriod, setSelfPeriod] = useState("Q1 2026");
+  const [selfRatings, setSelfRatings] = useState({ technical: 3, communication: 3, teamwork: 3, leadership: 3, innovation: 3 });
+  const [selfText, setSelfText] = useState({ accomplishments: "", challenges: "", learnings: "", nextGoals: "", supportNeeded: "" });
+  const [selfSubmitted, setSelfSubmitted] = useState(false);
+  const [selfSubmitting, setSelfSubmitting] = useState(false);
+  const [selfLoading, setSelfLoading] = useState(false);
+
+  // ── Manager Feedback ───────────────────────────────────
+  const [feedbacks, setFeedbacks] = useState([]);
+  const [fbLoading, setFbLoading] = useState(true);
+  const [expandedFb, setExpandedFb] = useState(null);
+
+  // ── Reviews ────────────────────────────────────────────
+  const [reviews, setReviews] = useState([]);
+  const [revLoading, setRevLoading] = useState(true);
+  const [expandedRev, setExpandedRev] = useState(null);
+
+  // ── Load data by tab ───────────────────────────────────
+  useEffect(() => {
+    if (tab === "goals") loadGoals();
+    if (tab === "feedback") loadFeedbacks();
+    if (tab === "reviews") loadReviews();
+    // eslint-disable-next-line
+  }, [tab]);
+
+  useEffect(() => {
+    if (tab === "self") loadSelf();
+    // eslint-disable-next-line
+  }, [tab, selfPeriod]);
+
+  async function loadGoals() {
+    setGoalsLoading(true);
+    try { setGoals(await api.getPerformanceGoals()); }
+    catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+    finally { setGoalsLoading(false); }
+  }
+
+  async function loadFeedbacks() {
+    setFbLoading(true);
+    try { setFeedbacks(await api.getManagerFeedbacks()); }
+    catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+    finally { setFbLoading(false); }
+  }
+
+  async function loadReviews() {
+    setRevLoading(true);
+    try { setReviews(await api.getPerformanceReviews()); }
+    catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+    finally { setRevLoading(false); }
+  }
+
+  async function loadSelf() {
+    setSelfLoading(true);
+    try {
+      const rows = await api.getSelfAssessments({ period: selfPeriod });
+      if (rows.length > 0) {
+        const r = rows[0];
+        setSelfRatings({ technical: r.technical_skill, communication: r.communication, teamwork: r.teamwork, leadership: r.leadership, innovation: r.innovation });
+        setSelfText({ accomplishments: r.accomplishments || "", challenges: r.challenges || "", learnings: r.learnings || "", nextGoals: r.next_goals || "", supportNeeded: r.support_needed || "" });
+        setSelfSubmitted(!!r.submitted_at);
+      } else {
+        setSelfRatings({ technical: 3, communication: 3, teamwork: 3, leadership: 3, innovation: 3 });
+        setSelfText({ accomplishments: "", challenges: "", learnings: "", nextGoals: "", supportNeeded: "" });
+        setSelfSubmitted(false);
+      }
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+    finally { setSelfLoading(false); }
+  }
+
+  // ── Helpers ────────────────────────────────────────────
+  const sc = s => s === "achieved" ? C.green : s === "on-track" ? C.accent : s === "at-risk" ? C.amber : C.red;
+  const sl = s => ({ "achieved": "Achieved", "on-track": "On Track", "at-risk": "At Risk", "behind": "Behind" }[s] || s);
+  const pc = p => p === "high" ? C.red : p === "medium" ? C.amber : C.textDim;
+  const Stars = ({ n, size = 16 }) => Array.from({ length: 5 }, (_, i) => (
+    <span key={i} style={{ fontSize: size, color: i < Math.floor(n) ? "#F59E0B" : i === Math.floor(n) && (n % 1 >= 0.5) ? "#F59E0B" : C.border, opacity: i === Math.floor(n) && (n % 1 >= 0.5) ? 0.55 : 1 }}>★</span>
+  ));
+  const avgSelf = Math.round((Object.values(selfRatings).reduce((a, v) => a + v, 0) / 5) * 10) / 10;
+
+  const openAddGoal = () => { setEditGoal(null); setGoalForm(emptyGoal); setGoalModal(true); };
+  const openEditGoal = g => { setEditGoal(g); setGoalForm({ title: g.title, type: g.type, target: g.target || "", current: g.current_value || "", due: g.due_date?.slice(0,10) || "", status: g.status, priority: g.priority, description: g.description || "" }); setGoalModal(true); };
+
+  async function saveGoal() {
+    if (!goalForm.title.trim()) return;
+    setGoalSaving(true);
+    try {
+      const payload = { title: goalForm.title, type: goalForm.type, target: goalForm.target, current: goalForm.current, due: goalForm.due || null, status: goalForm.status, priority: goalForm.priority, description: goalForm.description };
+      if (editGoal) await api.updatePerformanceGoal(editGoal.id, payload);
+      else await api.createPerformanceGoal(payload);
+      setGoalModal(false);
+      await loadGoals();
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+    finally { setGoalSaving(false); }
+  }
+
+  async function deleteGoal(id) {
+    if (!await dialog.confirm("Delete this goal?", { dtype: "warning" })) return;
+    try { await api.deletePerformanceGoal(id); await loadGoals(); }
+    catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+  }
+
+  async function submitSelf() {
+    setSelfSubmitting(true);
+    try {
+      await api.upsertSelfAssessment({
+        period: selfPeriod,
+        technicalSkill: selfRatings.technical,
+        communication: selfRatings.communication,
+        teamwork: selfRatings.teamwork,
+        leadership: selfRatings.leadership,
+        innovation: selfRatings.innovation,
+        accomplishments: selfText.accomplishments,
+        challenges: selfText.challenges,
+        learnings: selfText.learnings,
+        nextGoals: selfText.nextGoals,
+        supportNeeded: selfText.supportNeeded,
+      });
+      setSelfSubmitted(true);
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+    finally { setSelfSubmitting(false); }
+  }
+
+  const RatingBar = ({ label, value, onChange }) => (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+        <span style={{ fontSize: 13, color: C.textDim, fontWeight: 600 }}>{label}</span>
+        <span style={{ fontSize: 13, fontWeight: 900, color: C.accent }}>{value}<span style={{ color: C.textMuted, fontWeight: 500 }}>/5</span></span>
+      </div>
+      <div style={{ display: "flex", gap: 6 }}>
+        {[1,2,3,4,5].map(n => (
+          <button key={n} onClick={() => onChange(n)}
+            style={{ flex: 1, height: 8, borderRadius: 6, border: "none", cursor: "pointer", transition: "all 0.2s",
+              background: n <= value ? `linear-gradient(90deg,${C.accent},${C.purple})` : C.border,
+              transform: n <= value ? "scaleY(1.3)" : "scaleY(1)" }} />
+        ))}
+      </div>
+    </div>
+  );
+
+  const achieved = goals.filter(g => g.status === "achieved").length;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+      <style>{`
+        .ep-tab { padding: 10px 20px; border: none; border-bottom: 3px solid transparent; background: transparent; cursor: pointer; font-size: 13px; font-weight: 600; transition: all .18s; display: flex; align-items: center; gap: 7px; white-space: nowrap; border-radius: 8px 8px 0 0; }
+        .ep-tab:hover { background: rgba(59,130,246,0.07); }
+        .ep-textarea { width: 100%; background: ${C.surface}; border: 1.5px solid ${C.border}; border-radius: 10px; color: ${C.text}; padding: 12px 14px; font-size: 13px; font-family: inherit; resize: vertical; outline: none; line-height: 1.6; box-sizing: border-box; transition: border-color .2s; }
+        .ep-textarea:focus { border-color: ${C.accent}; }
+      `}</style>
+
+      {/* ── Header ── */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 21, fontWeight: 900, color: C.text, letterSpacing: -0.5 }}>My Performance</h2>
+          <p style={{ margin: "4px 0 0", fontSize: 13, color: C.textMuted }}>Set goals, complete your self-assessment and track your growth</p>
+        </div>
+        {goals.length > 0 && (
+          <div style={{ background: C.card, border: `1px solid ${C.accent}33`, borderRadius: 12, padding: "12px 20px", display: "flex", gap: 18 }}>
+            {[
+              { label: "Goals", value: goals.length, color: C.accent },
+              { label: "Achieved", value: achieved, color: C.green },
+              { label: "At Risk", value: goals.filter(g => g.status === "at-risk").length, color: C.amber },
+            ].map(s => (
+              <div key={s.label} style={{ textAlign: "center" }}>
+                <div style={{ fontSize: 20, fontWeight: 900, color: s.color }}>{s.value}</div>
+                <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Tab bar ── */}
+      <div style={{ display: "flex", borderBottom: `1px solid ${C.border}`, overflowX: "auto" }}>
+        {TABS.map(t => (
+          <button key={t.id} className="ep-tab"
+            onClick={() => setTab(t.id)}
+            style={{ color: tab === t.id ? C.accent : C.textMuted, borderBottomColor: tab === t.id ? C.accent : "transparent", background: tab === t.id ? C.accent + "12" : "transparent" }}>
+            <span>{t.icon}</span>{t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ══ GOALS TAB ══════════════════════════════════════════════════════ */}
+      {tab === "goals" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>My Goals ({goals.length})</span>
+            <Btn onClick={openAddGoal}>+ Add Goal</Btn>
+          </div>
+          {goalsLoading ? <Spinner /> : goals.length === 0 ? (
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 48, textAlign: "center", color: C.textMuted }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>🎯</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 6 }}>No goals set yet</div>
+              <p style={{ margin: 0, fontSize: 13 }}>Click "+ Add Goal" to set your first OKR or KPI.</p>
+            </div>
+          ) : (
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, overflow: "hidden" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "2fr 80px 100px 100px 110px 90px 90px 80px", background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "10px 20px", gap: 0 }}>
+                {["Goal / Objective","Type","Target","Current","Due Date","Priority","Status",""].map(h => (
+                  <div key={h} style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: .5 }}>{h}</div>
+                ))}
+              </div>
+              {goals.map((g, i) => {
+                const tNum = parseFloat(g.target), cNum = parseFloat(g.current_value);
+                const pct = (!isNaN(tNum) && tNum > 0 && !isNaN(cNum)) ? Math.min(Math.round((cNum / tNum) * 100), 100) : 0;
+                return (
+                  <div key={g.id} style={{ display: "grid", gridTemplateColumns: "2fr 80px 100px 100px 110px 90px 90px 80px", padding: "14px 20px", borderBottom: i < goals.length - 1 ? `1px solid ${C.border}44` : "none", alignItems: "center", gap: 0, transition: "background 0.15s" }}
+                    onMouseEnter={e => e.currentTarget.style.background = C.surface}
+                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{g.title}</div>
+                      {g.target && <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 6 }}>
+                        <div style={{ flex: 1, height: 4, background: C.border, borderRadius: 4, maxWidth: 160, overflow: "hidden" }}>
+                          <div style={{ width: `${pct}%`, height: "100%", background: `linear-gradient(90deg, ${sc(g.status)}, ${sc(g.status)}aa)`, borderRadius: 4 }} />
+                        </div>
+                        <span style={{ fontSize: 10, color: C.textMuted, fontWeight: 600 }}>{pct}%</span>
+                      </div>}
+                    </div>
+                    <span style={{ background: g.type === "OKR" ? C.purple + "22" : C.accent + "22", color: g.type === "OKR" ? C.purple : C.accent, border: `1px solid ${g.type === "OKR" ? C.purple : C.accent}44`, borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>{g.type}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{g.target || "—"}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: sc(g.status) }}>{g.current_value || "—"}</span>
+                    <span style={{ fontSize: 12, color: C.textDim }}>{g.due_date ? new Date(g.due_date + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</span>
+                    <span style={{ background: pc(g.priority) + "22", color: pc(g.priority), border: `1px solid ${pc(g.priority)}44`, borderRadius: 6, padding: "2px 8px", fontSize: 10, fontWeight: 700, textTransform: "uppercase" }}>{g.priority}</span>
+                    <span style={{ background: sc(g.status) + "22", color: sc(g.status), border: `1px solid ${sc(g.status)}44`, borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>{sl(g.status)}</span>
+                    <div style={{ display: "flex", gap: 5 }}>
+                      <button title="Edit" onClick={() => openEditGoal(g)} style={{ background: C.accent + "18", color: C.accent, border: `1px solid ${C.accent}33`, borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer" }}>✏</button>
+                      <button title="Delete" onClick={() => deleteGoal(g.id)} style={{ background: C.red + "18", color: C.red, border: `1px solid ${C.red}33`, borderRadius: 6, padding: "4px 8px", fontSize: 12, cursor: "pointer" }}>🗑</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Add / Edit Goal Modal */}
+          {goalModal && (
+            <Modal title={editGoal ? "Edit Goal" : "Add New Goal"} onClose={() => setGoalModal(false)}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <Inp label="Goal / Objective Title" value={goalForm.title} onChange={v => setGoalForm(p => ({ ...p, title: v }))} required />
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 12, color: C.textDim, fontWeight: 600, marginBottom: 6 }}>Type</div>
+                    <select value={goalForm.type} onChange={e => setGoalForm(p => ({ ...p, type: e.target.value }))}
+                      style={{ width: "100%", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "9px 12px", fontSize: 13, outline: "none" }}>
+                      <option value="OKR">OKR — Objective Key Result</option>
+                      <option value="KPI">KPI — Key Performance Indicator</option>
+                    </select>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12, color: C.textDim, fontWeight: 600, marginBottom: 6 }}>Priority</div>
+                    <select value={goalForm.priority} onChange={e => setGoalForm(p => ({ ...p, priority: e.target.value }))}
+                      style={{ width: "100%", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "9px 12px", fontSize: 13, outline: "none" }}>
+                      <option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
+                    </select>
+                  </div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <Inp label="Target" value={goalForm.target} onChange={v => setGoalForm(p => ({ ...p, target: v }))} placeholder="e.g. 90%" />
+                  <Inp label="Current Progress" value={goalForm.current} onChange={v => setGoalForm(p => ({ ...p, current: v }))} placeholder="e.g. 78%" />
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <Inp label="Due Date" type="date" value={goalForm.due} onChange={v => setGoalForm(p => ({ ...p, due: v }))} />
+                  <div>
+                    <div style={{ fontSize: 12, color: C.textDim, fontWeight: 600, marginBottom: 6 }}>Status</div>
+                    <select value={goalForm.status} onChange={e => setGoalForm(p => ({ ...p, status: e.target.value }))}
+                      style={{ width: "100%", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "9px 12px", fontSize: 13, outline: "none" }}>
+                      <option value="on-track">On Track</option><option value="at-risk">At Risk</option>
+                      <option value="achieved">Achieved</option><option value="behind">Behind</option>
+                    </select>
+                  </div>
+                </div>
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 4 }}>
+                  <Btn variant="ghost" onClick={() => setGoalModal(false)}>Cancel</Btn>
+                  <Btn onClick={saveGoal} disabled={goalSaving}>{goalSaving ? "Saving…" : editGoal ? "Save Changes" : "Add Goal"}</Btn>
+                </div>
+              </div>
+            </Modal>
+          )}
+        </div>
+      )}
+
+      {/* ══ SELF-ASSESSMENT TAB ════════════════════════════════════════════ */}
+      {tab === "self" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* Period selector */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Period:</span>
+            <select value={selfPeriod} onChange={e => { setSelfPeriod(e.target.value); setSelfSubmitted(false); }}
+              style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "7px 12px", fontSize: 13, outline: "none" }}>
+              {PERIODS.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+            {selfSubmitted && <span style={{ background: C.green + "18", color: C.green, border: `1px solid ${C.green}33`, borderRadius: 20, padding: "3px 12px", fontSize: 12, fontWeight: 700 }}>✓ Submitted</span>}
+          </div>
+
+          {selfLoading ? <Spinner /> : (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+              {/* Competency Ratings */}
+              <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 24 }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: C.text, marginBottom: 6 }}>Competency Self-Rating</div>
+                <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 20 }}>Period: {selfPeriod}</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                  {[
+                    { key: "technical", label: "Technical Skills" },
+                    { key: "communication", label: "Communication" },
+                    { key: "teamwork", label: "Teamwork & Collaboration" },
+                    { key: "leadership", label: "Leadership & Initiative" },
+                    { key: "innovation", label: "Innovation & Problem Solving" },
+                  ].map(({ key, label }) => (
+                    <RatingBar key={key} label={label} value={selfRatings[key]}
+                      onChange={v => setSelfRatings(p => ({ ...p, [key]: v }))} />
+                  ))}
+                </div>
+                <div style={{ marginTop: 22, padding: "14px 16px", background: C.surface, borderRadius: 10, border: `1px solid ${C.border}` }}>
+                  <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>Overall Self Score</div>
+                  <div style={{ fontSize: 32, fontWeight: 900, color: C.accent, marginTop: 4 }}>
+                    {avgSelf}<span style={{ fontSize: 14, color: C.textMuted, fontWeight: 600 }}>/5</span>
+                  </div>
+                  <div style={{ marginTop: 6 }}>
+                    <Stars n={avgSelf} size={18} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Written Assessment */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 24, flex: 1 }}>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: C.text, marginBottom: 18 }}>Written Assessment</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                    {[
+                      { key: "accomplishments", label: "Key Accomplishments", placeholder: "What did you achieve this period?" },
+                      { key: "challenges", label: "Challenges Faced", placeholder: "What obstacles did you encounter?" },
+                      { key: "learnings", label: "Key Learnings & Growth", placeholder: "What new skills did you gain?" },
+                      { key: "nextGoals", label: "Goals for Next Period", placeholder: "What do you aim to achieve next?" },
+                      { key: "supportNeeded", label: "Support Needed", placeholder: "What would help you perform better?" },
+                    ].map(({ key, label, placeholder }) => (
+                      <div key={key}>
+                        <div style={{ fontSize: 12, color: C.textDim, fontWeight: 600, marginBottom: 6 }}>{label}</div>
+                        <textarea rows={2} value={selfText[key]} onChange={e => setSelfText(p => ({ ...p, [key]: e.target.value }))}
+                          placeholder={placeholder} className="ep-textarea" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                  <Btn variant="ghost" onClick={() => loadSelf()}>Reset</Btn>
+                  <Btn variant="success" onClick={submitSelf} disabled={selfSubmitting}>
+                    {selfSubmitting ? "Saving…" : selfSubmitted ? "✓ Update Assessment" : "Submit Assessment"}
+                  </Btn>
+                </div>
+                {selfSubmitted && (
+                  <div style={{ background: C.green + "18", border: `1px solid ${C.green}44`, borderRadius: 10, padding: "12px 16px", fontSize: 13, color: C.green, fontWeight: 600 }}>
+                    ✓ Your self-assessment has been saved for {selfPeriod}.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ══ MANAGER FEEDBACK TAB ═══════════════════════════════════════════ */}
+      {tab === "feedback" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Feedback received from managers</div>
+            <span style={{ background: C.accent + "18", color: C.accent, border: `1px solid ${C.accent}33`, borderRadius: 20, padding: "3px 12px", fontSize: 12, fontWeight: 700 }}>{feedbacks.length} entries</span>
+          </div>
+          {fbLoading ? <Spinner /> : feedbacks.length === 0 ? (
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 48, textAlign: "center", color: C.textMuted }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>💬</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 6 }}>No feedback yet</div>
+              <p style={{ margin: 0, fontSize: 13 }}>Your manager hasn't submitted feedback yet.</p>
+            </div>
+          ) : feedbacks.map(fb => (
+            <div key={fb.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, overflow: "hidden" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "18px 22px", background: expandedFb === fb.id ? C.surface : "transparent" }}>
+                <div style={{ width: 46, height: 46, borderRadius: 12, background: C.purple + "22", border: `1px solid ${C.purple}33`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 900, color: C.purple, flexShrink: 0 }}>
+                  {(fb.manager_name || "?").split(" ").map(w => w[0]).join("").slice(0, 2)}
+                </div>
+                <div style={{ flex: 1, cursor: "pointer" }} onClick={() => setExpandedFb(expandedFb === fb.id ? null : fb.id)}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{fb.manager_name}</div>
+                  <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>{fb.cycle_name || fb.period || "—"} · {fb.feedback_date ? fmtD(fb.feedback_date) : ""}</div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div>
+                    <div style={{ display: "flex", gap: 1 }}><Stars n={fb.overall_rating} size={16} /></div>
+                    <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2, textAlign: "right" }}>{fb.overall_rating}/5</div>
+                  </div>
+                  <span style={{ color: C.textMuted, fontSize: 18, cursor: "pointer", transition: "transform 0.2s", transform: expandedFb === fb.id ? "rotate(180deg)" : "none" }}
+                    onClick={() => setExpandedFb(expandedFb === fb.id ? null : fb.id)}>▾</span>
+                </div>
+              </div>
+              {expandedFb === fb.id && (
+                <div style={{ padding: "0 22px 22px", display: "flex", flexDirection: "column", gap: 14, borderTop: `1px solid ${C.border}` }}>
+                  <div style={{ paddingTop: 16, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+                    <div style={{ background: C.green + "0d", border: `1px solid ${C.green}22`, borderRadius: 10, padding: "14px 16px" }}>
+                      <div style={{ fontSize: 11, color: C.green, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5, marginBottom: 8 }}>💪 Strengths</div>
+                      <p style={{ fontSize: 13, color: C.textDim, lineHeight: 1.6, margin: 0 }}>{fb.strengths || "—"}</p>
+                    </div>
+                    <div style={{ background: C.amber + "0d", border: `1px solid ${C.amber}22`, borderRadius: 10, padding: "14px 16px" }}>
+                      <div style={{ fontSize: 11, color: C.amber, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5, marginBottom: 8 }}>📈 Areas to Improve</div>
+                      <p style={{ fontSize: 13, color: C.textDim, lineHeight: 1.6, margin: 0 }}>{fb.areas_to_improve || "—"}</p>
+                    </div>
+                  </div>
+                  {fb.manager_comment && (
+                    <div style={{ background: C.accent + "0d", border: `1px solid ${C.accent}22`, borderRadius: 10, padding: "14px 16px" }}>
+                      <div style={{ fontSize: 11, color: C.accent, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5, marginBottom: 6 }}>💬 Manager's Comment</div>
+                      <p style={{ fontSize: 13, color: C.textDim, lineHeight: 1.6, margin: 0, fontStyle: "italic" }}>"{fb.manager_comment}"</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ══ PERFORMANCE REVIEWS TAB ════════════════════════════════════════ */}
+      {tab === "reviews" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Your Review Cycles</div>
+            <span style={{ background: C.purple + "18", color: C.purple, border: `1px solid ${C.purple}33`, borderRadius: 20, padding: "3px 12px", fontSize: 12, fontWeight: 700 }}>{reviews.length} review{reviews.length !== 1 ? "s" : ""}</span>
+          </div>
+          {revLoading ? <Spinner /> : reviews.length === 0 ? (
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 48, textAlign: "center", color: C.textMuted }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 6 }}>No reviews yet</div>
+              <p style={{ margin: 0, fontSize: 13 }}>Your manager or admin will schedule your first performance review.</p>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {reviews.map(r => (
+                <div key={r.id} style={{ background: C.card, border: `1px solid ${r.status === "pending" ? C.amber + "55" : C.border}`, borderLeft: `4px solid ${r.status === "completed" ? C.green : C.amber}`, borderRadius: 14, overflow: "hidden" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "18px 22px" }}>
+                    <div style={{ width: 46, height: 46, borderRadius: 12, background: (r.status === "completed" ? C.green : C.amber) + "22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>
+                      {r.status === "completed" ? "✅" : "⏳"}
+                    </div>
+                    <div style={{ flex: 1, cursor: "pointer" }} onClick={() => setExpandedRev(expandedRev === r.id ? null : r.id)}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{r.cycle_name || r.review_cycle}</div>
+                      <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>
+                        {r.period && `Period: ${r.period} · `}Reviewer: {r.reviewer_name || "—"}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      {r.final_score && (
+                        <div style={{ textAlign: "center" }}>
+                          <div style={{ fontSize: 22, fontWeight: 900, color: C.green }}>{r.final_score}</div>
+                          <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 700 }}>SCORE</div>
+                        </div>
+                      )}
+                      {r.badge && <span style={{ background: C.green + "18", color: C.green, border: `1px solid ${C.green}33`, borderRadius: 20, padding: "4px 12px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>{r.badge}</span>}
+                      {r.status === "pending" && <span style={{ background: C.amber + "18", color: C.amber, border: `1px solid ${C.amber}33`, borderRadius: 20, padding: "4px 12px", fontSize: 11, fontWeight: 700 }}>Pending</span>}
+                      <span style={{ color: C.textMuted, fontSize: 18, cursor: "pointer", transform: expandedRev === r.id ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}
+                        onClick={() => setExpandedRev(expandedRev === r.id ? null : r.id)}>▾</span>
+                    </div>
+                  </div>
+                  {expandedRev === r.id && r.status === "completed" && (
+                    <div style={{ padding: "0 22px 22px", borderTop: `1px solid ${C.border}` }}>
+                      <div style={{ paddingTop: 16, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px,1fr))", gap: 12 }}>
+                        {[
+                          { label: "Final Score", value: r.final_score ? r.final_score + "/5" : "—", color: C.green },
+                          { label: "Rating", value: r.badge || "—", color: C.accent },
+                          { label: "Review Date", value: r.review_date ? fmtD(r.review_date) : "—", color: C.purple },
+                          { label: "Reviewer", value: r.reviewer_name || "—", color: C.amber },
+                        ].map(d => (
+                          <div key={d.label} style={{ background: C.surface, borderRadius: 10, padding: "12px 14px", border: `1px solid ${C.border}` }}>
+                            <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>{d.label}</div>
+                            <div style={{ fontSize: 14, fontWeight: 800, color: d.color, marginTop: 4 }}>{d.value}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {r.notes && (
+                        <div style={{ marginTop: 14, background: C.surface, borderRadius: 10, padding: "14px 16px", border: `1px solid ${C.border}` }}>
+                          <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>Notes</div>
+                          <p style={{ fontSize: 13, color: C.textDim, lineHeight: 1.6, margin: 0 }}>{r.notes}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {expandedRev === r.id && r.status === "pending" && (
+                    <div style={{ padding: "0 22px 22px", borderTop: `1px solid ${C.border}` }}>
+                      <div style={{ paddingTop: 16, background: C.amber + "0d", border: `1px solid ${C.amber}33`, borderRadius: 10, padding: 16, textAlign: "center" }}>
+                        <div style={{ fontSize: 24, marginBottom: 8 }}>⏳</div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: C.amber }}>Review In Progress</div>
+                        <div style={{ fontSize: 12, color: C.textMuted, marginTop: 4 }}>Your manager will complete this review. You will be notified once it's ready.</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminEmployees({ readOnly = false, currentUser }) {
   const isAdminOnly = currentUser?.role === "admin";
   const [employees, setEmployees] = useState([]);
@@ -6839,6 +7392,8 @@ function printPayslipData(ps) {
   window.open(url, '_blank');
   setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
+
+
 
 function AdminPayslips() {
   const [employees, setEmployees] = useState([]);
@@ -8395,10 +8950,658 @@ function AttendanceClaims({ currentUser }) {
   );
 }
 
+// ════════════════════════════════════════════════════════
+// PERFORMANCE MANAGEMENT (Admin / Manager view) — Live API
+// ════════════════════════════════════════════════════════
+function PerformanceManagement({ currentUser }) {
+  const isAdmin = currentUser?.role === "admin";
+  const isManager = currentUser?.role === "manager";
+
+  const TABS = [
+    { id: "goals",    label: "Goals (All Employees)",    icon: "🎯" },
+    { id: "self",     label: "Self-Assessments",         icon: "🪞" },
+    { id: "feedback", label: "Manager Feedback",         icon: "💬" },
+    { id: "reviews",  label: "Performance Reviews",      icon: "📋" },
+    { id: "cycles",   label: "Review Cycles",            icon: "🗓" },
+  ];
+  const [tab, setTab] = useState("goals");
+
+  // employee list for dropdowns
+  const [allEmployees, setAllEmployees] = useState([]);
+  const [selEmp, setSelEmp] = useState("");
+
+  // goals — unified view (all reports / all employees)
+  const [goals, setGoals] = useState([]);
+  const [goalsLoading, setGoalsLoading] = useState(false);
+  const [goalFilter, setGoalFilter] = useState("");       // filter by employee name in table
+  const [goalModal, setGoalModal] = useState(false);
+  const [editGoal, setEditGoal] = useState(null);
+  const [goalSaving, setGoalSaving] = useState(false);
+  const emptyGoal = { employeeId: "", title: "", type: "OKR", target: "", current: "", due: "", status: "on-track", priority: "medium" };
+  const [goalForm, setGoalForm] = useState(emptyGoal);
+
+  // self-assessments — unified view
+  const [selfRows, setSelfRows] = useState([]);
+  const [selfLoading, setSelfLoading] = useState(false);
+  const [selfFilter, setSelfFilter] = useState("");
+  const [expandedSA, setExpandedSA] = useState(null);
+
+  // feedback — per-employee
+  const [feedbacks, setFeedbacks] = useState([]);
+  const [fbLoading, setFbLoading] = useState(false);
+  const [fbModal, setFbModal] = useState(false);
+  const [editFb, setEditFb] = useState(null);
+  const [fbSaving, setFbSaving] = useState(false);
+  const emptyFb = { employeeId: "", reviewCycleId: "", period: "", feedbackDate: "", overallRating: 4, strengths: "", areasToImprove: "", managerComment: "" };
+  const [fbForm, setFbForm] = useState(emptyFb);
+  const [expandedFb, setExpandedFb] = useState(null);
+
+  // reviews — per-employee
+  const [reviews, setReviews] = useState([]);
+  const [revLoading, setRevLoading] = useState(false);
+  const [revModal, setRevModal] = useState(false);
+  const [editRev, setEditRev] = useState(null);
+  const [revSaving, setRevSaving] = useState(false);
+  const emptyRev = { employeeId: "", reviewCycleId: "", period: "", status: "pending", finalScore: "", badge: "", reviewDate: "", notes: "" };
+  const [revForm, setRevForm] = useState(emptyRev);
+  const [expandedRev, setExpandedRev] = useState(null);
+
+  // cycles
+  const [cycles, setCycles] = useState([]);
+  const [cyclesLoading, setCyclesLoading] = useState(false);
+  const [cycleModal, setCycleModal] = useState(false);
+  const [editCycle, setEditCycle] = useState(null);
+  const emptyCycle = { name: "", startDate: "", endDate: "", status: "active" };
+  const [cycleForm, setCycleForm] = useState(emptyCycle);
+  const [cycleSaving, setCycleSaving] = useState(false);
+
+  const selStyle = { background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "9px 12px", fontSize: 13, outline: "none", width: "100%" };
+  const sc = s => s === "achieved" ? C.green : s === "on-track" ? C.accent : s === "at-risk" ? C.amber : C.red;
+  const sl = s => ({ "achieved": "Achieved", "on-track": "On Track", "at-risk": "At Risk", "behind": "Behind" }[s] || s);
+  const Stars = ({ n, size = 14 }) => Array.from({ length: 5 }, (_, i) => (
+    <span key={i} style={{ fontSize: size, color: i < Math.floor(n) ? "#F59E0B" : C.border }}>★</span>
+  ));
+  const empName = id => allEmployees.find(e => String(e.id) === String(id))?.name || "—";
+
+  // ── Load on mount
+  useEffect(() => { loadEmployees(); loadCycles(); }, []);
+  useEffect(() => {
+    if (tab === "goals") loadGoals();
+    else if (tab === "self") loadSelf();
+    else if (tab === "feedback" && selEmp) loadFeedback();
+    else if (tab === "reviews" && selEmp) loadReviews();
+    // eslint-disable-next-line
+  }, [tab]);
+  useEffect(() => {
+    if (tab === "feedback" && selEmp) loadFeedback();
+    if (tab === "reviews" && selEmp) loadReviews();
+    // eslint-disable-next-line
+  }, [selEmp]);
+
+  async function loadEmployees() {
+    try { setAllEmployees(await api.getMyReports()); } catch (e) { console.error(e); }
+  }
+  async function loadCycles() {
+    setCyclesLoading(true);
+    try { setCycles(await api.getReviewCycles()); }
+    catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+    finally { setCyclesLoading(false); }
+  }
+  async function loadGoals() {
+    setGoalsLoading(true);
+    try { setGoals(await api.getPerformanceGoals()); }
+    catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+    finally { setGoalsLoading(false); }
+  }
+  async function loadSelf() {
+    setSelfLoading(true);
+    try { setSelfRows(await api.getSelfAssessments()); }
+    catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+    finally { setSelfLoading(false); }
+  }
+  async function loadFeedback() {
+    setFbLoading(true);
+    try { setFeedbacks(await api.getManagerFeedbacks(selEmp ? { employee_id: selEmp } : {})); }
+    catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+    finally { setFbLoading(false); }
+  }
+  async function loadReviews() {
+    setRevLoading(true);
+    try { setReviews(await api.getPerformanceReviews(selEmp ? { employee_id: selEmp } : {})); }
+    catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+    finally { setRevLoading(false); }
+  }
+
+  // CRUD helpers
+  async function saveGoal() {
+    if (!goalForm.title.trim() || !goalForm.employeeId) return;
+    setGoalSaving(true);
+    try {
+      if (editGoal) await api.updatePerformanceGoal(editGoal.id, goalForm);
+      else await api.createPerformanceGoal(goalForm);
+      setGoalModal(false); await loadGoals();
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+    finally { setGoalSaving(false); }
+  }
+  async function deleteGoal(id) {
+    if (!await dialog.confirm("Delete this goal?", { dtype: "warning" })) return;
+    try { await api.deletePerformanceGoal(id); await loadGoals(); }
+    catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+  }
+  async function saveFeedback() {
+    if (!fbForm.employeeId) return;
+    setFbSaving(true);
+    try {
+      if (editFb) await api.updateManagerFeedback(editFb.id, fbForm);
+      else await api.createManagerFeedback(fbForm);
+      setFbModal(false); await loadFeedback();
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+    finally { setFbSaving(false); }
+  }
+  async function deleteFeedback(id) {
+    if (!await dialog.confirm("Delete feedback?", { dtype: "warning" })) return;
+    try { await api.deleteManagerFeedback(id); await loadFeedback(); }
+    catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+  }
+  async function saveReview() {
+    if (!revForm.employeeId || !revForm.reviewCycleId) return;
+    setRevSaving(true);
+    try {
+      if (editRev) await api.updatePerformanceReview(editRev.id, revForm);
+      else await api.createPerformanceReview(revForm);
+      setRevModal(false); await loadReviews();
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+    finally { setRevSaving(false); }
+  }
+  async function deleteReview(id) {
+    if (!await dialog.confirm("Delete review?", { dtype: "warning" })) return;
+    try { await api.deletePerformanceReview(id); await loadReviews(); }
+    catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+  }
+  async function saveCycle() {
+    if (!cycleForm.name.trim()) return;
+    setCycleSaving(true);
+    try {
+      if (editCycle) await api.updateReviewCycle(editCycle.id, cycleForm);
+      else await api.createReviewCycle(cycleForm);
+      setCycleModal(false); await loadCycles();
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+    finally { setCycleSaving(false); }
+  }
+  async function deleteCycle(id) {
+    if (!await dialog.confirm("Delete cycle?", { dtype: "warning" })) return;
+    try { await api.deleteReviewCycle(id); await loadCycles(); }
+    catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+  }
+
+  // ── Filtered goals/self for search
+  const filteredGoals = goals.filter(g =>
+    !goalFilter || (g.employee_name || "").toLowerCase().includes(goalFilter.toLowerCase())
+  );
+  const filteredSelf = selfRows.filter(s =>
+    !selfFilter || (s.employee_name || "").toLowerCase().includes(selfFilter.toLowerCase())
+  );
+
+  // ── Employee selector (for feedback/reviews tabs)
+  const EmpSelector = () => (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
+      <span style={{ fontSize: 13, fontWeight: 700, color: C.text, whiteSpace: "nowrap" }}>Employee:</span>
+      <select value={selEmp} onChange={e => setSelEmp(e.target.value)} style={{ ...selStyle, maxWidth: 280 }}>
+        <option value="">— Select Employee —</option>
+        {allEmployees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+      </select>
+    </div>
+  );
+  const NoEmpBanner = () => (
+    <div style={{ background: C.card, border: `1px dashed ${C.border}`, borderRadius: 16, padding: 48, textAlign: "center", color: C.textMuted }}>
+      <div style={{ fontSize: 36, marginBottom: 12 }}>👤</div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 6 }}>Select an employee first</div>
+      <p style={{ fontSize: 13, margin: 0 }}>Use the dropdown above to filter by employee.</p>
+    </div>
+  );
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      <div>
+        <h2 style={{ fontSize: 22, fontWeight: 900, color: C.text, margin: 0, letterSpacing: -0.5 }}>Performance Management</h2>
+        <p style={{ margin: "4px 0 0", fontSize: 13, color: C.textMuted }}>
+          {isManager ? "View your team's goals and self-assessments, give feedback" : "All employee performance data — goals, assessments, feedback, reviews"}
+        </p>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: "flex", gap: 4, borderBottom: `1px solid ${C.border}`, overflowX: "auto" }}>
+        {TABS.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)} style={{
+            background: tab === t.id ? C.accent + "18" : "transparent",
+            color: tab === t.id ? C.accent : C.textMuted,
+            border: "none", borderBottom: `2px solid ${tab === t.id ? C.accent : "transparent"}`,
+            borderRadius: "8px 8px 0 0", padding: "10px 18px", fontSize: 13,
+            fontWeight: tab === t.id ? 700 : 500, cursor: "pointer",
+            display: "flex", alignItems: "center", gap: 7, whiteSpace: "nowrap", transition: "all 0.15s",
+          }}>
+            <span>{t.icon}</span>{t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ══ GOALS TAB — shows ALL employees in one table ══ */}
+      {tab === "goals" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>All Employees' Goals</span>
+              <span style={{ background: C.accent + "18", color: C.accent, border: `1px solid ${C.accent}33`, borderRadius: 20, padding: "2px 10px", fontSize: 12, fontWeight: 700 }}>
+                {filteredGoals.length}
+              </span>
+            </div>
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <input placeholder="Filter by employee…" value={goalFilter} onChange={e => setGoalFilter(e.target.value)}
+                style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "7px 12px", fontSize: 13, outline: "none", width: 200 }} />
+              <Btn onClick={() => { setEditGoal(null); setGoalForm(emptyGoal); setGoalModal(true); }}>+ Add Goal</Btn>
+            </div>
+          </div>
+
+          {goalsLoading ? <Spinner /> : filteredGoals.length === 0 ? (
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 48, textAlign: "center", color: C.textMuted }}>
+              <div style={{ fontSize: 36, marginBottom: 12 }}>🎯</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 6 }}>No goals yet</div>
+              <p style={{ fontSize: 13, margin: 0 }}>Employees can add their goals from "My Performance" or you can add them here.</p>
+            </div>
+          ) : (
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, overflow: "hidden" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "160px 2fr 70px 90px 90px 90px 80px 70px", background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "10px 20px", gap: 0 }}>
+                {["Employee", "Goal", "Type", "Target", "Current", "Priority", "Status", ""].map(h => (
+                  <div key={h} style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: .5 }}>{h}</div>
+                ))}
+              </div>
+              {filteredGoals.map((g, i) => (
+                <div key={g.id} style={{ display: "grid", gridTemplateColumns: "160px 2fr 70px 90px 90px 90px 80px 70px", padding: "12px 20px", borderBottom: i < filteredGoals.length - 1 ? `1px solid ${C.border}44` : "none", alignItems: "center", gap: 0, transition: "background 0.15s" }}
+                  onMouseEnter={e => e.currentTarget.style.background = C.surface}
+                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: 8, background: C.accent + "22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 900, color: C.accent, flexShrink: 0 }}>
+                      {(g.employee_name || "?").split(" ").map(w => w[0]).join("").slice(0,2)}
+                    </div>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: C.textDim, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.employee_name}</span>
+                  </div>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: C.text, paddingRight: 8 }}>{g.title}</span>
+                  <span style={{ background: g.type === "OKR" ? C.purple + "22" : C.accent + "22", color: g.type === "OKR" ? C.purple : C.accent, borderRadius: 5, padding: "2px 6px", fontSize: 10, fontWeight: 700 }}>{g.type}</span>
+                  <span style={{ fontSize: 12, color: C.text }}>{g.target || "—"}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: sc(g.status) }}>{g.current_value || "—"}</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: g.priority === "high" ? C.red : g.priority === "medium" ? C.amber : C.textDim, textTransform: "uppercase" }}>{g.priority}</span>
+                  <span style={{ background: sc(g.status) + "22", color: sc(g.status), borderRadius: 5, padding: "2px 6px", fontSize: 10, fontWeight: 700 }}>{sl(g.status)}</span>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    <button onClick={() => { setEditGoal(g); setGoalForm({ employeeId: g.employee_id, title: g.title, type: g.type, target: g.target || "", current: g.current_value || "", due: g.due_date?.slice(0,10) || "", status: g.status, priority: g.priority }); setGoalModal(true); }}
+                      style={{ background: C.accent + "18", color: C.accent, border: `1px solid ${C.accent}33`, borderRadius: 5, padding: "3px 7px", fontSize: 11, cursor: "pointer" }}>✏</button>
+                    {isAdmin && <button onClick={() => deleteGoal(g.id)}
+                      style={{ background: C.red + "18", color: C.red, border: `1px solid ${C.red}33`, borderRadius: 5, padding: "3px 7px", fontSize: 11, cursor: "pointer" }}>🗑</button>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {goalModal && (
+            <Modal title={editGoal ? "Edit Goal" : "Add Goal for Employee"} onClose={() => setGoalModal(false)}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <div>
+                  <div style={{ fontSize: 12, color: C.textDim, fontWeight: 600, marginBottom: 6 }}>Employee *</div>
+                  <select value={goalForm.employeeId} onChange={e => setGoalForm(p => ({ ...p, employeeId: e.target.value }))} style={selStyle}>
+                    <option value="">— Select Employee —</option>
+                    {allEmployees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                  </select>
+                </div>
+                <Inp label="Goal Title *" value={goalForm.title} onChange={v => setGoalForm(p => ({ ...p, title: v }))} required />
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <div><div style={{ fontSize: 12, color: C.textDim, fontWeight: 600, marginBottom: 6 }}>Type</div>
+                    <select value={goalForm.type} onChange={e => setGoalForm(p => ({ ...p, type: e.target.value }))} style={selStyle}>
+                      <option value="OKR">OKR</option><option value="KPI">KPI</option>
+                    </select></div>
+                  <div><div style={{ fontSize: 12, color: C.textDim, fontWeight: 600, marginBottom: 6 }}>Priority</div>
+                    <select value={goalForm.priority} onChange={e => setGoalForm(p => ({ ...p, priority: e.target.value }))} style={selStyle}>
+                      <option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
+                    </select></div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <Inp label="Target" value={goalForm.target} onChange={v => setGoalForm(p => ({ ...p, target: v }))} />
+                  <Inp label="Current Progress" value={goalForm.current} onChange={v => setGoalForm(p => ({ ...p, current: v }))} />
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <Inp label="Due Date" type="date" value={goalForm.due} onChange={v => setGoalForm(p => ({ ...p, due: v }))} />
+                  <div><div style={{ fontSize: 12, color: C.textDim, fontWeight: 600, marginBottom: 6 }}>Status</div>
+                    <select value={goalForm.status} onChange={e => setGoalForm(p => ({ ...p, status: e.target.value }))} style={selStyle}>
+                      <option value="on-track">On Track</option><option value="at-risk">At Risk</option>
+                      <option value="achieved">Achieved</option><option value="behind">Behind</option>
+                    </select></div>
+                </div>
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                  <Btn variant="ghost" onClick={() => setGoalModal(false)}>Cancel</Btn>
+                  <Btn onClick={saveGoal} disabled={goalSaving}>{goalSaving ? "Saving…" : editGoal ? "Save" : "Add Goal"}</Btn>
+                </div>
+              </div>
+            </Modal>
+          )}
+        </div>
+      )}
+
+      {/* ══ SELF-ASSESSMENTS TAB — all employees in cards ══ */}
+      {tab === "self" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>All Submitted Self-Assessments</span>
+              <span style={{ background: C.purple + "18", color: C.purple, border: `1px solid ${C.purple}33`, borderRadius: 20, padding: "2px 10px", fontSize: 12, fontWeight: 700 }}>{filteredSelf.length}</span>
+            </div>
+            <input placeholder="Filter by employee…" value={selfFilter} onChange={e => setSelfFilter(e.target.value)}
+              style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "7px 12px", fontSize: 13, outline: "none", width: 200 }} />
+          </div>
+          {selfLoading ? <Spinner /> : filteredSelf.length === 0 ? (
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 48, textAlign: "center", color: C.textMuted }}>
+              <div style={{ fontSize: 36, marginBottom: 12 }}>🪞</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 6 }}>No assessments submitted yet</div>
+              <p style={{ fontSize: 13, margin: 0 }}>Employees submit self-assessments from their "My Performance" page.</p>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {filteredSelf.map(sa => {
+                const avg = ((sa.technical_skill + sa.communication + sa.teamwork + sa.leadership + sa.innovation) / 5).toFixed(1);
+                const expanded = expandedSA === sa.id;
+                return (
+                  <div key={sa.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "16px 20px", cursor: "pointer", background: expanded ? C.surface : "transparent" }}
+                      onClick={() => setExpandedSA(expanded ? null : sa.id)}>
+                      <div style={{ width: 44, height: 44, borderRadius: 12, background: C.purple + "22", border: `1px solid ${C.purple}33`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 900, color: C.purple, flexShrink: 0 }}>
+                        {(sa.employee_name || "?").split(" ").map(w => w[0]).join("").slice(0,2)}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{sa.employee_name}</div>
+                        <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>Period: {sa.period || sa.cycle_name || "—"} · Submitted: {sa.submitted_at?.slice(0,10) || "—"}</div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <div style={{ textAlign: "center" }}>
+                          <div style={{ fontSize: 22, fontWeight: 900, color: C.accent }}>{avg}</div>
+                          <div style={{ fontSize: 9, color: C.textMuted, fontWeight: 700, textTransform: "uppercase" }}>Avg Score</div>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                          {[["T", sa.technical_skill], ["C", sa.communication], ["Te", sa.teamwork]].map(([lbl, val]) => (
+                            <div key={lbl} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                              <span style={{ fontSize: 9, color: C.textMuted, width: 14 }}>{lbl}</span>
+                              <div style={{ width: 50, height: 4, background: C.border, borderRadius: 3, overflow: "hidden" }}>
+                                <div style={{ width: `${(val/5)*100}%`, height: "100%", background: `linear-gradient(90deg,${C.accent},${C.purple})`, borderRadius: 3 }} />
+                              </div>
+                              <span style={{ fontSize: 9, color: C.textMuted }}>{val}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <span style={{ color: C.textMuted, fontSize: 16, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>▾</span>
+                      </div>
+                    </div>
+                    {expanded && (
+                      <div style={{ padding: "0 20px 20px", borderTop: `1px solid ${C.border}` }}>
+                        <div style={{ paddingTop: 14, display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 8, marginBottom: 14 }}>
+                          {[
+                            { label: "Technical", val: sa.technical_skill },
+                            { label: "Communication", val: sa.communication },
+                            { label: "Teamwork", val: sa.teamwork },
+                            { label: "Leadership", val: sa.leadership },
+                            { label: "Innovation", val: sa.innovation },
+                          ].map(({ label, val }) => (
+                            <div key={label} style={{ background: C.surface, borderRadius: 10, padding: "10px 12px", textAlign: "center", border: `1px solid ${C.border}` }}>
+                              <div style={{ fontSize: 9, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
+                              <div style={{ fontSize: 18, fontWeight: 900, color: C.accent }}>{val}</div>
+                              <div style={{ fontSize: 9, color: C.textMuted }}>/5</div>
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                          {[
+                            { key: "accomplishments", label: "Key Accomplishments", color: C.green },
+                            { key: "challenges", label: "Challenges", color: C.amber },
+                            { key: "learnings", label: "Key Learnings", color: C.accent },
+                            { key: "next_goals", label: "Next Period Goals", color: C.purple },
+                          ].map(({ key, label, color }) => sa[key] && (
+                            <div key={key} style={{ background: color + "0d", border: `1px solid ${color}22`, borderRadius: 10, padding: "12px 14px" }}>
+                              <div style={{ fontSize: 10, color, fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>{label}</div>
+                              <p style={{ fontSize: 12, color: C.textDim, lineHeight: 1.6, margin: 0 }}>{sa[key]}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ══ FEEDBACK TAB ══ */}
+      {tab === "feedback" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+            <EmpSelector />
+            <Btn onClick={() => { setEditFb(null); setFbForm({ ...emptyFb, employeeId: selEmp || "" }); setFbModal(true); }}>+ Add Feedback</Btn>
+          </div>
+          {!selEmp ? <NoEmpBanner /> : fbLoading ? <Spinner /> : feedbacks.length === 0 ? (
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 40, textAlign: "center", color: C.textMuted }}>No feedback for this employee yet.</div>
+          ) : feedbacks.map(fb => (
+            <div key={fb.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 20px", background: expandedFb === fb.id ? C.surface : "transparent" }}>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: C.purple + "22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 900, color: C.purple, flexShrink: 0 }}>
+                  {(fb.manager_name || "?").split(" ").map(w => w[0]).join("").slice(0,2)}
+                </div>
+                <div style={{ flex: 1, cursor: "pointer" }} onClick={() => setExpandedFb(expandedFb === fb.id ? null : fb.id)}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>By {fb.manager_name}</div>
+                  <div style={{ fontSize: 12, color: C.textMuted }}>{fb.cycle_name || fb.period || "—"} · {fb.feedback_date?.slice(0,10) || ""}</div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div><Stars n={fb.overall_rating} /><div style={{ fontSize: 10, color: C.textMuted, textAlign: "right" }}>{fb.overall_rating}/5</div></div>
+                  <button onClick={() => { setEditFb(fb); setFbForm({ employeeId: fb.employee_id, reviewCycleId: fb.review_cycle_id || "", period: fb.period || "", feedbackDate: fb.feedback_date?.slice(0,10) || "", overallRating: fb.overall_rating, strengths: fb.strengths || "", areasToImprove: fb.areas_to_improve || "", managerComment: fb.manager_comment || "" }); setFbModal(true); }}
+                    style={{ background: C.accent + "18", color: C.accent, border: `1px solid ${C.accent}33`, borderRadius: 6, padding: "4px 8px", fontSize: 11, cursor: "pointer" }}>✏</button>
+                  {(isAdmin || String(fb.manager_id) === String(currentUser?.employee_id)) && (
+                    <button onClick={() => deleteFeedback(fb.id)} style={{ background: C.red + "18", color: C.red, border: `1px solid ${C.red}33`, borderRadius: 6, padding: "4px 8px", fontSize: 11, cursor: "pointer" }}>🗑</button>
+                  )}
+                  <span style={{ color: C.textMuted, fontSize: 16, cursor: "pointer" }} onClick={() => setExpandedFb(expandedFb === fb.id ? null : fb.id)}>▾</span>
+                </div>
+              </div>
+              {expandedFb === fb.id && (
+                <div style={{ padding: "0 20px 16px", display: "flex", flexDirection: "column", gap: 10, borderTop: `1px solid ${C.border}` }}>
+                  <div style={{ paddingTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    <div style={{ background: C.green + "0d", border: `1px solid ${C.green}22`, borderRadius: 10, padding: "12px 14px" }}>
+                      <div style={{ fontSize: 10, color: C.green, fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>💪 Strengths</div>
+                      <p style={{ fontSize: 13, color: C.textDim, lineHeight: 1.6, margin: 0 }}>{fb.strengths || "—"}</p>
+                    </div>
+                    <div style={{ background: C.amber + "0d", border: `1px solid ${C.amber}22`, borderRadius: 10, padding: "12px 14px" }}>
+                      <div style={{ fontSize: 10, color: C.amber, fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>📈 Areas to Improve</div>
+                      <p style={{ fontSize: 13, color: C.textDim, lineHeight: 1.6, margin: 0 }}>{fb.areas_to_improve || "—"}</p>
+                    </div>
+                  </div>
+                  {fb.manager_comment && <div style={{ background: C.accent + "0d", border: `1px solid ${C.accent}22`, borderRadius: 10, padding: "12px 14px" }}>
+                    <div style={{ fontSize: 10, color: C.accent, fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>💬 Comment</div>
+                    <p style={{ fontSize: 13, color: C.textDim, lineHeight: 1.6, margin: 0, fontStyle: "italic" }}>"{fb.manager_comment}"</p>
+                  </div>}
+                </div>
+              )}
+            </div>
+          ))}
+          {fbModal && (
+            <Modal title={editFb ? "Edit Feedback" : "Add Manager Feedback"} onClose={() => setFbModal(false)}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <div><div style={{ fontSize: 12, color: C.textDim, fontWeight: 600, marginBottom: 6 }}>Employee *</div>
+                  <select value={fbForm.employeeId} onChange={e => setFbForm(p => ({ ...p, employeeId: e.target.value }))} style={selStyle}>
+                    <option value="">— Select —</option>
+                    {allEmployees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                  </select></div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <div><div style={{ fontSize: 12, color: C.textDim, fontWeight: 600, marginBottom: 6 }}>Review Cycle</div>
+                    <select value={fbForm.reviewCycleId} onChange={e => setFbForm(p => ({ ...p, reviewCycleId: e.target.value }))} style={selStyle}>
+                      <option value="">— None —</option>
+                      {cycles.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select></div>
+                  <Inp label="Period (manual)" value={fbForm.period} onChange={v => setFbForm(p => ({ ...p, period: v }))} placeholder="e.g. Q1 2026" />
+                </div>
+                <Inp label="Feedback Date" type="date" value={fbForm.feedbackDate} onChange={v => setFbForm(p => ({ ...p, feedbackDate: v }))} />
+                <div>
+                  <div style={{ fontSize: 12, color: C.textDim, fontWeight: 600, marginBottom: 8 }}>Overall Rating: {fbForm.overallRating}/5</div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {[1,2,3,4,5].map(n => (
+                      <button key={n} onClick={() => setFbForm(p => ({ ...p, overallRating: n }))}
+                        style={{ flex: 1, padding: "6px 0", borderRadius: 7, border: `1px solid ${n <= fbForm.overallRating ? "#F59E0B" : C.border}`, background: n <= fbForm.overallRating ? "#F59E0B22" : "transparent", color: n <= fbForm.overallRating ? "#F59E0B" : C.textMuted, fontSize: 18, cursor: "pointer" }}>★</button>
+                    ))}
+                  </div>
+                </div>
+                <div><div style={{ fontSize: 12, color: C.textDim, fontWeight: 600, marginBottom: 6 }}>Strengths</div>
+                  <textarea rows={2} value={fbForm.strengths} onChange={e => setFbForm(p => ({ ...p, strengths: e.target.value }))}
+                    style={{ width: "100%", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "9px 12px", fontSize: 13, resize: "vertical", outline: "none", boxSizing: "border-box" }} /></div>
+                <div><div style={{ fontSize: 12, color: C.textDim, fontWeight: 600, marginBottom: 6 }}>Areas to Improve</div>
+                  <textarea rows={2} value={fbForm.areasToImprove} onChange={e => setFbForm(p => ({ ...p, areasToImprove: e.target.value }))}
+                    style={{ width: "100%", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "9px 12px", fontSize: 13, resize: "vertical", outline: "none", boxSizing: "border-box" }} /></div>
+                <div><div style={{ fontSize: 12, color: C.textDim, fontWeight: 600, marginBottom: 6 }}>Manager Comment</div>
+                  <textarea rows={2} value={fbForm.managerComment} onChange={e => setFbForm(p => ({ ...p, managerComment: e.target.value }))}
+                    style={{ width: "100%", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "9px 12px", fontSize: 13, resize: "vertical", outline: "none", boxSizing: "border-box" }} /></div>
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                  <Btn variant="ghost" onClick={() => setFbModal(false)}>Cancel</Btn>
+                  <Btn onClick={saveFeedback} disabled={fbSaving}>{fbSaving ? "Saving…" : editFb ? "Save" : "Add Feedback"}</Btn>
+                </div>
+              </div>
+            </Modal>
+          )}
+        </div>
+      )}
+
+      {/* ══ REVIEWS TAB ══ */}
+      {tab === "reviews" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+            <EmpSelector />
+            <Btn onClick={() => { setEditRev(null); setRevForm({ ...emptyRev, employeeId: selEmp || "" }); setRevModal(true); }}>+ Add Review</Btn>
+          </div>
+          {!selEmp ? <NoEmpBanner /> : revLoading ? <Spinner /> : reviews.length === 0 ? (
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 40, textAlign: "center", color: C.textMuted }}>No reviews for this employee yet.</div>
+          ) : reviews.map(r => (
+            <div key={r.id} style={{ background: C.card, border: `1px solid ${r.status === "pending" ? C.amber + "55" : C.border}`, borderLeft: `4px solid ${r.status === "completed" ? C.green : C.amber}`, borderRadius: 14, overflow: "hidden" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 20px" }}>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: (r.status === "completed" ? C.green : C.amber) + "22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
+                  {r.status === "completed" ? "✅" : "⏳"}
+                </div>
+                <div style={{ flex: 1, cursor: "pointer" }} onClick={() => setExpandedRev(expandedRev === r.id ? null : r.id)}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{r.cycle_name || r.review_cycle || "—"}</div>
+                  <div style={{ fontSize: 12, color: C.textMuted }}>{r.period && `${r.period} · `}Reviewer: {r.reviewer_name || "—"}</div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {r.final_score && <div style={{ textAlign: "center" }}><div style={{ fontSize: 18, fontWeight: 900, color: C.green }}>{r.final_score}</div><div style={{ fontSize: 9, color: C.textMuted }}>SCORE</div></div>}
+                  {r.badge && <span style={{ background: C.green + "18", color: C.green, border: `1px solid ${C.green}33`, borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>{r.badge}</span>}
+                  {r.status === "pending" && <span style={{ background: C.amber + "18", color: C.amber, border: `1px solid ${C.amber}33`, borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 700 }}>Pending</span>}
+                  <button onClick={() => { setEditRev(r); setRevForm({ employeeId: r.employee_id, reviewCycleId: r.review_cycle_id || "", period: r.period || "", status: r.status, finalScore: r.final_score || "", badge: r.badge || "", reviewDate: r.review_date?.slice(0,10) || "", notes: r.notes || "" }); setRevModal(true); }}
+                    style={{ background: C.accent + "18", color: C.accent, border: `1px solid ${C.accent}33`, borderRadius: 6, padding: "4px 8px", fontSize: 11, cursor: "pointer" }}>✏</button>
+                  {isAdmin && <button onClick={() => deleteReview(r.id)} style={{ background: C.red + "18", color: C.red, border: `1px solid ${C.red}33`, borderRadius: 6, padding: "4px 8px", fontSize: 11, cursor: "pointer" }}>🗑</button>}
+                  <span style={{ color: C.textMuted, fontSize: 16, cursor: "pointer" }} onClick={() => setExpandedRev(expandedRev === r.id ? null : r.id)}>▾</span>
+                </div>
+              </div>
+            </div>
+          ))}
+          {revModal && (
+            <Modal title={editRev ? "Edit Review" : "Add Review"} onClose={() => setRevModal(false)}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <div><div style={{ fontSize: 12, color: C.textDim, fontWeight: 600, marginBottom: 6 }}>Employee *</div>
+                  <select value={revForm.employeeId} onChange={e => setRevForm(p => ({ ...p, employeeId: e.target.value }))} style={selStyle}>
+                    <option value="">— Select —</option>
+                    {allEmployees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                  </select></div>
+                <div><div style={{ fontSize: 12, color: C.textDim, fontWeight: 600, marginBottom: 6 }}>Review Cycle *</div>
+                  <select value={revForm.reviewCycleId} onChange={e => setRevForm(p => ({ ...p, reviewCycleId: e.target.value }))} style={selStyle}>
+                    <option value="">— Select Cycle —</option>
+                    {cycles.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select></div>
+                <Inp label="Period" value={revForm.period} onChange={v => setRevForm(p => ({ ...p, period: v }))} placeholder="e.g. Jan–Mar 2026" />
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <div><div style={{ fontSize: 12, color: C.textDim, fontWeight: 600, marginBottom: 6 }}>Status</div>
+                    <select value={revForm.status} onChange={e => setRevForm(p => ({ ...p, status: e.target.value }))} style={selStyle}>
+                      <option value="pending">Pending</option><option value="in-progress">In Progress</option><option value="completed">Completed</option>
+                    </select></div>
+                  <Inp label="Review Date" type="date" value={revForm.reviewDate} onChange={v => setRevForm(p => ({ ...p, reviewDate: v }))} />
+                </div>
+                {revForm.status === "completed" && (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                    <Inp label="Final Score" value={revForm.finalScore} onChange={v => setRevForm(p => ({ ...p, finalScore: v }))} placeholder="e.g. 4.2" />
+                    <Inp label="Rating Badge" value={revForm.badge} onChange={v => setRevForm(p => ({ ...p, badge: v }))} placeholder="e.g. Exceeds Expectations" />
+                  </div>
+                )}
+                <div><div style={{ fontSize: 12, color: C.textDim, fontWeight: 600, marginBottom: 6 }}>Notes</div>
+                  <textarea rows={3} value={revForm.notes} onChange={e => setRevForm(p => ({ ...p, notes: e.target.value }))}
+                    style={{ width: "100%", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "9px 12px", fontSize: 13, resize: "vertical", outline: "none", boxSizing: "border-box" }} /></div>
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                  <Btn variant="ghost" onClick={() => setRevModal(false)}>Cancel</Btn>
+                  <Btn onClick={saveReview} disabled={revSaving}>{revSaving ? "Saving…" : editRev ? "Save" : "Create Review"}</Btn>
+                </div>
+              </div>
+            </Modal>
+          )}
+        </div>
+      )}
+
+      {/* ══ REVIEW CYCLES TAB ══ */}
+      {tab === "cycles" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Review Cycles ({cycles.length})</span>
+            <Btn onClick={() => { setEditCycle(null); setCycleForm(emptyCycle); setCycleModal(true); }}>+ New Cycle</Btn>
+          </div>
+          {cyclesLoading ? <Spinner /> : cycles.length === 0 ? (
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 48, textAlign: "center", color: C.textMuted }}>
+              <div style={{ fontSize: 36, marginBottom: 12 }}>🗓</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 6 }}>No cycles yet</div>
+              <p style={{ fontSize: 13, margin: 0 }}>Create a cycle like "Q1 2026" to start assigning reviews.</p>
+            </div>
+          ) : cycles.map(c => (
+            <div key={c.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "16px 20px", display: "flex", alignItems: "center", gap: 14 }}>
+              <div style={{ fontSize: 22, flexShrink: 0 }}>🗓</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{c.name}</div>
+                <div style={{ fontSize: 12, color: C.textMuted }}>{c.start_date?.slice(0,10)} → {c.end_date?.slice(0,10)}</div>
+              </div>
+              <span style={{ background: c.status === "active" ? C.green + "18" : C.textMuted + "18", color: c.status === "active" ? C.green : C.textMuted, border: `1px solid ${c.status === "active" ? C.green : C.textMuted}33`, borderRadius: 20, padding: "3px 12px", fontSize: 12, fontWeight: 700 }}>
+                {c.status === "active" ? "Active" : "Closed"}
+              </span>
+              <button onClick={() => { setEditCycle(c); setCycleForm({ name: c.name, startDate: c.start_date?.slice(0,10) || "", endDate: c.end_date?.slice(0,10) || "", status: c.status }); setCycleModal(true); }}
+                style={{ background: C.accent + "18", color: C.accent, border: `1px solid ${C.accent}33`, borderRadius: 6, padding: "5px 9px", fontSize: 12, cursor: "pointer" }}>✏</button>
+              {isAdmin && <button onClick={() => deleteCycle(c.id)} style={{ background: C.red + "18", color: C.red, border: `1px solid ${C.red}33`, borderRadius: 6, padding: "5px 9px", fontSize: 12, cursor: "pointer" }}>🗑</button>}
+            </div>
+          ))}
+          {cycleModal && (
+            <Modal title={editCycle ? "Edit Cycle" : "New Review Cycle"} onClose={() => setCycleModal(false)}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <Inp label="Cycle Name *" value={cycleForm.name} onChange={v => setCycleForm(p => ({ ...p, name: v }))} placeholder="e.g. Q1 2026" required />
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <Inp label="Start Date" type="date" value={cycleForm.startDate} onChange={v => setCycleForm(p => ({ ...p, startDate: v }))} />
+                  <Inp label="End Date" type="date" value={cycleForm.endDate} onChange={v => setCycleForm(p => ({ ...p, endDate: v }))} />
+                </div>
+                <div><div style={{ fontSize: 12, color: C.textDim, fontWeight: 600, marginBottom: 6 }}>Status</div>
+                  <select value={cycleForm.status} onChange={e => setCycleForm(p => ({ ...p, status: e.target.value }))} style={selStyle}>
+                    <option value="active">Active</option><option value="closed">Closed</option>
+                  </select></div>
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                  <Btn variant="ghost" onClick={() => setCycleModal(false)}>Cancel</Btn>
+                  <Btn onClick={saveCycle} disabled={cycleSaving}>{cycleSaving ? "Saving…" : editCycle ? "Save" : "Create Cycle"}</Btn>
+                </div>
+              </div>
+            </Modal>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+
 const ADMIN_NAV = [
   { id: "dashboard", label: "Dashboard", icon: "⬡" },
   { id: "project_management", label: "Project Mgmt (Client)", icon: "📊" },
   { id: "people", label: "Employees & Resources", icon: "👥" },
+  { id: "performance", label: "Performance Management", icon: "🎯" },
   { id: "attendance", label: "Attendance & Claims", icon: "◷" },
   { id: "payslips", label: "Payslips", icon: "💰" },
   { id: "reports", label: "Reports", icon: "◫" },
@@ -8419,29 +9622,29 @@ const STYLE = [
   "@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');",
   "* { box-sizing: border-box; }",
   "input, select, button { font-family: inherit !important; }",
-  "input[type='date'], input[type='time'], input[type='datetime-local'] { color-scheme: dark; }",
-  "input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webkit-calendar-picker-indicator, input[type='datetime-local']::-webkit-calendar-picker-indicator { filter: brightness(0) invert(1) !important; opacity: 1 !important; cursor: pointer; }",
+  "input[type='date'], input[type='time'], input[type='datetime-local'] { color-scheme: var(--color-scheme, dark); }",
+  ".dark-mode input[type='date']::-webkit-calendar-picker-indicator, .dark-mode input[type='time']::-webkit-calendar-picker-indicator, .dark-mode input[type='datetime-local']::-webkit-calendar-picker-indicator { filter: brightness(0) invert(1) !important; opacity: 1 !important; cursor: pointer; }",
   "::-webkit-scrollbar { width: 4px; height: 4px; }",
   "::-webkit-scrollbar-track { background: transparent; }",
-  "::-webkit-scrollbar-thumb { background: #1E2740; border-radius: 4px; }",
+  "::-webkit-scrollbar-thumb { background: var(--c-border); border-radius: 4px; }",
   "@keyframes spin { to { transform: rotate(360deg); } }",
   /* ── Root layout ── */
   ".app-root { display: flex; flex-direction: column; min-height: 100vh; }",
   /* ── Header ── */
   ".app-header { position: fixed; top: 0; left: 0; right: 0; height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 18px 0 14px; z-index: 300; }",
-  ".burger-btn { background: none; border: 1px solid #1E2740; color: #E2E8F0; border-radius: 8px; padding: 6px 10px; font-size: 18px; cursor: pointer; line-height: 1; display: flex; align-items: center; flex-shrink: 0; }",
-  ".burger-btn:hover { background: rgba(255,255,255,0.07); }",
+  ".burger-btn { background: none; border: 1px solid var(--c-border); color: var(--c-text); border-radius: 8px; padding: 6px 10px; font-size: 18px; cursor: pointer; line-height: 1; display: flex; align-items: center; flex-shrink: 0; }",
+  ".burger-btn:hover { background: rgba(128,128,128,0.12); }",
   /* ── Body (sidebar + main) ── */
   ".app-body { display: flex; flex: 1; padding-top: 56px; }",
   /* ── Sidebar ── */
-  ".app-nav { width: 240px; flex-shrink: 0; display: flex; flex-direction: column; position: fixed; top: 56px; left: 0; height: calc(100vh - 56px); transition: width 0.28s cubic-bezier(0.4,0,0.2,1); z-index: 200; overflow-y: auto; overflow-x: hidden; background: linear-gradient(180deg,#0D1119 0%,#0F1420 100%); box-shadow: 1px 0 0 rgba(30,39,64,0.8), 8px 0 24px rgba(0,0,0,0.35); }",
+  ".app-nav { width: 240px; flex-shrink: 0; display: flex; flex-direction: column; position: fixed; top: 56px; left: 0; height: calc(100vh - 56px); transition: width 0.28s cubic-bezier(0.4,0,0.2,1); z-index: 200; overflow-y: auto; overflow-x: hidden; background: var(--c-nav); box-shadow: 1px 0 0 var(--c-border), 8px 0 24px rgba(0,0,0,0.18); }",
   ".app-nav.nav-closed { width: 56px; }",
   /* ── Nav section label ── */
-  ".nav-section { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #2A3550; padding: 16px 16px 6px; white-space: nowrap; }",
+  ".nav-section { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--c-nav-section); padding: 16px 16px 6px; white-space: nowrap; }",
   ".app-nav.nav-closed .nav-section { display: none; }",
   /* ── Nav items ── */
-  ".nav-item { width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 10px; border: none; cursor: pointer; text-align: left; margin-bottom: 2px; font-size: 13px; font-weight: 500; transition: background 0.18s ease, color 0.18s ease, width 0.28s, margin 0.28s, padding 0.28s; color: #4A5A7A; background: transparent; outline: none; white-space: nowrap; }",
-  ".nav-item:hover { background: rgba(59,130,246,0.07); color: #8899BB; }",
+  ".nav-item { width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 10px; border: none; cursor: pointer; text-align: left; margin-bottom: 2px; font-size: 13px; font-weight: 500; transition: background 0.18s ease, color 0.18s ease, width 0.28s, margin 0.28s, padding 0.28s; color: var(--c-nav-item); background: transparent; outline: none; white-space: nowrap; }",
+  ".nav-item:hover { background: rgba(59,130,246,0.07); color: var(--c-nav-hover); }",
   ".nav-item.active { background: linear-gradient(135deg,rgba(59,130,246,0.18) 0%,rgba(59,130,246,0.08) 100%); color: #3B82F6; font-weight: 650; box-shadow: inset 0 0 0 1px rgba(59,130,246,0.18); }",
   /* Collapsed: fixed 36px square, auto-centered */
   ".app-nav.nav-closed .nav-item { width: 36px; height: 36px; padding: 0; margin: 0 auto 4px; justify-content: center; gap: 0; border-radius: 10px; }",
@@ -8518,8 +9721,40 @@ export default function App() {
       return t && u ? JSON.parse(u) : null;
     } catch { return null; }
   });
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("pp_theme") !== "light");
   const [page, setPage] = useState("dashboard");
   const [navOpen, setNavOpen] = useState(false);
+
+  // Apply theme tokens before render
+  Object.assign(C, darkMode ? DARK : LIGHT);
+
+  // CSS variables string for class-based styles
+  const themeVars = `
+    :root {
+      --c-border: ${C.border};
+      --c-text: ${C.text};
+      --c-nav: ${(darkMode ? DARK : LIGHT)._nav};
+      --c-nav-section: ${(darkMode ? DARK : LIGHT)._navSection};
+      --c-nav-item: ${(darkMode ? DARK : LIGHT)._navItem};
+      --c-nav-hover: ${(darkMode ? DARK : LIGHT)._navHover};
+      --color-scheme: ${darkMode ? "dark" : "light"};
+    }
+  `;
+
+  function toggleTheme() {
+    const next = !darkMode;
+    setDarkMode(next);
+    localStorage.setItem("pp_theme", next ? "dark" : "light");
+  }
+
+  // Theme toggle button used in both headers
+  const ThemeToggle = () => (
+    <button onClick={toggleTheme} title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+      style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.textDim, padding: "5px 10px", fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", gap: 5, transition: "all 0.2s" }}>
+      {darkMode ? "☀" : "🌙"}
+      <span style={{ fontSize: 11, fontWeight: 600, color: C.textMuted }}>{darkMode ? "Light" : "Dark"}</span>
+    </button>
+  );
   const [portalTab, setPortalTab] = useState(null);
   const nav = (p) => { setPage(p); setNavOpen(false); };
   const navWithTab = (p, tab) => { if (tab) setPortalTab(tab); nav(p); };
@@ -8551,16 +9786,20 @@ export default function App() {
   if (!isAdmin) return (
     <><DialogProvider />
       <style>{STYLE}</style>
-      <div className="app-root" style={{ background: C.bg, color: C.text, fontFamily: "'DM Sans','Segoe UI',sans-serif" }}>
+      <style>{themeVars}</style>
+      <div className={`app-root${darkMode ? " dark-mode" : ""}`} style={{ background: C.bg, color: C.text, fontFamily: "'DM Sans','Segoe UI',sans-serif" }}>
         {/* ── Header ── */}
         <header className="app-header" style={{ background: C.surface, borderBottom: `1px solid ${C.border}` }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <button className="burger-btn" onClick={() => setNavOpen(v => !v)} aria-label="Toggle sidebar">
               {navOpen ? "✕" : "☰"}
             </button>
-            <img src="/image.png" alt="Logo" style={{ height: 50, objectFit: "contain" }} />
+            <div style={{ background: darkMode ? "transparent" : "#0A0D14", borderRadius: 8, padding: darkMode ? 0 : "3px 10px", display: "flex", alignItems: "center" }}>
+              <img src="/image.png" alt="Logo" style={{ height: 50, objectFit: "contain" }} />
+            </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <ThemeToggle />
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <Avatar initials={currentUser.avatar || mkAvi(currentUser.emp_name || "")} color={C.accent} size={28} />
               <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{currentUser.emp_name || currentUser.username}</span>
@@ -8610,16 +9849,20 @@ export default function App() {
   return (
     <><DialogProvider />
       <style>{STYLE}</style>
-      <div className="app-root" style={{ background: C.bg, color: C.text, fontFamily: "'DM Sans','Segoe UI',sans-serif" }}>
+      <style>{themeVars}</style>
+      <div className={`app-root${darkMode ? " dark-mode" : ""}`} style={{ background: C.bg, color: C.text, fontFamily: "'DM Sans','Segoe UI',sans-serif" }}>
         {/* ── Header ── */}
         <header className="app-header" style={{ background: C.surface, borderBottom: `1px solid ${C.border}` }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <button className="burger-btn" onClick={() => setNavOpen(v => !v)} aria-label="Toggle sidebar">
               {navOpen ? "✕" : "☰"}
             </button>
-            <img src="/image.png" alt="Logo" style={{ height: 34, objectFit: "contain" }} />
+            <div style={{ background: darkMode ? "transparent" : "#0A0D14", borderRadius: 8, padding: darkMode ? 0 : "3px 10px", display: "flex", alignItems: "center" }}>
+              <img src="/image.png" alt="Logo" style={{ height: 34, objectFit: "contain" }} />
+            </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <ThemeToggle />
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <Avatar initials={currentUser.avatar || mkAvi(currentUser.emp_name || "")} color={currentUser.role === "manager" ? C.green : C.purple} size={28} />
               <div>
@@ -8688,6 +9931,7 @@ export default function App() {
             {page === "resumes" && <AdminCompanyResume />}
             {page === "subscriptions" && <SubscriptionManagement />}
             {page === "onboard" && <OnboardEmployee />}
+            {page === "performance" && <PerformanceManagement currentUser={currentUser} />}
             {page === "compensation" && currentUser.role === "admin" && <CompensationDetails />}
             {page === "infra" && currentUser.role === "admin" && <AdminAssets />}
             {page === "emp-dashboard" && isManager && <EmployeeDashboard currentUser={currentUser} navFn={navWithTab} />}

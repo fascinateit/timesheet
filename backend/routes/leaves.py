@@ -16,6 +16,8 @@ def _fmt(row):
     for k in ("start_date", "end_date", "created_at", "updated_at"):
         if row.get(k) and hasattr(row[k], "isoformat"):
             row[k] = row[k].isoformat()
+    if "is_half_day" in row:
+        row["is_half_day"] = bool(row["is_half_day"])
     return row
 
 
@@ -27,6 +29,13 @@ def _day_count(start_str, end_str):
         return max((e - s).days + 1, 0)
     except Exception:
         return 0
+
+
+def _resolve_days(start_str, end_str, is_half_day):
+    """Half-day requests are only valid for a single-day range and count as 0.5 day."""
+    if is_half_day and str(start_str)[:10] == str(end_str)[:10]:
+        return 0.5
+    return _day_count(start_str, end_str)
 
 
 def _ensure_balance_row(emp_id):
@@ -105,8 +114,11 @@ def create_leave():
     if not all([emp_id, d.get("startDate"), d.get("endDate")]):
         return jsonify(error="employeeId, startDate, endDate are required"), 400
 
-    leave_type = d.get("type", "Annual")
-    days       = _day_count(d["startDate"], d["endDate"])
+    leave_type  = d.get("type", "Annual")
+    is_half_day = bool(d.get("isHalfDay"))
+    if is_half_day and d["startDate"] != d["endDate"]:
+        return jsonify(error="Half-day leave requires the start and end date to be the same."), 400
+    days = _resolve_days(d["startDate"], d["endDate"], is_half_day)
 
     # Deduct from balance if this is a balance-consuming leave type
     if leave_type in BALANCE_TYPES and days > 0:
@@ -126,8 +138,8 @@ def create_leave():
         )
 
     lid = execute(
-        "INSERT INTO leaves (employee_id,leave_type,start_date,end_date,reason,status) VALUES (%s,%s,%s,%s,%s,'pending')",
-        (emp_id, leave_type, d.get("startDate"), d.get("endDate"), d.get("reason", "")),
+        "INSERT INTO leaves (employee_id,leave_type,is_half_day,start_date,end_date,reason,status) VALUES (%s,%s,%s,%s,%s,%s,'pending')",
+        (emp_id, leave_type, is_half_day, d.get("startDate"), d.get("endDate"), d.get("reason", "")),
     )
     row = query(
         """
@@ -166,7 +178,7 @@ def approve_leave(lid):
 def reject_leave(lid):
     user = json.loads(get_jwt_identity())
     lv = query(
-        "SELECT employee_id, leave_type, start_date, end_date, status FROM leaves WHERE id=%s",
+        "SELECT employee_id, leave_type, is_half_day, start_date, end_date, status FROM leaves WHERE id=%s",
         (lid,), fetch="one",
     )
     if not lv: return jsonify(error="Not found"), 404
@@ -177,7 +189,7 @@ def reject_leave(lid):
 
     # Refund balance if the leave was pending and used bucket days
     if lv["status"] == "pending" and lv["leave_type"] in BALANCE_TYPES:
-        days = _day_count(lv["start_date"], lv["end_date"])
+        days = _resolve_days(lv["start_date"], lv["end_date"], lv["is_half_day"])
         if days > 0:
             execute(
                 "UPDATE leave_balance SET balance=balance+%s, total_used=GREATEST(total_used-%s,0) WHERE employee_id=%s",
@@ -198,7 +210,7 @@ def update_leave(lid):
     d = request.get_json(silent=True) or {}
 
     lv = query(
-        "SELECT employee_id, leave_type, start_date, end_date, status FROM leaves WHERE id=%s",
+        "SELECT employee_id, leave_type, is_half_day, start_date, end_date, status FROM leaves WHERE id=%s",
         (lid,), fetch="one",
     )
     if not lv: return jsonify(error="Not found"), 404
@@ -208,13 +220,16 @@ def update_leave(lid):
     if user["role"] == "employee" and lv["employee_id"] != user["employee_id"]:
         return jsonify(error="Forbidden"), 403
 
-    new_type  = d.get("type", lv["leave_type"])
-    new_start = d.get("startDate", str(lv["start_date"])[:10])
-    new_end   = d.get("endDate",   str(lv["end_date"])[:10])
-    new_reason = d.get("reason", "")
+    new_type     = d.get("type", lv["leave_type"])
+    new_start    = d.get("startDate", str(lv["start_date"])[:10])
+    new_end      = d.get("endDate",   str(lv["end_date"])[:10])
+    new_reason   = d.get("reason", "")
+    new_half_day = bool(d.get("isHalfDay", lv["is_half_day"]))
+    if new_half_day and new_start != new_end:
+        return jsonify(error="Half-day leave requires the start and end date to be the same."), 400
 
-    old_days = _day_count(lv["start_date"], lv["end_date"])
-    new_days = _day_count(new_start, new_end)
+    old_days = _resolve_days(lv["start_date"], lv["end_date"], lv["is_half_day"])
+    new_days = _resolve_days(new_start, new_end, new_half_day)
 
     emp_id = lv["employee_id"]
     _ensure_balance_row(emp_id)
@@ -244,8 +259,8 @@ def update_leave(lid):
         )
 
     execute(
-        "UPDATE leaves SET leave_type=%s, start_date=%s, end_date=%s, reason=%s WHERE id=%s",
-        (new_type, new_start, new_end, new_reason, lid),
+        "UPDATE leaves SET leave_type=%s, is_half_day=%s, start_date=%s, end_date=%s, reason=%s WHERE id=%s",
+        (new_type, new_half_day, new_start, new_end, new_reason, lid),
     )
     row = query(
         """SELECT l.*, e.name AS employee_name, e.avatar, e.group_id, g.color AS group_color
@@ -263,7 +278,7 @@ def update_leave(lid):
 def delete_leave(lid):
     user = json.loads(get_jwt_identity())
     lv = query(
-        "SELECT employee_id, leave_type, start_date, end_date, status FROM leaves WHERE id=%s",
+        "SELECT employee_id, leave_type, is_half_day, start_date, end_date, status FROM leaves WHERE id=%s",
         (lid,), fetch="one",
     )
     if not lv: return jsonify(error="Not found"), 404
@@ -277,7 +292,7 @@ def delete_leave(lid):
 
     # Refund balance for pending bucket-type leaves
     if lv["status"] == "pending" and lv["leave_type"] in BALANCE_TYPES:
-        days = _day_count(lv["start_date"], lv["end_date"])
+        days = _resolve_days(lv["start_date"], lv["end_date"], lv["is_half_day"])
         if days > 0:
             execute(
                 "UPDATE leave_balance SET balance=balance+%s, total_used=GREATEST(total_used-%s,0) WHERE employee_id=%s",

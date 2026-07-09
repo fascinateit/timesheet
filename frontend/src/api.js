@@ -1,5 +1,5 @@
 // src/api.js  –  Centralised API service
-const BASE = process.env.REACT_APP_API_URL || "http://localhost:5002/api";
+const BASE = process.env.REACT_APP_API_URL || "http://localhost:5001/api";
 
 function token() {
   return localStorage.getItem("pp_token");
@@ -191,4 +191,36 @@ export const api = {
     return data;
   },
 
+  // Performance — Goals
+  getPerformanceGoals: (params = {}) => req("GET", `/performance/goals/?${new URLSearchParams(params)}`),
+  createPerformanceGoal: (d) => req("POST", "/performance/goals/", d),
+  updatePerformanceGoal: (id, d) => req("PUT", `/performance/goals/${id}`, d),
+  deletePerformanceGoal: (id) => req("DELETE", `/performance/goals/${id}`),
+
+  // Performance — Review Cycles
+  getReviewCycles: () => req("GET", "/performance/review-cycles/"),
+  createReviewCycle: (d) => req("POST", "/performance/review-cycles/", d),
+  updateReviewCycle: (id, d) => req("PUT", `/performance/review-cycles/${id}`, d),
+  deleteReviewCycle: (id) => req("DELETE", `/performance/review-cycles/${id}`),
+
+  // Performance — Self Assessments
+  getSelfAssessments: (params = {}) => req("GET", `/performance/self-assessments/?${new URLSearchParams(params)}`),
+  upsertSelfAssessment: (d) => req("POST", "/performance/self-assessments/", d),
+
+  // Performance — Manager Feedback
+  getManagerFeedbacks: (params = {}) => req("GET", `/performance/feedbacks/?${new URLSearchParams(params)}`),
+  createManagerFeedback: (d) => req("POST", "/performance/feedbacks/", d),
+  updateManagerFeedback: (id, d) => req("PUT", `/performance/feedbacks/${id}`, d),
+  deleteManagerFeedback: (id) => req("DELETE", `/performance/feedbacks/${id}`),
+
+  // Performance — Reviews
+  getPerformanceReviews: (params = {}) => req("GET", `/performance/reviews/?${new URLSearchParams(params)}`),
+  createPerformanceReview: (d) => req("POST", "/performance/reviews/", d),
+  updatePerformanceReview: (id, d) => req("PUT", `/performance/reviews/${id}`, d),
+  deletePerformanceReview: (id) => req("DELETE", `/performance/reviews/${id}`),
+
+  // Performance — Helper (manager's reports / all employees for admin)
+  getMyReports: () => req("GET", "/performance/my-reports/"),
+
 };
+

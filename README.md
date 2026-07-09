@@ -537,6 +537,8 @@ crontab -e
 
 0 6 * * * /opt/projectpulse/venv/bin/python /opt/projectpulse/backend/daily_report.py >> /opt/projectpulse/logs/report.log 2>&1
 
+0 6 * * * /opt/projectpulse/venv/bin/python /opt/projectpulse/backend/wishes.py >> /opt/projectpulse/logs/wishes.log 2>&1
+
 crontab -l
 ```
 
