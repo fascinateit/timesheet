@@ -582,19 +582,19 @@ function ProjectDashboard({ projects, invoices }) {
   });
 
   // ── Global aggregates ─────────────────────────────────────────────────
-  const totalBudget  = projects.reduce((a, p) => p.status === "active" ? a + parseFloat(p.budget || 0) : a, 0);
-  const totalBurned  = projects.reduce((a, p) => p.status === "active" ? a + parseFloat(p.burned || 0) : a, 0);
-  const rootInvs     = invoices.filter(i => !i.parent_invoice_id);
-  const totalRaised  = rootInvs.reduce((a, i) => a + parseFloat(i.amount || 0), 0);
-  const totalTdsSum  = rootInvs.reduce((a, i) => a + parseFloat(i.tds_amount || 0), 0);
-  const tdsDeducted  = rootInvs.filter(i => i.status === "cleared").reduce((a, i) => a + parseFloat(i.tds_amount || 0), 0);
-  const tdsExpected  = rootInvs.filter(i => i.status !== "cleared").reduce((a, i) => a + parseFloat(i.tds_amount || 0), 0);
+  const totalBudget = projects.reduce((a, p) => p.status === "active" ? a + parseFloat(p.budget || 0) : a, 0);
+  const totalBurned = projects.reduce((a, p) => p.status === "active" ? a + parseFloat(p.burned || 0) : a, 0);
+  const rootInvs = invoices.filter(i => !i.parent_invoice_id);
+  const totalRaised = rootInvs.reduce((a, i) => a + parseFloat(i.amount || 0), 0);
+  const totalTdsSum = rootInvs.reduce((a, i) => a + parseFloat(i.tds_amount || 0), 0);
+  const tdsDeducted = rootInvs.filter(i => i.status === "cleared").reduce((a, i) => a + parseFloat(i.tds_amount || 0), 0);
+  const tdsExpected = rootInvs.filter(i => i.status !== "cleared").reduce((a, i) => a + parseFloat(i.tds_amount || 0), 0);
   const totalCleared = rootInvs.filter(i => i.status === "cleared").reduce((a, i) => a + (parseFloat(i.amount || 0) - parseFloat(i.tds_amount || 0)), 0)
-                     + rootInvs.filter(i => i.status === "partial").reduce((a, i) => a + parseFloat(i.payment_received || 0), 0);
+    + rootInvs.filter(i => i.status === "partial").reduce((a, i) => a + parseFloat(i.payment_received || 0), 0);
   const totalPending = rootInvs.filter(i => i.status === "partial").reduce((a, i) => a + parseFloat(i.balance_amount || 0), 0)
-                     + rootInvs.filter(i => i.status === "pending").reduce((a, i) => a + parseFloat(i.amount || 0), 0);
-  const collectPct   = (totalRaised - totalTdsSum) > 0 ? Math.min(Math.round((totalCleared / (totalRaised - totalTdsSum)) * 100), 100) : 0;
-  const activeCount  = projects.filter(p => p.status === "active").length;
+    + rootInvs.filter(i => i.status === "pending").reduce((a, i) => a + parseFloat(i.amount || 0), 0);
+  const collectPct = (totalRaised - totalTdsSum) > 0 ? Math.min(Math.round((totalCleared / (totalRaised - totalTdsSum)) * 100), 100) : 0;
+  const activeCount = projects.filter(p => p.status === "active").length;
   const pendingCount = rootInvs.filter(i => i.status !== "cleared").length;
 
   // ── Chart helpers ─────────────────────────────────────────────────────
@@ -635,11 +635,11 @@ function ProjectDashboard({ projects, invoices }) {
     const pInvs = invoices.filter(i => i.project_id === p.id && !i.parent_invoice_id);
     return {
       name: p.code, fullName: p.name,
-      Raised:  pInvs.reduce((s, i) => s + parseFloat(i.amount || 0), 0),
+      Raised: pInvs.reduce((s, i) => s + parseFloat(i.amount || 0), 0),
       Cleared: pInvs.filter(i => i.status === "cleared").reduce((s, i) => s + (parseFloat(i.amount || 0) - parseFloat(i.tds_amount || 0)), 0)
-             + pInvs.filter(i => i.status === "partial").reduce((s, i) => s + parseFloat(i.payment_received || 0), 0),
+        + pInvs.filter(i => i.status === "partial").reduce((s, i) => s + parseFloat(i.payment_received || 0), 0),
       Pending: pInvs.filter(i => i.status === "partial").reduce((s, i) => s + parseFloat(i.balance_amount || 0), 0)
-             + pInvs.filter(i => i.status === "pending").reduce((s, i) => s + parseFloat(i.amount || 0), 0),
+        + pInvs.filter(i => i.status === "pending").reduce((s, i) => s + parseFloat(i.amount || 0), 0),
     };
   }).filter(d => d.Raised > 0);
 
@@ -881,61 +881,61 @@ function ProjectDashboard({ projects, invoices }) {
         {filtered.length === 0
           ? <div style={{ padding: 48, textAlign: "center", color: C.textMuted, background: C.surface, borderRadius: 16, fontSize: 13 }}>No projects match your filters.</div>
           : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 14 }}>
-              {filtered.map((p, idx) => {
-                const raised  = invoices.filter(i => i.project_id === p.id).reduce((s, i) => s + parseFloat(i.amount || 0), 0);
-                const budget  = parseFloat(p.budget || 0);
-                const burned  = parseFloat(p.burned || 0);
-                const highest = Math.max(budget, raised, burned, 1);
-                const isOver  = raised > budget;
-                const col     = PALETTE[idx % PALETTE.length];
-                const utilPct = budget > 0 ? Math.min(Math.round((raised / budget) * 100), 999) : 0;
+            {filtered.map((p, idx) => {
+              const raised = invoices.filter(i => i.project_id === p.id).reduce((s, i) => s + parseFloat(i.amount || 0), 0);
+              const budget = parseFloat(p.budget || 0);
+              const burned = parseFloat(p.burned || 0);
+              const highest = Math.max(budget, raised, burned, 1);
+              const isOver = raised > budget;
+              const col = PALETTE[idx % PALETTE.length];
+              const utilPct = budget > 0 ? Math.min(Math.round((raised / budget) * 100), 999) : 0;
 
-                return (
-                  <div key={p.id} style={{
-                    background: C.card, border: `1px solid ${C.border}`,
-                    borderRadius: 16, overflow: "hidden",
-                    display: "flex", flexDirection: "column"
-                  }}>
-                    {/* Colored header strip */}
-                    <div style={{ background: `linear-gradient(90deg, ${col}33, ${col}0a)`, borderBottom: `1px solid ${col}22`, padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <div>
-                        <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>{p.name}</div>
-                        <div style={{ fontSize: 11, color: col, fontWeight: 600, marginTop: 2 }}>{p.code}</div>
-                      </div>
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-                        <StatusBadge status={p.status} />
-                        <span style={{ fontSize: 10, color: C.textMuted }}>
-                          {isOver ? "⚠ Over budget" : `${fmt$(budget - raised)} pending`}
-                        </span>
-                      </div>
+              return (
+                <div key={p.id} style={{
+                  background: C.card, border: `1px solid ${C.border}`,
+                  borderRadius: 16, overflow: "hidden",
+                  display: "flex", flexDirection: "column"
+                }}>
+                  {/* Colored header strip */}
+                  <div style={{ background: `linear-gradient(90deg, ${col}33, ${col}0a)`, borderBottom: `1px solid ${col}22`, padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>{p.name}</div>
+                      <div style={{ fontSize: 11, color: col, fontWeight: 600, marginTop: 2 }}>{p.code}</div>
                     </div>
-
-                    {/* Body */}
-                    <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
-                      {[
-                        { label: "BUDGET", value: budget, color: C.accent },
-                        { label: "RAISED", value: raised, color: isOver ? C.red : C.green },
-                        { label: "BURNED", value: burned, color: C.amber },
-                      ].map(row => (
-                        <div key={row.label} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          <div style={{ width: 52, fontSize: 10, color: C.textMuted, fontWeight: 700, letterSpacing: .5, textAlign: "right" }}>{row.label}</div>
-                          <div style={{ flex: 1, height: 8, borderRadius: 6, background: C.surface, overflow: "hidden", border: `1px solid ${C.border}` }}>
-                            <div style={{ width: `${(row.value / highest) * 100}%`, height: "100%", background: row.color, borderRadius: 6, transition: "width .35s ease" }} />
-                          </div>
-                          <div style={{ width: 82, fontSize: 12, fontWeight: 700, color: row.color, textAlign: "right" }}>{fmt$(row.value)}</div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Footer: utilization */}
-                    <div style={{ borderTop: `1px solid ${C.border}`, padding: "10px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", background: C.surface }}>
-                      <span style={{ fontSize: 11, color: C.textMuted }}>Budget utilization</span>
-                      <span style={{ fontSize: 12, fontWeight: 800, color: isOver ? C.red : utilPct >= 85 ? C.amber : C.green }}>{utilPct}%</span>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                      <StatusBadge status={p.status} />
+                      <span style={{ fontSize: 10, color: C.textMuted }}>
+                        {isOver ? "⚠ Over budget" : `${fmt$(budget - raised)} pending`}
+                      </span>
                     </div>
                   </div>
-                );
-              })}
-            </div>
+
+                  {/* Body */}
+                  <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
+                    {[
+                      { label: "BUDGET", value: budget, color: C.accent },
+                      { label: "RAISED", value: raised, color: isOver ? C.red : C.green },
+                      { label: "BURNED", value: burned, color: C.amber },
+                    ].map(row => (
+                      <div key={row.label} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{ width: 52, fontSize: 10, color: C.textMuted, fontWeight: 700, letterSpacing: .5, textAlign: "right" }}>{row.label}</div>
+                        <div style={{ flex: 1, height: 8, borderRadius: 6, background: C.surface, overflow: "hidden", border: `1px solid ${C.border}` }}>
+                          <div style={{ width: `${(row.value / highest) * 100}%`, height: "100%", background: row.color, borderRadius: 6, transition: "width .35s ease" }} />
+                        </div>
+                        <div style={{ width: 82, fontSize: 12, fontWeight: 700, color: row.color, textAlign: "right" }}>{fmt$(row.value)}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Footer: utilization */}
+                  <div style={{ borderTop: `1px solid ${C.border}`, padding: "10px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", background: C.surface }}>
+                    <span style={{ fontSize: 11, color: C.textMuted }}>Budget utilization</span>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: isOver ? C.red : utilPct >= 85 ? C.amber : C.green }}>{utilPct}%</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         }
       </div>
 
@@ -974,8 +974,8 @@ function ProjectDashboard({ projects, invoices }) {
                     labelFormatter={(n, pl) => pl?.[0]?.payload?.fullName || n}
                     cursor={{ fill: C.accentGlow }} />
                   <Bar dataKey="Budget" fill={C.accent} radius={[5, 5, 0, 0]} barSize={22} />
-                  <Bar dataKey="Raised"  fill={C.green}  radius={[5, 5, 0, 0]} barSize={22} />
-                  <Bar dataKey="Burned"  fill={C.amber}  radius={[5, 5, 0, 0]} barSize={22} />
+                  <Bar dataKey="Raised" fill={C.green} radius={[5, 5, 0, 0]} barSize={22} />
+                  <Bar dataKey="Burned" fill={C.amber} radius={[5, 5, 0, 0]} barSize={22} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -987,7 +987,7 @@ function ProjectDashboard({ projects, invoices }) {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
             {[
               { title: "Invoice Status by Project", sub: "Raised · Cleared · Pending per project", data: projectInvData },
-              { title: "Invoice Status by Client",  sub: "Raised · Cleared · Pending per client",  data: clientInvData  },
+              { title: "Invoice Status by Client", sub: "Raised · Cleared · Pending per client", data: clientInvData },
             ].map(({ title, sub, data }) => (
               <div key={title} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: "22px 22px", display: "flex", flexDirection: "column", gap: 14 }}>
                 <div>
@@ -997,22 +997,22 @@ function ProjectDashboard({ projects, invoices }) {
                 {data.length === 0
                   ? <div style={{ padding: 32, textAlign: "center", color: C.textMuted, fontSize: 12 }}>No invoice data available</div>
                   : <div style={{ width: "100%", height: 260 }}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={data} margin={{ top: 6, right: 12, left: 0, bottom: 4 }} barGap={2}>
-                          <XAxis dataKey="name" stroke={C.textMuted} fontSize={10} tickLine={false} axisLine={false} />
-                          <YAxis stroke={C.textMuted} fontSize={10} tickLine={false} axisLine={false} tickFormatter={tickFmt} />
-                          <Tooltip contentStyle={tooltipStyle} itemStyle={{ fontSize: 12, fontWeight: 700 }}
-                            formatter={(v, n) => [fmt$(v), n]}
-                            labelStyle={{ color: C.textDim, fontWeight: 700, fontSize: 12, marginBottom: 6 }}
-                            labelFormatter={(n, pl) => pl?.[0]?.payload?.fullName || n}
-                            cursor={{ fill: C.accentGlow }} />
-                          <Legend iconType="circle" wrapperStyle={{ fontSize: 11, color: C.text, paddingTop: 10 }} />
-                          <Bar dataKey="Raised"  fill={C.accent} radius={[4, 4, 0, 0]} barSize={16} />
-                          <Bar dataKey="Cleared" fill={C.green}  radius={[4, 4, 0, 0]} barSize={16} />
-                          <Bar dataKey="Pending" fill={C.amber}  radius={[4, 4, 0, 0]} barSize={16} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={data} margin={{ top: 6, right: 12, left: 0, bottom: 4 }} barGap={2}>
+                        <XAxis dataKey="name" stroke={C.textMuted} fontSize={10} tickLine={false} axisLine={false} />
+                        <YAxis stroke={C.textMuted} fontSize={10} tickLine={false} axisLine={false} tickFormatter={tickFmt} />
+                        <Tooltip contentStyle={tooltipStyle} itemStyle={{ fontSize: 12, fontWeight: 700 }}
+                          formatter={(v, n) => [fmt$(v), n]}
+                          labelStyle={{ color: C.textDim, fontWeight: 700, fontSize: 12, marginBottom: 6 }}
+                          labelFormatter={(n, pl) => pl?.[0]?.payload?.fullName || n}
+                          cursor={{ fill: C.accentGlow }} />
+                        <Legend iconType="circle" wrapperStyle={{ fontSize: 11, color: C.text, paddingTop: 10 }} />
+                        <Bar dataKey="Raised" fill={C.accent} radius={[4, 4, 0, 0]} barSize={16} />
+                        <Bar dataKey="Cleared" fill={C.green} radius={[4, 4, 0, 0]} barSize={16} />
+                        <Bar dataKey="Pending" fill={C.amber} radius={[4, 4, 0, 0]} barSize={16} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
                 }
               </div>
             ))}
@@ -1221,16 +1221,16 @@ function ProjectManagement({ readOnly = false, currentUser }) {
         const clientList = Object.values(clientMap).sort((a, b) => b.raised - a.raised);
 
         // ── Global KPI aggregates ─────────────────────────────────────────
-        const rootInvList  = invoices.filter(i => !i.parent_invoice_id);
-        const totalRaised  = rootInvList.reduce((a, i) => a + parseFloat(i.amount || 0), 0);
+        const rootInvList = invoices.filter(i => !i.parent_invoice_id);
+        const totalRaised = rootInvList.reduce((a, i) => a + parseFloat(i.amount || 0), 0);
         const totalTdsList = rootInvList.reduce((a, i) => a + parseFloat(i.tds_amount || 0), 0);
-        const tdsDeducted  = rootInvList.filter(i => i.status === "cleared").reduce((a, i) => a + parseFloat(i.tds_amount || 0), 0);
-        const tdsExpected  = rootInvList.filter(i => i.status !== "cleared").reduce((a, i) => a + parseFloat(i.tds_amount || 0), 0);
+        const tdsDeducted = rootInvList.filter(i => i.status === "cleared").reduce((a, i) => a + parseFloat(i.tds_amount || 0), 0);
+        const tdsExpected = rootInvList.filter(i => i.status !== "cleared").reduce((a, i) => a + parseFloat(i.tds_amount || 0), 0);
         const totalCleared = rootInvList.filter(i => i.status === "cleared").reduce((a, i) => a + (parseFloat(i.amount || 0) - parseFloat(i.tds_amount || 0)), 0)
-                           + rootInvList.filter(i => i.status === "partial").reduce((a, i) => a + parseFloat(i.payment_received || 0), 0);
+          + rootInvList.filter(i => i.status === "partial").reduce((a, i) => a + parseFloat(i.payment_received || 0), 0);
         const totalPending = rootInvList.filter(i => i.status === "partial").reduce((a, i) => a + parseFloat(i.balance_amount || 0), 0)
-                           + rootInvList.filter(i => i.status === "pending").reduce((a, i) => a + parseFloat(i.amount || 0), 0);
-        const collectPct   = (totalRaised - totalTdsList) > 0 ? Math.min(Math.round((totalCleared / (totalRaised - totalTdsList)) * 100), 100) : 0;
+          + rootInvList.filter(i => i.status === "pending").reduce((a, i) => a + parseFloat(i.amount || 0), 0);
+        const collectPct = (totalRaised - totalTdsList) > 0 ? Math.min(Math.round((totalCleared / (totalRaised - totalTdsList)) * 100), 100) : 0;
 
         return (
           <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
@@ -1238,9 +1238,9 @@ function ProjectManagement({ readOnly = false, currentUser }) {
             {/* ── Row 1: Global KPI strip ──────────────────────────────────── */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
               {[
-                { label: "Total Raised",  value: fmt$(totalRaised),  color: C.accent, sub: `${rootInvList.length} invoices` },
-                { label: "Total Cleared", value: fmt$(totalCleared), color: C.green,  sub: `${rootInvList.filter(i => i.status === "cleared").length} invoices` },
-                { label: "Total Pending", value: fmt$(totalPending), color: C.amber,  sub: `${rootInvList.filter(i => i.status !== "cleared").length} outstanding` },
+                { label: "Total Raised", value: fmt$(totalRaised), color: C.accent, sub: `${rootInvList.length} invoices` },
+                { label: "Total Cleared", value: fmt$(totalCleared), color: C.green, sub: `${rootInvList.filter(i => i.status === "cleared").length} invoices` },
+                { label: "Total Pending", value: fmt$(totalPending), color: C.amber, sub: `${rootInvList.filter(i => i.status !== "cleared").length} outstanding` },
               ].map(k => (
                 <div key={k.label} style={{ background: `linear-gradient(135deg, ${C.surface}, ${C.card})`, border: `1px solid ${k.color}33`, borderLeft: `3px solid ${k.color}`, borderRadius: 14, padding: "18px 20px", position: "relative", overflow: "hidden" }}>
                   <div style={{ position: "absolute", top: -16, right: -16, width: 70, height: 70, borderRadius: "50%", background: `radial-gradient(circle, ${k.color}15 0%, transparent 70%)`, pointerEvents: "none" }} />
@@ -1394,11 +1394,11 @@ function ProjectManagement({ readOnly = false, currentUser }) {
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14 }}>
                   {activeProjects.map((p, idx) => {
                     const projectInvoices = invoices.filter(i => i.project_id === p.id);
-                    const raised  = projectInvoices.reduce((a, i) => a + parseFloat(i.amount || 0), 0);
-                    const budget  = parseFloat(p.budget || 0);
+                    const raised = projectInvoices.reduce((a, i) => a + parseFloat(i.amount || 0), 0);
+                    const budget = parseFloat(p.budget || 0);
                     const utilPct = budget > 0 ? Math.min(Math.round((raised / budget) * 100), 999) : 0;
-                    const isOver  = raised > budget;
-                    const col     = PALETTE[idx % PALETTE.length];
+                    const isOver = raised > budget;
+                    const col = PALETTE[idx % PALETTE.length];
                     return (
                       <div key={p.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, overflow: "hidden" }}>
                         {/* Colour strip header */}
@@ -1523,9 +1523,9 @@ function ProjectManagement({ readOnly = false, currentUser }) {
                             <Td>
                               {inv.payment_received_date || inv.payment_received
                                 ? <div>
-                                    <div style={{ fontSize: 12, fontWeight: 700, color: C.green }}>{inv.payment_received != null ? fmt$(inv.payment_received) : "—"}</div>
-                                    <div style={{ fontSize: 10, color: C.textMuted }}>{inv.payment_received_date ? fmtD(inv.payment_received_date) : ""}</div>
-                                  </div>
+                                  <div style={{ fontSize: 12, fontWeight: 700, color: C.green }}>{inv.payment_received != null ? fmt$(inv.payment_received) : "—"}</div>
+                                  <div style={{ fontSize: 10, color: C.textMuted }}>{inv.payment_received_date ? fmtD(inv.payment_received_date) : ""}</div>
+                                </div>
                                 : <span style={{ fontSize: 11, color: C.textMuted }}>—</span>}
                             </Td>
                             <Td>
@@ -1554,7 +1554,7 @@ function ProjectManagement({ readOnly = false, currentUser }) {
                     </table>
                   </div>
                 )}
-                
+
                 {/* Pagination Controls */}
                 <PaginationControls page={invPage} setPage={setInvPage} perPage={invPerPage} setPerPage={setInvPerPage} total={sortedInvoices.length} />
               </div>
@@ -1854,10 +1854,10 @@ function CompanyExpenses({ modal, setModal, currentUser, projects }) {
   if (loading) return <Spinner />;
 
   // ── Derived data ──────────────────────────────────────────────────────────
-  const expTotal   = e => (parseFloat(e.amount) || 0) + (parseFloat(e.gst_amount) || 0);
-  const totalAll   = expenses.reduce((s, e) => s + expTotal(e), 0);
-  const totalPend  = expenses.filter(e => e.status === "pending").reduce((s, e) => s + expTotal(e), 0);
-  const totalClr   = expenses.filter(e => e.status === "cleared").reduce((s, e) => s + expTotal(e), 0);
+  const expTotal = e => (parseFloat(e.amount) || 0) + (parseFloat(e.gst_amount) || 0);
+  const totalAll = expenses.reduce((s, e) => s + expTotal(e), 0);
+  const totalPend = expenses.filter(e => e.status === "pending").reduce((s, e) => s + expTotal(e), 0);
+  const totalClr = expenses.filter(e => e.status === "cleared").reduce((s, e) => s + expTotal(e), 0);
   const totalAudit = expenses.filter(e => e.status === "sent to auditing").reduce((s, e) => s + expTotal(e), 0);
 
   const payerOptions = Array.from(new Set(expenses.map(e => e.paid_by).filter(Boolean))).sort();
@@ -1873,7 +1873,7 @@ function CompanyExpenses({ modal, setModal, currentUser, projects }) {
     return true;
   });
   const filteredTotal = filteredList.reduce((s, e) => s + expTotal(e), 0);
-  
+
   const expTotalPages = Math.ceil(filteredList.length / expPerPage) || 1;
   const paginatedExpenses = filteredList.slice((expPage - 1) * expPerPage, expPage * expPerPage);
 
@@ -2154,7 +2154,7 @@ function CompanyExpenses({ modal, setModal, currentUser, projects }) {
             <div style={{ fontSize: 12, color: C.textMuted }}>Total: <strong style={{ color: C.green }}>{fmt$(filteredTotal)}</strong></div>
           </div>
         )}
-        
+
         {/* Pagination Controls */}
         <PaginationControls page={expPage} setPage={setExpPage} perPage={expPerPage} setPerPage={setExpPerPage} total={filteredList.length} />
       </div>
@@ -2269,7 +2269,7 @@ function InvoiceForm({ projects, clients, initialData, saving, onCancel, onSave 
   };
   const parseDate = (d) => {
     if (!d) return "";
-    try { const dt = (typeof d === "string" && /^\d{4}-\d{2}-\d{2}/.test(d)) ? new Date(d.slice(0, 10) + "T00:00:00") : new Date(d); const p = n => String(n).padStart(2, "0"); return `${dt.getFullYear()}-${p(dt.getMonth()+1)}-${p(dt.getDate())}`; } catch { return ""; }
+    try { const dt = (typeof d === "string" && /^\d{4}-\d{2}-\d{2}/.test(d)) ? new Date(d.slice(0, 10) + "T00:00:00") : new Date(d); const p = n => String(n).padStart(2, "0"); return `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`; } catch { return ""; }
   };
   const [form, setForm] = useState(initialData ? {
     client_id: initialData.client_id || "",
@@ -2607,124 +2607,253 @@ function InvoicePrintPreview({ invoice }) {
 // ═══════════════════════════════════════════════════════
 // LOGIN PAGE
 // ════════════════════════════════════════════════════════
+const LOGIN_FEATURES = [
+  { icon: "⏱", title: "Timesheets", text: "Log hours by project, copy last week and submit for approval.", color: "#3B82F6" },
+  { icon: "🌴", title: "Leave", text: "Check your balance, plan time off and track requests.", color: "#10B981" },
+  { icon: "💰", title: "Payslips", text: "See your salary breakdown and download approved slips.", color: "#F59E0B" },
+  { icon: "👤", title: "Profile", text: "Keep personal, bank and contact details up to date.", color: "#8B5CF6" },
+];
+
 function LoginPage({ onLogin }) {
-  const [username, setUsername] = useState("");
+  const [username, setUsername] = useState(() => { try { return localStorage.getItem("pp_last_user") || ""; } catch { return ""; } });
   const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(() => { try { return !!localStorage.getItem("pp_last_user"); } catch { return false; } });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPass, setShowPass] = useState(false);
+  const [caps, setCaps] = useState(false);
+  const [help, setHelp] = useState(false);
+  const [touched, setTouched] = useState(false);
+  const passRef = useRef(null);
+  const userRef = useRef(null);
+  const formRef = useRef(null);
+  const shakeForm = () => formRef.current?.animate?.([{ transform: "translateX(0)" }, { transform: "translateX(-6px)" }, { transform: "translateX(6px)" }, { transform: "translateX(-4px)" }, { transform: "translateX(0)" }], { duration: 360 });
 
-  async function handleSubmit() {
-    setError(""); if (!username || !password) { setError("Both fields required."); return; }
+  useEffect(() => { (username ? passRef : userRef).current?.focus(); }, []);
+
+  const hour = new Date().getHours();
+  const greet = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const userErr = touched && !username.trim() ? "Enter your username" : "";
+  const passErr = touched && !password ? "Enter your password" : "";
+
+  async function handleSubmit(e) {
+    e?.preventDefault();
+    setTouched(true); setError("");
+    if (!username.trim() || !password) { shakeForm(); return; }
     setLoading(true);
-    try { await onLogin(username, password); }
-    catch (e) { setError(e.message || "Login failed"); }
-    finally { setLoading(false); }
+    try {
+      try { remember ? localStorage.setItem("pp_last_user", username.trim()) : localStorage.removeItem("pp_last_user"); } catch { }
+      await onLogin(username.trim(), password);
+    } catch (err) {
+      const msg = err?.message || "";
+      setError(/401|invalid|incorrect|credential/i.test(msg) ? "That username and password don't match. Please try again."
+        : /fetch|network|failed to/i.test(msg) ? "Can't reach the server. Check your connection and try again."
+          : msg || "Sign in failed. Please try again.");
+      setPassword(""); setTouched(false); shakeForm();
+      setTimeout(() => passRef.current?.focus(), 0);
+    } finally { setLoading(false); }
   }
+  const onKey = e => setCaps(!!e.getModifierState?.("CapsLock"));
 
   return (
-    <div style={{ minHeight: "100vh", fontFamily: "'DM Sans','Segoe UI',sans-serif", position: "relative", overflow: "hidden" }}>
+    <div className="lg">
+      <style>{`
+        .lg { min-height: 100vh; min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(420px, 1fr); background: #070A12; color: #E2E8F0; font-family: 'DM Sans','Segoe UI',system-ui,sans-serif; }
+        .lg *, .lg *::before, .lg *::after { box-sizing: border-box; }
 
-      {/* Full-page banner background */}
-      <img src="/banner.jpg" alt="" style={{
-        position: "fixed", inset: 0, width: "100%", height: "100%",
-        objectFit: "fill", objectPosition: "center", zIndex: 0
-      }} />
-      {/* Dark overlay */}
-      <div style={{
-        position: "fixed", inset: 0, zIndex: 1,
-        background: "linear-gradient(135deg, rgba(10,14,26,0.88) 0%, rgba(10,14,26,0.72) 50%, rgba(20,10,40,0.82) 100%)"
-      }} />
-      {/* Ambient glow */}
-      <div style={{ position: "fixed", inset: 0, zIndex: 1, pointerEvents: "none" }}>
-        <div style={{ position: "absolute", top: "10%", left: "5%", width: 400, height: 400, borderRadius: "50%", background: `radial-gradient(circle, ${C.accent}22 0%, transparent 70%)` }} />
-        <div style={{ position: "absolute", bottom: "10%", right: "5%", width: 500, height: 500, borderRadius: "50%", background: "radial-gradient(circle, #7c3aed22 0%, transparent 70%)" }} />
-      </div>
+        /* Brand panel */
+        .lg-brand { position: relative; overflow: hidden; padding: clamp(28px, 4vw, 56px); display: flex; flex-direction: column; justify-content: space-between; gap: 32px; isolation: isolate; }
+        .lg-brand-bg { position: absolute; inset: 0; z-index: -2; background: url(/banner.jpg) left center / cover no-repeat; transform: scale(1.04); filter: saturate(.9); }
+        .lg-brand::before { content: ""; position: absolute; inset: 0; z-index: -1; background:
+            radial-gradient(600px 400px at 15% 20%, rgba(59,130,246,.28), transparent 70%),
+            radial-gradient(600px 420px at 85% 90%, rgba(139,92,246,.30), transparent 70%),
+            linear-gradient(160deg, rgba(7,10,18,.86) 0%, rgba(10,14,26,.80) 50%, rgba(18,10,36,.92) 100%); }
+        .lg-logo { height: 44px; width: auto; object-fit: contain; align-self: flex-start; filter: drop-shadow(0 4px 18px rgba(59,130,246,.35)); }
+        .lg-hero { max-width: 560px; }
+        .lg-eyebrow { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; color: #A5B4FC; background: rgba(99,102,241,.14); border: 1px solid rgba(129,140,248,.3); padding: 6px 12px; border-radius: 999px; letter-spacing: .3px; }
+        .lg-eyebrow i { width: 7px; height: 7px; border-radius: 50%; background: #22C55E; box-shadow: 0 0 0 4px rgba(34,197,94,.18); }
+        .lg-h1 { font-size: clamp(30px, 3.6vw, 46px); line-height: 1.08; font-weight: 800; letter-spacing: -1.2px; margin: 18px 0 14px; color: #fff; }
+        .lg-h1 span { background: linear-gradient(90deg, #60A5FA, #A78BFA 60%, #F0ABFC); -webkit-background-clip: text; background-clip: text; color: transparent; }
+        .lg-lead { font-size: 15.5px; line-height: 1.6; color: rgba(226,232,240,.72); margin: 0; max-width: 500px; }
+        .lg-features { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 32px; }
+        .lg-feat { display: flex; gap: 12px; align-items: flex-start; padding: 14px; border-radius: 16px; background: rgba(255,255,255,.045); border: 1px solid rgba(255,255,255,.08); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); transition: border-color .2s, transform .2s; }
+        .lg-feat:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--c) 55%, transparent); }
+        .lg-feat-ico { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 19px; flex-shrink: 0; background: color-mix(in srgb, var(--c) 20%, transparent); border: 1px solid color-mix(in srgb, var(--c) 40%, transparent); }
+        .lg-feat b { display: block; font-size: 14px; color: #fff; margin-bottom: 3px; }
+        .lg-feat p { margin: 0; font-size: 12.5px; line-height: 1.45; color: rgba(226,232,240,.62); }
+        .lg-trust { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 12.5px; color: rgba(226,232,240,.6); }
+        .lg-trust span { display: inline-flex; align-items: center; gap: 6px; }
 
-      {/* Content */}
-      <div style={{
-        position: "relative", zIndex: 2,
-        minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "32px 20px"
-      }}>
-        <div style={{ width: "100%", maxWidth: 400 }}>
+        /* Form panel */
+        .lg-form-side { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: clamp(24px, 4vw, 56px); background: radial-gradient(500px 300px at 50% 0%, rgba(59,130,246,.10), transparent 70%), #0B0F1A; position: relative; }
+        .lg-card { width: 100%; max-width: 420px; }
+        .lg-mobile-logo { display: none; }
+        .lg-hi { font-size: 13px; font-weight: 700; color: #93C5FD; margin-bottom: 6px; }
+        .lg-title { font-size: clamp(24px, 2.6vw, 30px); font-weight: 800; color: #fff; letter-spacing: -0.6px; margin: 0; }
+        .lg-sub { font-size: 14px; color: rgba(226,232,240,.6); margin: 8px 0 28px; line-height: 1.5; }
+        .lg-form { display: flex; flex-direction: column; gap: 16px; }
+        .lg-field { display: flex; flex-direction: column; gap: 7px; }
+        .lg-label-row { display: flex; justify-content: space-between; align-items: center; }
+        .lg-label { font-size: 13px; font-weight: 700; color: rgba(226,232,240,.85); }
+        .lg-link { background: none; border: none; padding: 0; color: #60A5FA; font-size: 12.5px; font-weight: 700; cursor: pointer; font-family: inherit; }
+        .lg-link:hover { text-decoration: underline; }
+        .lg-input-wrap { position: relative; display: flex; align-items: center; }
+        .lg-input-ico { position: absolute; left: 14px; width: 18px; height: 18px; color: rgba(226,232,240,.4); pointer-events: none; }
+        .lg-input { width: 100%; height: 50px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.12); border-radius: 14px; color: #fff; padding: 0 46px 0 44px; font-size: 15px; font-family: inherit; outline: none; transition: border-color .15s, box-shadow .15s, background .15s; }
+        .lg-input::placeholder { color: rgba(226,232,240,.35); }
+        .lg-input:hover { border-color: rgba(255,255,255,.2); }
+        .lg-input:focus { border-color: #3B82F6; background: rgba(59,130,246,.06); box-shadow: 0 0 0 4px rgba(59,130,246,.18); }
+        .lg-input.err { border-color: #F87171; }
+        .lg-input:-webkit-autofill { -webkit-text-fill-color: #fff; -webkit-box-shadow: 0 0 0 1000px #121827 inset; caret-color: #fff; }
+        .lg-eye { position: absolute; right: 8px; width: 36px; height: 36px; border-radius: 10px; border: none; background: transparent; color: rgba(226,232,240,.55); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .lg-eye:hover { background: rgba(255,255,255,.06); color: #fff; }
+        .lg-hint { font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+        .lg-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .lg-check { display: inline-flex; align-items: center; gap: 9px; font-size: 13px; color: rgba(226,232,240,.75); cursor: pointer; user-select: none; }
+        .lg-check input { width: 17px; height: 17px; accent-color: #3B82F6; cursor: pointer; margin: 0; }
+        .lg-error { display: flex; gap: 10px; align-items: flex-start; background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.35); color: #FCA5A5; border-radius: 12px; padding: 11px 14px; font-size: 13px; line-height: 1.45; }
+        .lg-btn { height: 52px; border: none; border-radius: 14px; font-size: 15px; font-weight: 800; color: #fff; cursor: pointer; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 10px; background: linear-gradient(135deg, #3B82F6, #6366F1 60%, #8B5CF6); background-size: 150% 100%; box-shadow: 0 10px 30px -8px rgba(99,102,241,.7); transition: transform .15s, box-shadow .15s, background-position .3s; margin-top: 4px; }
+        .lg-btn:hover:not(:disabled) { transform: translateY(-1px); background-position: 100% 0; box-shadow: 0 14px 36px -8px rgba(99,102,241,.85); }
+        .lg-btn:disabled { opacity: .7; cursor: progress; }
+        .lg-spin { width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid rgba(255,255,255,.35); border-top-color: #fff; animation: lgSpin .7s linear infinite; }
+        @keyframes lgSpin { to { transform: rotate(360deg); } }
+        .lg-help { border-radius: 14px; padding: 14px 16px; background: rgba(59,130,246,.08); border: 1px solid rgba(59,130,246,.3); font-size: 13px; line-height: 1.55; color: rgba(226,232,240,.85); animation: lgFade .2s ease-out; }
+        .lg-help b { color: #fff; }
+        .lg-help ul { margin: 8px 0 0; padding-left: 18px; color: rgba(226,232,240,.7); }
+        @keyframes lgFade { from { opacity: 0; transform: translateY(-4px); } }
+        .lg-divider { display: none; align-items: center; gap: 12px; font-size: 11.5px; color: rgba(226,232,240,.4); font-weight: 700; letter-spacing: .6px; text-transform: uppercase; margin: 26px 0 14px; }
+        .lg-divider::before, .lg-divider::after { content: ""; flex: 1; height: 1px; background: rgba(255,255,255,.1); }
+        .lg-chips { display: none; }
+        .lg-footer { margin-top: 28px; font-size: 12px; color: rgba(226,232,240,.4); text-align: center; line-height: 1.6; }
+        .lg button:focus-visible, .lg input[type="checkbox"]:focus-visible { outline: 2px solid #60A5FA; outline-offset: 2px; }
 
-          {/* Logo + heading */}
-          <div style={{ textAlign: "center", marginBottom: 32 }}>
-            <img src="/image.png" alt="Logo" style={{ objectFit: "contain", marginBottom: 14, filter: "drop-shadow(0 4px 16px rgba(59,130,246,0.4))" }} />
-            <div style={{ fontSize: 24, fontWeight: 800, color: "#fff", letterSpacing: 0.3, textShadow: "0 2px 12px rgba(0,0,0,0.5)" }}>Welcome back</div>
-            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", marginTop: 6 }}>Sign in to your Fascinate IT workspace</div>
+        /* ── Tablet: stack, brand becomes a compact header ── */
+        @media (max-width: 1023px) {
+          .lg { grid-template-columns: 1fr; }
+          .lg-brand { padding: 28px 28px 34px; gap: 20px; }
+          .lg-hero { max-width: none; }
+          .lg-h1 { margin: 14px 0 10px; }
+          .lg-features { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 22px; }
+          .lg-feat { flex-direction: column; gap: 10px; }
+          .lg-trust { display: none; }
+          .lg-form-side { justify-content: flex-start; padding-top: 36px; padding-bottom: 36px; }
+        }
+        /* ── Phone: form first, brand reduced to logo + chips ── */
+        @media (max-width: 640px) {
+          .lg-brand { display: none; }
+          .lg-form-side { min-height: 100vh; min-height: 100dvh; justify-content: center; padding: 28px 20px; background:
+              radial-gradient(420px 260px at 0% 0%, rgba(59,130,246,.22), transparent 70%),
+              radial-gradient(420px 300px at 100% 100%, rgba(139,92,246,.22), transparent 70%), #0B0F1A; }
+          .lg-mobile-logo { display: block; height: 34px; width: auto; margin-bottom: 26px; }
+          .lg-sub { margin-bottom: 22px; }
+          .lg-divider { display: flex; }
+          .lg-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+          .lg-chips span { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; padding: 6px 11px; border-radius: 999px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); color: rgba(226,232,240,.8); }
+          .lg-input { height: 52px; font-size: 16px; }
+        }
+        @media (prefers-reduced-motion: reduce) { .lg *, .lg *::before, .lg *::after { animation: none !important; transition: none !important; } }
+      `}</style>
+
+      {/* ── Brand / product panel ── */}
+      <section className="lg-brand" aria-label="About the employee portal">
+        <div className="lg-brand-bg" aria-hidden />
+        <img src="/image.png" alt="Fascinate IT" className="lg-logo" />
+        <div className="lg-hero">
+          <span className="lg-eyebrow"><i />Employee Self-Service Portal</span>
+          <h1 className="lg-h1">Your work life, <span>all in one place.</span></h1>
+          <p className="lg-lead">Track your hours, request time off, view your payslips and keep your profile up to date — from your desk or your phone.</p>
+          <div className="lg-features">
+            {LOGIN_FEATURES.map(f => (
+              <div key={f.title} className="lg-feat" style={{ "--c": f.color }}>
+                <div className="lg-feat-ico">{f.icon}</div>
+                <div><b>{f.title}</b><p>{f.text}</p></div>
+              </div>
+            ))}
           </div>
+        </div>
+        <div className="lg-trust">
+          <span>🔐 Role-based access</span>
+          <span>📱 Works on any device</span>
+          <span>✅ Manager approvals built in</span>
+        </div>
+      </section>
 
-          {/* Glass card */}
-          <div style={{
-            background: "rgba(22,27,42,0.78)",
-            backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
-            border: `1px solid rgba(255,255,255,0.10)`,
-            borderRadius: 18, padding: "32px 28px",
-            boxShadow: `0 8px 48px rgba(0,0,0,0.5), 0 0 0 1px ${C.accent}22`
-          }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* ── Sign-in panel ── */}
+      <main className="lg-form-side">
+        <div className="lg-card">
+          <img src="/image.png" alt="Fascinate IT" className="lg-mobile-logo" />
+          <div className="lg-hi">{greet} 👋</div>
+          <h2 className="lg-title">Sign in to your portal</h2>
+          <p className="lg-sub">Use the username and password provided by your HR or administrator.</p>
 
-              {/* Username */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <label style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", fontWeight: 600, letterSpacing: 0.5 }}>USERNAME</label>
-                <div style={{ position: "relative" }}>
-                  <span style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)", fontSize: 14, color: "rgba(255,255,255,0.35)" }}>👤</span>
-                  <input value={username} onChange={e => setUsername(e.target.value)}
-                    onKeyDown={e => e.key === "Enter" && handleSubmit()}
-                    placeholder="Enter your username"
-                    style={{
-                      width: "100%", background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)",
-                      borderRadius: 10, color: "#fff", padding: "11px 12px 11px 38px", fontSize: 13,
-                      outline: "none", boxSizing: "border-box", transition: "border-color 0.2s"
-                    }} />
-                </div>
+          <form ref={formRef} className="lg-form" onSubmit={handleSubmit} noValidate>
+            <div className="lg-field">
+              <label className="lg-label" htmlFor="lg-user">Username</label>
+              <div className="lg-input-wrap">
+                <svg className="lg-input-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
+                <input id="lg-user" ref={userRef} className={`lg-input${userErr ? " err" : ""}`} value={username} onChange={e => setUsername(e.target.value)}
+                  autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="e.g. user.name"
+                  aria-invalid={!!userErr} aria-describedby={userErr ? "lg-user-err" : undefined} />
               </div>
-
-              {/* Password */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <label style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", fontWeight: 600, letterSpacing: 0.5 }}>PASSWORD</label>
-                <div style={{ position: "relative" }}>
-                  <span style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)", fontSize: 14, color: "rgba(255,255,255,0.35)" }}>🔒</span>
-                  <input type={showPass ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)}
-                    onKeyDown={e => e.key === "Enter" && handleSubmit()} placeholder="Enter your password"
-                    style={{
-                      width: "100%", background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)",
-                      borderRadius: 10, color: "#fff", padding: "11px 40px 11px 38px", fontSize: 13,
-                      outline: "none", boxSizing: "border-box"
-                    }} />
-                  <button onClick={() => setShowPass(v => !v)} style={{
-                    position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)",
-                    background: "none", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: 15
-                  }}>{showPass ? "🙈" : "👁"}</button>
-                </div>
-              </div>
-
-              {/* Error */}
-              {error && (
-                <div style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.4)", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#fca5a5" }}>
-                  ⚠ {error}
-                </div>
-              )}
-
-              {/* Submit */}
-              <button onClick={handleSubmit} disabled={loading} style={{
-                background: `linear-gradient(135deg, ${C.accent}, ${C.accentDim})`,
-                color: "#fff", border: "none", borderRadius: 10, padding: "13px",
-                fontSize: 14, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer",
-                marginTop: 4, opacity: loading ? 0.75 : 1,
-                boxShadow: `0 4px 28px ${C.accent}55`, letterSpacing: 0.4
-              }}>
-                {loading ? "Authenticating…" : "Sign In →"}
-              </button>
+              {userErr && <div id="lg-user-err" className="lg-hint" style={{ color: "#FCA5A5" }}>{userErr}</div>}
             </div>
+
+            <div className="lg-field">
+              <div className="lg-label-row">
+                <label className="lg-label" htmlFor="lg-pass">Password</label>
+                <button type="button" className="lg-link" onClick={() => setHelp(h => !h)} aria-expanded={help}>Forgot password?</button>
+              </div>
+              <div className="lg-input-wrap">
+                <svg className="lg-input-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
+                <input id="lg-pass" ref={passRef} type={showPass ? "text" : "password"} className={`lg-input${passErr ? " err" : ""}`} value={password}
+                  onChange={e => setPassword(e.target.value)} onKeyDown={onKey} onKeyUp={onKey} onBlur={() => setCaps(false)}
+                  autoComplete="current-password" placeholder="Enter your password"
+                  aria-invalid={!!passErr} aria-describedby={caps ? "lg-caps" : passErr ? "lg-pass-err" : undefined} />
+                <button type="button" className="lg-eye" onClick={() => setShowPass(v => !v)} aria-label={showPass ? "Hide password" : "Show password"} aria-pressed={showPass}>
+                  {showPass
+                    ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></svg>
+                    : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>}
+                </button>
+              </div>
+              {caps && <div id="lg-caps" className="lg-hint" style={{ color: "#FBBF24" }} role="status">⇪ Caps Lock is on</div>}
+              {passErr && !caps && <div id="lg-pass-err" className="lg-hint" style={{ color: "#FCA5A5" }}>{passErr}</div>}
+            </div>
+
+            {help && (
+              <div className="lg-help" role="note">
+                <b>Can't sign in?</b> Password resets are handled by your HR / administrator.
+                <ul>
+                  <li>Ask them to reset your password or confirm your username.</li>
+                  <li>Once you're in, you can change it anytime from <b>My Profile → Password</b>.</li>
+                </ul>
+              </div>
+            )}
+
+            <div className="lg-row">
+              <label className="lg-check">
+                <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} />
+                Remember my username
+              </label>
+            </div>
+
+            {error && <div className="lg-error" role="alert"><span>⚠</span><span>{error}</span></div>}
+
+            <button type="submit" className="lg-btn" disabled={loading}>
+              {loading ? <><span className="lg-spin" aria-hidden />Signing you in…</> : <>Sign in <span aria-hidden>→</span></>}
+            </button>
+          </form>
+
+          <div className="lg-divider">Inside the portal</div>
+          <div className="lg-chips">
+            {LOGIN_FEATURES.map(f => <span key={f.title}>{f.icon} {f.title}</span>)}
           </div>
 
-          <div style={{ textAlign: "center", marginTop: 22, fontSize: 11, color: "rgba(255,255,255,0.3)" }}>
+          <div className="lg-footer">
+            Trouble signing in? Contact your HR or system administrator.<br />
             © {new Date().getFullYear()} Fascinate IT. All rights reserved.
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
@@ -3546,7 +3675,7 @@ function weekStart(date) {
   d.setDate(d.getDate() + diff); d.setHours(0, 0, 0, 0); return d;
 }
 function addDays(date, n) { const d = new Date(date); d.setDate(d.getDate() + n); return d; }
-function isoDate(d) { const p = n => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; }
+function isoDate(d) { const p = n => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; }
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -6809,9 +6938,10 @@ function EmployeeDashboard({ currentUser, navFn }) {
 }
 
 // ════════════════════════════════════════════════════════
-function EmployeeHome({ currentUser, defaultTab, navFn }) {
-  const [tab, setTab] = useState("profile");
-  useEffect(() => { if (defaultTab) setTab(defaultTab); }, [defaultTab]);
+function EmployeeHome({ currentUser, defaultTab, navFn, onTabChange }) {
+  const [tab, setTabState] = useState(defaultTab || "profile");
+  const setTab = t => { setTabState(t); onTabChange && onTabChange(t); };
+  useEffect(() => { if (defaultTab) setTabState(defaultTab); }, [defaultTab]);
 
   const roleLabel = currentUser.role === "manager" ? "Manager"
     : currentUser.role === "admin" ? "Admin"
@@ -6843,7 +6973,7 @@ function EmployeeHome({ currentUser, defaultTab, navFn }) {
         .eh-tabs-bar { display: flex; overflow-x: auto; gap: 2px; scrollbar-width: none; }
         .eh-tabs-bar::-webkit-scrollbar { display: none; }
         .eh-tab-btn { display: flex; align-items: center; gap: 7px; padding: 11px 20px; border: none; cursor: pointer; font-size: 13.5px; font-weight: 600; white-space: nowrap; border-bottom: 3px solid transparent; transition: all .18s; background: transparent; }
-        .eh-tab-btn:hover { color: #ffffff !important; background: rgba(255,255,255,0.05); }
+        .eh-tab-btn:hover { color: ${C.text} !important; background: ${C.accent}0d; }
         @media (max-width: 768px) {
           .eh-hero-content { padding: 0 20px !important; }
           .eh-hero-name { font-size: 22px !important; }
@@ -7427,269 +7557,683 @@ const EXP_CATEGORIES = ["Travel", "Meals", "Software", "Hardware", "Training", "
 const EXP_STATUS_COLOR = { pending: C.amber, approved: C.green, rejected: C.red, needs_correction: C.purple, paid: C.accent };
 
 
+// ── Expense helpers ──
+const EXP_META = {
+  Travel: { icon: "✈️", color: "#3B82F6" }, Meals: { icon: "🍽", color: "#F59E0B" }, Software: { icon: "💻", color: "#8B5CF6" },
+  Hardware: { icon: "🖥", color: "#06B6D4" }, Training: { icon: "📚", color: "#10B981" }, Other: { icon: "🧾", color: "#94A3B8" },
+};
+const EXP_STATUS = {
+  pending: { label: "In review", icon: "⏳" }, needs_correction: { label: "Needs correction", icon: "↩" },
+  approved: { label: "Approved", icon: "✓" }, paid: { label: "Paid", icon: "💸" }, rejected: { label: "Rejected", icon: "✕" },
+};
+const EXP_API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5001/api";
+const EXP_ALLOWED = ["png", "jpg", "jpeg", "gif", "pdf", "webp"];
+const EXP_MAX_MB = 10;
+const expMeta = c => EXP_META[c] || EXP_META.Other;
+const expColor = s => EXP_STATUS_COLOR[s] || C.textMuted;
+const expLabel = s => (EXP_STATUS[s] ? EXP_STATUS[s].label : String(s || "").replace("_", " "));
+const expINR = n => `₹${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+const expReceiptUrl = f => `${EXP_API_BASE}/receipts/${f}`;
+const expIsImg = f => /\.(png|jpe?g|gif|webp)$/i.test(f || "");
+const expDate = d => { if (!d) return "—"; const x = new Date(String(d).replace(" ", "T")); return isNaN(x) ? String(d).slice(0, 10) : x.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }); };
+
+function ExpenseModal({ init, isEdit, adminNote, projects, existing, onClose, onSubmit }) {
+  const [f, setF] = useState(init);
+  const [file, setFile] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const [drag, setDrag] = useState(false);
+  const [tried, setTried] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [fileErr, setFileErr] = useState("");
+  const set = (k, v) => setF(p => ({ ...p, [k]: v }));
+
+  useEffect(() => {
+    const onKey = e => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
+
+  function pick(fl) {
+    if (!fl) return;
+    const ext = (fl.name.split(".").pop() || "").toLowerCase();
+    if (!EXP_ALLOWED.includes(ext)) { setFileErr("Use PNG, JPG, GIF, WEBP or PDF"); return; }
+    if (fl.size > EXP_MAX_MB * 1024 * 1024) { setFileErr(`File is larger than ${EXP_MAX_MB} MB`); return; }
+    setFileErr(""); setFile(fl);
+    setPreview(p => { if (p) URL.revokeObjectURL(p); return /^image\//.test(fl.type) ? URL.createObjectURL(fl) : null; });
+  }
+
+  const amt = parseFloat(f.amount);
+  const errs = {
+    title: !f.title.trim() ? "Add a short title" : null,
+    amount: !f.amount ? "Enter the amount" : !(amt > 0) ? "Amount must be greater than 0" : amt > 1e7 ? "That looks too large" : null,
+  };
+  const valid = !errs.title && !errs.amount;
+  const dup = !isEdit && amt > 0 ? (existing || []).find(x => +x.amount === amt && x.category === f.category && x.status !== "rejected"
+    && (Date.now() - new Date(String(x.submitted_at || "").replace(" ", "T")).getTime()) < 30 * 86400000) : null;
+  const activeProjects = projects.filter(p => !["closed", "completed"].includes(p.status) || String(p.id) === String(init.projectId));
+
+  async function submit() {
+    setTried(true);
+    if (!valid || busy) return;
+    setBusy(true);
+    const ok = await onSubmit({ ...f, title: f.title.trim(), description: (f.description || "").trim(), receiptFile: file });
+    setBusy(false);
+    if (ok) onClose();
+  }
+
+  return (
+    <div className="exm-backdrop" onClick={onClose}>
+      <div className="exm" role="dialog" aria-modal="true" aria-label={isEdit ? "Edit expense" : "Submit expense"} onClick={e => e.stopPropagation()}>
+        <div className="exm-head">
+          <div>
+            <div className="exm-title">{isEdit ? "Edit & resubmit" : "New expense claim"}</div>
+            <div className="exm-sub">{isEdit ? "Saving sends it back to review" : "Your manager will be notified"}</div>
+          </div>
+          <button className="ex-icon-btn" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+        <div className="exm-body">
+          {adminNote && <div className="ex-note" style={{ color: C.purple, background: C.purple + "14", borderColor: C.purple + "40" }}>📝 <span><b>Reviewer note:</b> {adminNote}</span></div>}
+
+          <div className="exm-amount">
+            <span>₹</span>
+            <input type="number" inputMode="decimal" min="0" step="0.01" placeholder="0.00" value={f.amount} onChange={e => set("amount", e.target.value)} aria-label="Amount in rupees" autoFocus={!isEdit} />
+          </div>
+          {tried && errs.amount && <div className="exm-err" style={{ textAlign: "center" }}>{errs.amount}</div>}
+
+          <div className="exm-field">
+            <label className="exm-lbl">Category</label>
+            <div className="exm-cats" role="radiogroup" aria-label="Category">
+              {EXP_CATEGORIES.map(c => {
+                const m = expMeta(c); const on = f.category === c;
+                return (
+                  <button key={c} role="radio" aria-checked={on} className={`exm-cat${on ? " on" : ""}`} style={{ "--c": m.color }} onClick={() => set("category", c)}>
+                    <span>{m.icon}</span>{c}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="exm-field">
+            <label className="exm-lbl" htmlFor="exm-title">Title</label>
+            <input id="exm-title" className={`exm-input${tried && errs.title ? " err" : ""}`} maxLength={200} value={f.title} onChange={e => set("title", e.target.value)} placeholder="e.g. Cab to client office" />
+            {tried && errs.title && <div className="exm-err">{errs.title}</div>}
+          </div>
+
+          <div className="exm-field">
+            <label className="exm-lbl" htmlFor="exm-proj">Project <span className="exm-mini">optional</span></label>
+            <select id="exm-proj" className="exm-input" value={f.projectId || ""} onChange={e => set("projectId", e.target.value)}>
+              <option value="">No project</option>
+              {activeProjects.map(p => <option key={p.id} value={p.id}>{p.code} — {p.name}</option>)}
+            </select>
+          </div>
+
+          <div className="exm-field">
+            <label className="exm-lbl" htmlFor="exm-desc">Notes <span className="exm-mini">optional</span></label>
+            <textarea id="exm-desc" className="exm-input" rows={3} maxLength={1000} value={f.description} onChange={e => set("description", e.target.value)} placeholder="What was it for? Who attended? Trip details…" />
+          </div>
+
+          <div className="exm-field">
+            <label className="exm-lbl">Receipt <span className="exm-mini">PNG, JPG, WEBP or PDF · max {EXP_MAX_MB} MB</span></label>
+            <label className={`exm-drop${drag ? " drag" : ""}${file ? " has" : ""}`}
+              onDragOver={e => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)}
+              onDrop={e => { e.preventDefault(); setDrag(false); pick(e.dataTransfer.files[0]); }}>
+              <input type="file" accept="image/*,.pdf" onChange={e => pick(e.target.files[0])} />
+              {preview ? <img src={preview} alt="Receipt preview" /> : <span className="exm-drop-ico">{file ? "📄" : "📎"}</span>}
+              <span className="exm-drop-txt">
+                {file ? <><b>{file.name}</b><small>{(file.size / 1024).toFixed(0)} KB · tap to change</small></>
+                  : init.receiptUrl ? <><b>Receipt attached</b><small>Drop or tap to replace</small></>
+                    : <><b>Drop a receipt or tap to upload</b><small>Photos from your phone work too</small></>}
+              </span>
+              {file && <button type="button" className="ex-icon-btn" onClick={e => { e.preventDefault(); setFile(null); setPreview(null); }} aria-label="Remove file">✕</button>}
+            </label>
+            {fileErr && <div className="exm-err">{fileErr}</div>}
+            {init.receiptUrl && !file && <a className="exm-mini" href={expReceiptUrl(init.receiptUrl)} target="_blank" rel="noreferrer" style={{ color: C.accent }}>View current receipt ↗</a>}
+          </div>
+
+          {dup && <div className="ex-note" style={{ color: C.amber, background: C.amber + "12", borderColor: C.amber + "40" }}>⚠ <span>Possible duplicate — you claimed {expINR(dup.amount)} for {dup.category} (“{dup.title}”) on {expDate(dup.submitted_at)}.</span></div>}
+        </div>
+        <div className="exm-foot">
+          <button className="ex-btn ex-btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="ex-btn ex-btn-primary" onClick={submit} disabled={busy || (tried && !valid)}>
+            {busy ? (file ? "Uploading…" : "Saving…") : isEdit ? "Save & resubmit" : amt > 0 ? `Submit ${expINR(amt)}` : "Submit claim"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Expenses({ currentUser, viewOnly }) {
   const [rows, setRows] = useState([]);
   const [projects, setProjects] = useState([]);
-  const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
-  const [modal, setModal] = useState(null); // null | "new" | row-object
-  const [noteModal, setNoteModal] = useState(null); // {id, action}
+  const [modal, setModal] = useState(null);       // null | "new" | row
+  const [detail, setDetail] = useState(null);     // row id
+  const [noteModal, setNoteModal] = useState(null); // { row, action }
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
-  const [filterStatus, setFilterStatus] = useState("");
-  // Pagination
+  const [status, setStatus] = useState("");
+  const [cat, setCat] = useState("");
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState("new");
   const [expPage, setExpPage] = useState(1);
   const [expPerPage, setExpPerPage] = useState(10);
 
-  const load = useCallback(async () => {
-    setLoading(true); setErr("");
+  const load = async (silent) => {
+    if (!silent) setLoading(true);
+    setErr("");
     try {
-      const params = {};
-      if (filterStatus) params.status = filterStatus;
-      const [ex, pr, em] = await Promise.all([api.getExpenses(params), api.getProjects(), api.getEmployees()]);
-      setRows(ex); setProjects(pr); setEmployees(em);
+      const [ex, pr] = await Promise.all([api.getExpenses(), api.getProjects()]);
+      setRows(ex || []); setProjects(pr || []);
     } catch (e) { setErr(e.message); } finally { setLoading(false); }
-  });
-  useEffect(() => { load(); }, [filterStatus]);
+  };
+  useEffect(() => { load(); }, []);
+  useEffect(() => { setExpPage(1); }, [status, cat, search, sort]);
 
   async function handleSave(form) {
-    setSaving(true);
     try {
       let receiptUrl = form.receiptUrl || "";
-      if (form.receiptFile) {
-        const res = await api.uploadExpenseReceipt(form.receiptFile);
-        receiptUrl = res.filename;
-      }
-      const payload = { ...form, receiptUrl };
-      delete payload.receiptFile;
+      if (form.receiptFile) receiptUrl = (await api.uploadExpenseReceipt(form.receiptFile)).filename;
+      const payload = { title: form.title, amount: form.amount, category: form.category, projectId: form.projectId, description: form.description, receiptUrl };
       if (modal === "new") await api.createExpense({ ...payload, employeeId: currentUser.employee_id });
       else await api.updateExpense(modal.id, payload);
-      setModal(null); await load();
-    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setSaving(false); }
+      await load(true);
+      return true;
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); return false; }
   }
-  async function handleDelete(id) {
-    if (!await dialog.confirm("Delete this expense?", { dtype: "warning" })) return;
-    try { await api.deleteExpense(id); await load(); } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+  async function handleDelete(row) {
+    if (!await dialog.confirm(`Delete “${row.title}” (${expINR(row.amount)})? This can't be undone.`, { title: "Delete claim", dtype: "warning" })) return;
+    try { await api.deleteExpense(row.id); setDetail(null); await load(true); } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
   }
   async function handleAction() {
+    const { row, action } = noteModal;
+    if ((action === "reject" || action === "sendback") && !note.trim()) return;
     setSaving(true);
     try {
-      if (noteModal.action === "approve") await api.approveExpense(noteModal.id);
-      else if (noteModal.action === "pay") await api.payExpense(noteModal.id);
-      else if (noteModal.action === "reject") await api.rejectExpense(noteModal.id, note);
-      else await api.sendbackExpense(noteModal.id, note);
-      setNoteModal(null); setNote(""); await load();
+      if (action === "approve") await api.approveExpense(row.id);
+      else if (action === "pay") await api.payExpense(row.id);
+      else if (action === "reject") await api.rejectExpense(row.id, note.trim());
+      else await api.sendbackExpense(row.id, note.trim());
+      setNoteModal(null); setNote(""); await load(true);
     } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setSaving(false); }
   }
 
   if (loading) return <Spinner />;
-  if (err) return <ErrBox msg={err} onRetry={load} />;
+  if (err) return <ErrBox msg={err} onRetry={() => load()} />;
 
-  const statusOpts = ["pending", "approved", "rejected", "needs_correction", "paid"].map(s => ({ value: s, label: s.replace("_", " ") }));
+  // ── derived ──
+  const sum = list => list.reduce((s, r) => s + (+r.amount || 0), 0);
+  const by = s => rows.filter(r => r.status === s);
+  const inReview = by("pending"), fix = by("needs_correction"), approved = by("approved"), paid = by("paid");
+  const year = new Date().getFullYear();
+  const thisYear = rows.filter(r => String(r.submitted_at || "").slice(0, 4) === String(year) && r.status !== "rejected");
+  const catAgg = EXP_CATEGORIES.map(c => ({ c, ...expMeta(c), v: sum(thisYear.filter(r => r.category === c)) })).filter(x => x.v > 0).sort((a, b) => b.v - a.v);
+  const catTotal = sum(thisYear);
+  const months = Array.from({ length: 6 }, (_, i) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - (5 - i)); return { key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, label: d.toLocaleDateString("en-US", { month: "short" }) }; });
+  const monthAgg = months.map(m => ({ ...m, v: sum(rows.filter(r => r.status !== "rejected" && String(r.submitted_at || "").slice(0, 7) === m.key)) }));
+  const maxMonth = Math.max(1, ...monthAgg.map(m => m.v));
+
+  const q = search.trim().toLowerCase();
+  const filtered = rows.filter(r => (!status || r.status === status) && (!cat || r.category === cat)
+    && (!q || `${r.title} ${r.description || ""} ${r.project_code || ""} ${r.employee_name || ""}`.toLowerCase().includes(q)))
+    .sort((a, b) => sort === "amount" ? (+b.amount || 0) - (+a.amount || 0) : sort === "old" ? String(a.submitted_at).localeCompare(String(b.submitted_at)) : String(b.submitted_at).localeCompare(String(a.submitted_at)));
+  const paged = filtered.slice((expPage - 1) * expPerPage, expPage * expPerPage);
+  const canEdit = r => viewOnly && (r.status === "pending" || r.status === "needs_correction");
+  const mineOnly = r => r.employee_id === currentUser.employee_id;
+  const canReview = r => !viewOnly && (currentUser.role === "admin" || !mineOnly(r));
+
+  const toReview = inReview.filter(canReview), toPay = approved.filter(canReview);
+  const tabs = [["", "All", rows.length], ["pending", "In review", inReview.length], ["needs_correction", "Needs fix", fix.length], ["approved", "Approved", approved.length], ["paid", "Paid", paid.length], ["rejected", "Rejected", by("rejected").length]];
+  const banner = viewOnly
+    ? (fix.length ? { c: C.purple, t: `${fix.length} claim${fix.length !== 1 ? "s were" : " was"} sent back for correction.`, a: "needs_correction" } : null)
+    : (toReview.length ? { c: C.amber, t: `${toReview.length} claim${toReview.length !== 1 ? "s" : ""} (${expINR(sum(toReview))}) waiting for your review.`, a: "pending" }
+      : toPay.length ? { c: C.green, t: `${toPay.length} approved claim${toPay.length !== 1 ? "s" : ""} (${expINR(sum(toPay))}) ready to pay out.`, a: "approved" } : null);
+
+  function exportCSV() {
+    if (!filtered.length) return;
+    const esc = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const csv = ["Date,Employee,Title,Category,Project,Amount,Status,Note",
+      ...filtered.map(r => [String(r.submitted_at || "").slice(0, 10), esc(r.employee_name), esc(r.title), r.category, esc(r.project_code), r.amount, r.status, esc(r.admin_note)].join(","))].join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a"); a.href = url; a.download = `expenses_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  }
+
+  const Pill = ({ s }) => (
+    <span className="ex-pill" style={{ color: expColor(s), background: expColor(s) + "18", borderColor: expColor(s) + "40" }}>
+      <i style={{ background: expColor(s) }} />{expLabel(s)}
+    </span>
+  );
+
+  const actionsFor = (r, compact) => (
+    <>
+      {canEdit(r) && <button className={`ex-btn ${r.status === "needs_correction" ? "ex-btn-primary" : "ex-btn-ghost"} sm`} onClick={() => { setDetail(null); setModal(r); }}>{r.status === "needs_correction" ? "↩ Fix & resubmit" : "✎ Edit"}</button>}
+      {canEdit(r) && <button className="ex-btn ex-btn-danger sm" onClick={() => handleDelete(r)} aria-label="Delete claim">🗑{compact ? "" : " Delete"}</button>}
+      {canReview(r) && r.status === "pending" && (<>
+        <button className="ex-btn ex-btn-success sm" onClick={() => setNoteModal({ row: r, action: "approve" })}>✓ Approve</button>
+        <button className="ex-btn ex-btn-ghost sm" onClick={() => setNoteModal({ row: r, action: "sendback" })}>↩ Send back</button>
+        <button className="ex-btn ex-btn-danger sm" onClick={() => setNoteModal({ row: r, action: "reject" })}>✕ Reject</button>
+      </>)}
+      {canReview(r) && r.status === "approved" && <button className="ex-btn ex-btn-success sm" onClick={() => setNoteModal({ row: r, action: "pay" })}>💸 Mark paid</button>}
+    </>
+  );
+
+  const det = detail ? rows.find(r => r.id === detail) : null;
+  const flow = r => {
+    const s = r.status;
+    const steps = [
+      { t: "Submitted", d: expDate(r.submitted_at), done: true, c: C.green },
+      s === "needs_correction" ? { t: "Sent back for correction", d: "Update and resubmit", done: true, c: C.purple }
+        : s === "rejected" ? { t: "Rejected", d: expDate(r.updated_at), done: true, c: C.red }
+          : { t: "Approved", d: ["approved", "paid"].includes(s) ? expDate(r.updated_at) : "Waiting for review", done: ["approved", "paid"].includes(s), c: C.green },
+    ];
+    if (!["rejected", "needs_correction"].includes(s)) steps.push({ t: "Paid out", d: s === "paid" ? expDate(r.updated_at) : "After approval", done: s === "paid", c: C.green });
+    return steps;
+  };
 
   return (
     <>
       <style>{`
-        .exp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; }
-        .exp-card { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 14px; overflow: hidden; transition: transform .15s, box-shadow .15s; }
-        .exp-card:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
-        .exp-filter-pill { background: ${C.surface}; border: 1px solid ${C.border}; border-radius: 20px; padding: 5px 14px; font-size: 12px; font-weight: 600; color: ${C.textMuted}; cursor: pointer; transition: all .15s; white-space: nowrap; }
-        .exp-filter-pill.active { background: ${C.accent}22; border-color: ${C.accent}66; color: ${C.accent}; }
-        @media (max-width: 640px) { .exp-grid { grid-template-columns: 1fr; } }
+        .ex { container-type: inline-size; container-name: ex; }
+        .ex-wrap { display: flex; flex-direction: column; gap: 18px; }
+        .ex-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 16px; border-radius: 12px; font-size: 13px; font-weight: 700; cursor: pointer; border: 1px solid transparent; font-family: inherit; transition: transform .15s, opacity .15s, border-color .15s; white-space: nowrap; text-decoration: none; }
+        .ex-btn.sm { padding: 7px 11px; font-size: 12px; border-radius: 10px; }
+        .ex-btn:hover:not(:disabled) { transform: translateY(-1px); }
+        .ex-btn:disabled { opacity: .5; cursor: not-allowed; }
+        .ex-btn-primary { background: ${C.accent}; color: #fff; box-shadow: 0 8px 22px ${C.accent}40; }
+        .ex-btn-ghost { background: ${C.surface}; color: ${C.text}; border-color: ${C.border}; }
+        .ex-btn-ghost:hover:not(:disabled) { border-color: ${C.accent}77; }
+        .ex-btn-success { background: ${C.green}18; color: ${C.green}; border-color: ${C.green}44; }
+        .ex-btn-danger { background: ${C.red}12; color: ${C.red}; border-color: ${C.red}40; }
+        .ex-icon-btn { width: 34px; height: 34px; border-radius: 10px; border: 1px solid ${C.border}; background: ${C.surface}; color: ${C.textDim}; cursor: pointer; font-size: 14px; font-family: inherit; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; }
+        .ex-wrap button:focus-visible, .exm button:focus-visible, .exd button:focus-visible { outline: 2px solid ${C.accent}; outline-offset: 2px; }
+
+        .ex-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+        .ex-title { margin: 0; font-size: clamp(22px, 2.4vw, 26px); font-weight: 800; color: ${C.text}; letter-spacing: -0.5px; }
+        .ex-sub { margin: 4px 0 0; color: ${C.textMuted}; font-size: 13px; }
+        .ex-head-acts { display: flex; gap: 8px; flex-wrap: wrap; }
+
+        .ex-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+        .ex-kpi { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 18px; padding: 16px; text-align: left; font-family: inherit; cursor: pointer; display: flex; flex-direction: column; gap: 10px; min-width: 0; transition: border-color .15s, transform .15s; position: relative; overflow: hidden; }
+        .ex-kpi:hover { transform: translateY(-1px); border-color: color-mix(in srgb, var(--k) 50%, ${C.border}); }
+        .ex-kpi.on { border-color: var(--k); box-shadow: 0 0 0 1px var(--k) inset; }
+        .ex-kpi::after { content: ""; position: absolute; right: -30px; top: -30px; width: 100px; height: 100px; border-radius: 50%; background: var(--k); opacity: .07; }
+        .ex-kpi-top { display: flex; justify-content: space-between; align-items: center; }
+        .ex-kpi-ico { width: 36px; height: 36px; border-radius: 11px; display: flex; align-items: center; justify-content: center; font-size: 17px; background: color-mix(in srgb, var(--k) 16%, transparent); }
+        .ex-kpi-n { font-size: 11.5px; font-weight: 800; color: ${C.textMuted}; background: ${C.surface}; border: 1px solid ${C.border}; padding: 2px 8px; border-radius: 999px; }
+        .ex-kpi-v { font-size: 21px; font-weight: 800; color: ${C.text}; letter-spacing: -0.4px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ex-kpi-l { font-size: 12px; color: ${C.textMuted}; font-weight: 600; margin-top: -6px; }
+
+        .ex-banner { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 14px; font-size: 13px; font-weight: 600; border: 1px solid; flex-wrap: wrap; }
+        .ex-banner span { flex: 1; min-width: 180px; }
+        .ex-note { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; font-size: 12.5px; border: 1px solid; line-height: 1.45; }
+        .ex-note span { flex: 1; overflow-wrap: anywhere; }
+
+        .ex-insights { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+        .ex-card { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 20px; padding: 18px; min-width: 0; }
+        .ex-card-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; }
+        .ex-card-t { font-size: 14.5px; font-weight: 800; color: ${C.text}; }
+        .ex-muted { font-size: 12px; color: ${C.textMuted}; }
+        .ex-catbar { height: 10px; border-radius: 6px; overflow: hidden; display: flex; background: ${C.border}; margin-bottom: 12px; }
+        .ex-catlist { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
+        .ex-catrow { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: ${C.text}; font-weight: 600; min-width: 0; }
+        .ex-catrow b { margin-left: auto; color: ${C.textDim}; font-variant-numeric: tabular-nums; }
+        .ex-trend { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; align-items: end; height: 110px; }
+        .ex-tcol { display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; min-width: 0; }
+        .ex-tcol div { width: 100%; max-width: 36px; border-radius: 8px 8px 4px 4px; background: linear-gradient(180deg, ${C.accent}, ${C.purple}); min-height: 3px; }
+        .ex-tcol span { font-size: 10.5px; color: ${C.textMuted}; font-weight: 700; }
+        .ex-tcol em { font-size: 10px; font-style: normal; color: ${C.textDim}; font-weight: 700; white-space: nowrap; }
+
+        .ex-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .ex-tabs { display: inline-flex; background: ${C.surface}; border: 1px solid ${C.border}; border-radius: 12px; padding: 3px; overflow-x: auto; scrollbar-width: none; max-width: 100%; }
+        .ex-tabs::-webkit-scrollbar { display: none; }
+        .ex-tabs button { background: transparent; border: 1px solid transparent; color: ${C.textMuted}; border-radius: 9px; padding: 7px 11px; font-size: 12.5px; font-weight: 700; cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+        .ex-tabs button.on { background: ${C.card}; color: ${C.text}; border-color: ${C.border}; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
+        .ex-tabs em { font-style: normal; font-size: 10.5px; background: ${C.border}; color: ${C.textDim}; border-radius: 999px; padding: 1px 6px; }
+        .ex-tabs button.on em { background: ${C.accent}; color: #fff; }
+        .ex-spacer { flex: 1; }
+        .ex-input { background: ${C.surface}; border: 1px solid ${C.border}; border-radius: 10px; color: ${C.text}; padding: 8px 12px; font-size: 13px; outline: none; font-family: inherit; }
+        .ex-input:focus { border-color: ${C.accent}; }
+
+        .ex-list { display: flex; flex-direction: column; gap: 10px; }
+        .ex-item { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: 14px; align-items: center; background: ${C.card}; border: 1px solid ${C.border}; border-radius: 18px; padding: 14px 16px; cursor: pointer; transition: border-color .15s, transform .15s; text-align: left; font-family: inherit; width: 100%; color: inherit; }
+        .ex-item:hover { border-color: color-mix(in srgb, var(--c) 50%, ${C.border}); transform: translateY(-1px); }
+        .ex-item.flag { border-color: ${C.purple}77; background: linear-gradient(90deg, ${C.purple}10, transparent 40%), ${C.card}; }
+        .ex-ico { width: 48px; height: 48px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 22px; background: color-mix(in srgb, var(--c) 16%, ${C.surface}); border: 1px solid color-mix(in srgb, var(--c) 35%, transparent); }
+        .ex-main { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+        .ex-item-t { font-size: 14.5px; font-weight: 800; color: ${C.text}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ex-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; color: ${C.textMuted}; }
+        .ex-tag { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; border: 1px solid; white-space: nowrap; }
+        .ex-desc { font-size: 12.5px; color: ${C.textDim}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ex-side { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+        .ex-amt { font-size: 18px; font-weight: 800; color: ${C.text}; font-variant-numeric: tabular-nums; letter-spacing: -0.3px; }
+        .ex-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 800; padding: 4px 10px; border-radius: 999px; border: 1px solid; white-space: nowrap; }
+        .ex-pill i { width: 6px; height: 6px; border-radius: 50%; }
+        .ex-acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+        .ex-empty { text-align: center; padding: 48px 20px; color: ${C.textMuted}; font-size: 13.5px; }
+        .ex-empty div { font-size: 36px; margin-bottom: 8px; }
+
+        /* Modal + drawer */
+        .exm-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.66); backdrop-filter: blur(3px); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .exm { width: 100%; max-width: 560px; max-height: min(92vh, 920px); display: flex; flex-direction: column; background: ${C.card}; border: 1px solid ${C.border}; border-radius: 22px; box-shadow: 0 30px 80px rgba(0,0,0,.6); overflow: hidden; animation: exmIn .18s ease-out; }
+        @keyframes exmIn { from { transform: translateY(12px); opacity: 0; } }
+        .exm-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 20px 22px 14px; border-bottom: 1px solid ${C.border}; }
+        .exm-title { font-size: 18px; font-weight: 800; color: ${C.text}; }
+        .exm-sub { font-size: 12.5px; color: ${C.textMuted}; margin-top: 3px; }
+        .exm-body { padding: 18px 22px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+        .exm-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 22px; border-top: 1px solid ${C.border}; background: ${C.surface}; }
+        .exm-field { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+        .exm-lbl { font-size: 12.5px; font-weight: 800; color: ${C.textDim}; }
+        .exm-mini { font-size: 11.5px; color: ${C.textMuted}; font-weight: 600; }
+        .exm-input { width: 100%; box-sizing: border-box; background: ${C.surface}; border: 1px solid ${C.border}; border-radius: 12px; color: ${C.text}; padding: 10px 12px; font-size: 14px; font-family: inherit; outline: none; resize: vertical; }
+        .exm-input:focus { border-color: ${C.accent}; box-shadow: 0 0 0 3px ${C.accentGlow}; }
+        .exm-input.err { border-color: ${C.red}; }
+        .exm-err { font-size: 12px; color: ${C.red}; font-weight: 600; }
+        .exm-amount { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 14px; border-radius: 18px; background: ${C.surface}; border: 1px solid ${C.border}; }
+        .exm-amount:focus-within { border-color: ${C.accent}; box-shadow: 0 0 0 3px ${C.accentGlow}; }
+        .exm-amount span { font-size: 28px; font-weight: 800; color: ${C.textMuted}; }
+        .exm-amount input::-webkit-outer-spin-button, .exm-amount input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .exm-amount input { -moz-appearance: textfield; width: 100%; max-width: 260px; background: transparent; border: none; outline: none; color: ${C.text}; font-size: 34px; font-weight: 800; font-family: inherit; text-align: center; letter-spacing: -1px; }
+        .exm-cats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+        .exm-cat { --c: ${C.accent}; display: flex; align-items: center; gap: 8px; padding: 10px; border-radius: 12px; border: 1px solid ${C.border}; background: ${C.surface}; color: ${C.text}; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
+        .exm-cat span { font-size: 17px; }
+        .exm-cat:hover { border-color: color-mix(in srgb, var(--c) 55%, ${C.border}); }
+        .exm-cat.on { border-color: var(--c); background: color-mix(in srgb, var(--c) 14%, ${C.surface}); box-shadow: 0 0 0 1px var(--c) inset; }
+        .exm-drop { display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 14px; border: 1.5px dashed ${C.border}; background: ${C.surface}; cursor: pointer; transition: border-color .15s, background .15s; }
+        .exm-drop:hover, .exm-drop.drag { border-color: ${C.accent}; background: ${C.accent}0d; }
+        .exm-drop.has { border-style: solid; }
+        .exm-drop input { position: absolute; opacity: 0; width: 0; height: 0; }
+        .exm-drop img { width: 52px; height: 52px; border-radius: 10px; object-fit: cover; flex-shrink: 0; }
+        .exm-drop-ico { width: 52px; height: 52px; border-radius: 10px; background: ${C.card}; display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+        .exm-drop-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+        .exm-drop-txt b { font-size: 13px; color: ${C.text}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .exm-drop-txt small { font-size: 11.5px; color: ${C.textMuted}; }
+
+        .exd-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); backdrop-filter: blur(2px); z-index: 999; display: flex; justify-content: flex-end; }
+        .exd { width: 100%; max-width: 440px; height: 100%; background: ${C.card}; border-left: 1px solid ${C.border}; display: flex; flex-direction: column; animation: exdIn .2s ease-out; }
+        @keyframes exdIn { from { transform: translateX(30px); opacity: 0; } }
+        .exd-head { padding: 20px; border-bottom: 1px solid ${C.border}; display: flex; gap: 12px; align-items: flex-start; }
+        .exd-body { padding: 20px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 16px; }
+        .exd-foot { padding: 14px 20px; border-top: 1px solid ${C.border}; background: ${C.surface}; display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+        .exd-amt { font-size: 32px; font-weight: 800; color: ${C.text}; letter-spacing: -1px; }
+        .exd-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .exd-kv { background: ${C.surface}; border: 1px solid ${C.border}66; border-radius: 12px; padding: 10px 12px; min-width: 0; }
+        .exd-kv small { display: block; font-size: 10.5px; font-weight: 800; color: ${C.textMuted}; text-transform: uppercase; letter-spacing: .5px; }
+        .exd-kv b { display: block; font-size: 13.5px; color: ${C.text}; margin-top: 3px; overflow-wrap: anywhere; }
+        .exd-step { display: flex; gap: 12px; position: relative; padding-bottom: 14px; }
+        .exd-step:last-child { padding-bottom: 0; }
+        .exd-step:not(:last-child)::before { content: ""; position: absolute; left: 10px; top: 22px; bottom: 0; width: 2px; background: ${C.border}; }
+        .exd-dot { width: 22px; height: 22px; border-radius: 50%; border: 2px solid; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; flex-shrink: 0; }
+        .exd-step b { display: block; font-size: 13px; color: ${C.text}; }
+        .exd-step span { font-size: 12px; color: ${C.textMuted}; }
+        .exd-receipt { display: block; border-radius: 14px; overflow: hidden; border: 1px solid ${C.border}; background: ${C.surface}; }
+        .exd-receipt img { width: 100%; max-height: 320px; object-fit: contain; display: block; background: #0003; }
+        .exd-receipt div { padding: 10px 12px; font-size: 12.5px; color: ${C.accent}; font-weight: 700; }
+
+        /* ── Responsive ── */
+        @container ex (max-width: 980px) {
+          .ex-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .ex-insights { grid-template-columns: 1fr; }
+        }
+        @container ex (max-width: 640px) {
+          .ex-wrap { gap: 14px; }
+          .ex-header { align-items: stretch; }
+          .ex-head-acts, .ex-head-acts > * { flex: 1; }
+          .ex-head-acts { width: 100%; }
+          .ex-kpi { padding: 12px; gap: 8px; }
+          .ex-kpi-v { font-size: 17px; }
+          .ex-card { padding: 14px; border-radius: 18px; }
+          .ex-catlist { grid-template-columns: 1fr; }
+          .ex-toolbar > * { width: 100%; }
+          .ex-tabs { display: flex; }
+          .ex-spacer { display: none; }
+          .ex-item { grid-template-columns: 44px minmax(0, 1fr); gap: 12px; padding: 12px; }
+          .ex-ico { width: 44px; height: 44px; font-size: 20px; border-radius: 12px; }
+          .ex-side { grid-column: 1 / -1; flex-direction: row; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+          .ex-amt { font-size: 17px; }
+          .ex-acts { width: 100%; }
+          .ex-acts:empty { display: none; }
+          .ex-acts .ex-btn { flex: 1; }
+        }
+        @media (max-width: 640px) {
+          .exm-backdrop { align-items: flex-end; padding: 0; }
+          .exm { max-width: none; border-radius: 22px 22px 0 0; max-height: 94vh; }
+          .exm-head, .exm-body, .exm-foot { padding-left: 16px; padding-right: 16px; }
+          .exm-foot .ex-btn { flex: 1; }
+          .exm-cats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .exd-backdrop { align-items: flex-end; }
+          .exd { max-width: none; height: auto; max-height: 92vh; border-left: none; border-top: 1px solid ${C.border}; border-radius: 22px 22px 0 0; }
+          .exd-foot .ex-btn { flex: 1; }
+        }
       `}</style>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-
-        {/* ── Header ── */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: -0.5 }}>
-              {viewOnly ? "My Expenses" : "Expense Reports"}
-            </h2>
-            <p style={{ margin: "5px 0 0", color: C.textMuted, fontSize: 13 }}>
-              {viewOnly ? "Submit and track your expense claims" : "Review and approve employee expenses"}
-            </p>
-          </div>
-          {viewOnly && <Btn onClick={() => setModal("new")}>+ Submit Expense</Btn>}
-        </div>
-
-        {/* ── Summary KPIs ── */}
-        {rows.length > 0 && (() => {
-          const totalAmt = rows.reduce((s, r) => s + (+r.amount || 0), 0);
-          const pendingAmt = rows.filter(r => r.status === "pending").reduce((s, r) => s + (+r.amount || 0), 0);
-          const paidAmt = rows.filter(r => r.status === "paid").reduce((s, r) => s + (+r.amount || 0), 0);
-          return (
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-              {[
-                { label: "Total Claimed", value: fmt$(totalAmt), color: C.accent, icon: "🧾" },
-                { label: "Pending", value: fmt$(pendingAmt), color: C.amber, icon: "⏳" },
-                { label: "Paid Out", value: fmt$(paidAmt), color: C.green, icon: "✅" },
-                { label: "Submissions", value: rows.length, color: C.purple, icon: "📋" },
-              ].map(s => (
-                <div key={s.label} style={{
-                  background: C.card, border: `1px solid ${C.border}`, borderRadius: 14,
-                  padding: "14px 20px", display: "flex", alignItems: "center", gap: 12, flex: "1 1 160px",
-                }}>
-                  <div style={{ width: 38, height: 38, borderRadius: 10, background: s.color + "22", border: `1px solid ${s.color}33`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{s.icon}</div>
-                  <div>
-                    <div style={{ fontSize: 16, fontWeight: 800, color: s.color }}>{s.value}</div>
-                    <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 600, marginTop: 2 }}>{s.label}</div>
-                  </div>
-                </div>
-              ))}
+      <div className="ex">
+        <div className="ex-wrap">
+          {/* Header */}
+          <div className="ex-header">
+            <div>
+              <h2 className="ex-title">{viewOnly ? "My Expenses" : "Expense Reports"}</h2>
+              <p className="ex-sub">{viewOnly ? "Submit claims, attach receipts and track reimbursements" : "Review, approve and pay out employee expenses"}</p>
             </div>
-          );
-        })()}
-
-        {/* ── Status Filter Pills ── */}
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, letterSpacing: .5, textTransform: "uppercase" }}>Filter:</span>
-          {["", "pending", "approved", "rejected", "needs_correction", "paid"].map(s => (
-            <button key={s} className={`exp-filter-pill${filterStatus === s ? " active" : ""}`}
-              onClick={() => { setFilterStatus(s); setExpPage(1); }}
-              style={{
-                background: filterStatus === s ? (EXP_STATUS_COLOR[s] || C.accent) + "22" : C.surface,
-                border: `1px solid ${filterStatus === s ? (EXP_STATUS_COLOR[s] || C.accent) + "66" : C.border}`,
-                borderRadius: 20, padding: "5px 14px", fontSize: 12, fontWeight: 600,
-                color: filterStatus === s ? (EXP_STATUS_COLOR[s] || C.accent) : C.textMuted,
-                cursor: "pointer", transition: "all .15s", whiteSpace: "nowrap",
-              }}
-            >
-              {s === "" ? "All" : s.replace("_", " ").replace(/\b\w/g, c => c.toUpperCase())}
-            </button>
-          ))}
-        </div>
-
-        {/* ── Expense Cards ── */}
-        {rows.length === 0 ? (
-          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 48, textAlign: "center", color: C.textMuted, fontSize: 13 }}>
-            No expense records found.{viewOnly && " Click \u201c+ Submit Expense\u201d to add your first claim."}
+            <div className="ex-head-acts">
+              <button className="ex-btn ex-btn-ghost" onClick={exportCSV} disabled={!filtered.length}>⬇ Export CSV</button>
+              {viewOnly && <button className="ex-btn ex-btn-primary" onClick={() => setModal("new")}>＋ New claim</button>}
+            </div>
           </div>
-        ) : (
-          <>
-          <div className="exp-grid">
-            {rows.slice((expPage - 1) * expPerPage, expPage * expPerPage).map(ex => {
-              const statusColor = EXP_STATUS_COLOR[ex.status] || C.textMuted;
-              const canEdit = viewOnly && (ex.status === "pending" || ex.status === "needs_correction");
-              const catIcon = ex.category === "Travel" ? "✈️" : ex.category === "Meals" ? "🍽" : ex.category === "Software" ? "💻" : ex.category === "Hardware" ? "🖥" : ex.category === "Training" ? "📚" : "🧾";
-              return (
-                <div key={ex.id} className="exp-card">
-                  {/* Card Header */}
-                  <div style={{
-                    padding: "14px 18px", borderBottom: `1px solid ${C.border}`,
-                    display: "flex", justifyContent: "space-between", alignItems: "center",
-                    background: statusColor + "0A",
-                  }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div style={{
-                        width: 40, height: 40, borderRadius: 10, flexShrink: 0,
-                        background: statusColor + "22", border: `1px solid ${statusColor}44`,
-                        display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20,
-                      }}>{catIcon}</div>
-                      <div>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{ex.title}</div>
-                        {!viewOnly && ex.employee_name && (
-                          <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{ex.employee_name}</div>
-                        )}
-                      </div>
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: C.green }}>₹{(+ex.amount || 0).toFixed(2)}</div>
-                      <div style={{ marginTop: 4 }}><Badge color={statusColor}>{ex.status.replace("_", " ")}</Badge></div>
-                    </div>
-                  </div>
 
-                  {/* Card Body */}
-                  <div style={{ padding: "12px 18px", display: "flex", flexDirection: "column", gap: 8 }}>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      <Badge color={C.accent}>{ex.category}</Badge>
-                      {ex.project_code && <Badge color={C.purple}>{ex.project_code}</Badge>}
-                    </div>
-                    {ex.description && (
-                      <div style={{ fontSize: 12, color: C.textDim }}>{ex.description}</div>
-                    )}
-                    {ex.admin_note && (
-                      <div style={{ background: C.purple + "18", border: `1px solid ${C.purple}33`, borderRadius: 8, padding: "8px 12px", fontSize: 12, color: C.purple }}>
-                        📝 {ex.admin_note}
-                      </div>
-                    )}
-                  </div>
+          {/* KPIs */}
+          <div className="ex-kpis">
+            {[
+              { k: "pending", l: "In review", v: sum(inReview), n: inReview.length, icon: "⏳", c: C.amber },
+              { k: "approved", l: "Approved · to be paid", v: sum(approved), n: approved.length, icon: "✓", c: C.green },
+              { k: "paid", l: "Reimbursed", v: sum(paid), n: paid.length, icon: "💸", c: C.accent },
+              { k: "needs_correction", l: "Needs correction", v: sum(fix), n: fix.length, icon: "↩", c: C.purple },
+            ].map(s => (
+              <button key={s.k} className={`ex-kpi${status === s.k ? " on" : ""}`} style={{ "--k": s.c }} onClick={() => setStatus(v => v === s.k ? "" : s.k)} aria-pressed={status === s.k}>
+                <div className="ex-kpi-top"><span className="ex-kpi-ico">{s.icon}</span><span className="ex-kpi-n">{s.n}</span></div>
+                <div className="ex-kpi-v" style={{ color: s.n ? s.c : C.text }}>{expINR(s.v)}</div>
+                <div className="ex-kpi-l">{s.l}</div>
+              </button>
+            ))}
+          </div>
 
-                  {/* Card Footer — actions */}
-                  <div style={{
-                    padding: "10px 18px", borderTop: `1px solid ${C.border}`,
-                    display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center",
-                  }}>
-                    {canEdit && <Btn small variant="ghost" onClick={() => setModal(ex)}>✏ Edit</Btn>}
-                    {canEdit && <Btn small variant="danger" onClick={() => handleDelete(ex.id)}>🗑</Btn>}
-                    {ex.receipt_url && (
-                      <a href={`${process.env.REACT_APP_API_URL || "http://localhost:5002/api"}/receipts/${ex.receipt_url}`}
-                        target="_blank" rel="noreferrer"
-                        style={{ fontSize: 12, padding: "4px 10px", borderRadius: 6, background: C.accent + "18", color: C.accent, textDecoration: "none", border: `1px solid ${C.accent}44`, display: "inline-flex", alignItems: "center", gap: 4 }}>
-                        📎 Receipt
-                      </a>
-                    )}
-                    {!viewOnly && ex.status === "pending" && (
-                      <>
-                        <Btn small variant="success" onClick={() => setNoteModal({ id: ex.id, action: "approve" })}>✓ Approve</Btn>
-                        <Btn small variant="danger" onClick={() => setNoteModal({ id: ex.id, action: "reject" })}>✕ Reject</Btn>
-                        <Btn small variant="ghost" onClick={() => setNoteModal({ id: ex.id, action: "sendback" })}>↩ Send Back</Btn>
-                      </>
-                    )}
-                    {!viewOnly && ex.status === "approved" && (
-                      <Btn small variant="success" onClick={() => setNoteModal({ id: ex.id, action: "pay" })}>💵 Mark Paid</Btn>
-                    )}
+          {banner && (
+            <div className="ex-banner" style={{ color: banner.c, background: banner.c + "12", borderColor: banner.c + "40" }} role="status">
+              <b>{viewOnly ? "📝" : "📥"}</b><span>{banner.t}</span>
+              {status !== banner.a && <button className="ex-btn ex-btn-ghost sm" onClick={() => setStatus(banner.a)}>Show them →</button>}
+            </div>
+          )}
+
+          {/* Insights */}
+          {rows.length > 0 && (
+            <div className="ex-insights">
+              <section className="ex-card">
+                <div className="ex-card-h"><div className="ex-card-t">By category · {year}</div><span className="ex-muted">{expINR(catTotal)}</span></div>
+                {catAgg.length === 0 ? <div className="ex-muted">No claims this year yet.</div> : (<>
+                  <div className="ex-catbar">{catAgg.map(x => <div key={x.c} title={`${x.c}: ${expINR(x.v)}`} style={{ width: `${(x.v / catTotal) * 100}%`, background: x.color }} />)}</div>
+                  <div className="ex-catlist">
+                    {catAgg.map(x => (
+                      <button key={x.c} className="ex-catrow" onClick={() => setCat(v => v === x.c ? "" : x.c)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", opacity: cat && cat !== x.c ? .45 : 1 }}>
+                        <span>{x.icon}</span>{x.c}<b>{expINR(x.v)}</b>
+                      </button>
+                    ))}
                   </div>
+                </>)}
+              </section>
+              <section className="ex-card">
+                <div className="ex-card-h"><div className="ex-card-t">Last 6 months</div><span className="ex-muted">excl. rejected</span></div>
+                <div className="ex-trend" role="img" aria-label="Claimed amount per month">
+                  {monthAgg.map(m => (
+                    <div key={m.key} className="ex-tcol" title={`${m.label}: ${expINR(m.v)}`}>
+                      {m.v > 0 && <em>{m.v >= 1000 ? `${(m.v / 1000).toFixed(m.v >= 10000 ? 0 : 1)}k` : Math.round(m.v)}</em>}
+                      <div style={{ height: `${(m.v / maxMonth) * 70}%`, opacity: m.v ? 1 : .25 }} />
+                      <span>{m.label}</span>
+                    </div>
+                  ))}
                 </div>
-              );
-            })}
+              </section>
+            </div>
+          )}
+
+          {/* Toolbar */}
+          <div className="ex-toolbar">
+            <div className="ex-tabs" role="tablist" aria-label="Filter by status">
+              {tabs.map(([k, l, n]) => <button key={k || "all"} role="tab" aria-selected={status === k} className={status === k ? "on" : ""} onClick={() => setStatus(k)}>{l}<em>{n}</em></button>)}
+            </div>
+            <div className="ex-spacer" />
+            <select className="ex-input" value={cat} onChange={e => setCat(e.target.value)} aria-label="Filter by category">
+              <option value="">All categories</option>
+              {EXP_CATEGORIES.map(c => <option key={c} value={c}>{expMeta(c).icon} {c}</option>)}
+            </select>
+            <select className="ex-input" value={sort} onChange={e => setSort(e.target.value)} aria-label="Sort">
+              <option value="new">Newest first</option>
+              <option value="old">Oldest first</option>
+              <option value="amount">Highest amount</option>
+            </select>
+            <input className="ex-input" placeholder={viewOnly ? "Search claims…" : "Search employee, title…"} value={search} onChange={e => setSearch(e.target.value)} aria-label="Search claims" />
           </div>
-          <PaginationControls page={expPage} setPage={setExpPage} perPage={expPerPage} setPerPage={setExpPerPage} total={rows.length} />
-          </>
-        )}
 
-        {/* ── Submit / Edit Modal ── */}
-        {modal && (
-          <Modal title={modal === "new" ? "Submit Expense" : "Edit Expense"} onClose={() => setModal(null)}>
-            <ExpenseForm
-              init={modal === "new"
-                ? { title: "", amount: "", category: "Other", projectId: "", description: "", receiptUrl: "" }
-                : { title: modal.title, amount: modal.amount, category: modal.category, projectId: modal.project_id || "", description: modal.description || "", receiptUrl: modal.receipt_url || "" }}
-              projects={projects}
-              saving={saving}
-              onCancel={() => setModal(null)}
-              onSave={handleSave}
-              btnLabel={modal === "new" ? "Submit" : "Save & Resubmit"}
-            />
-          </Modal>
-        )}
+          {/* List */}
+          {filtered.length === 0 ? (
+            <div className="ex-card ex-empty">
+              <div>{rows.length ? "🔍" : "🧾"}</div>
+              {rows.length ? "No claims match these filters." : viewOnly ? "No expense claims yet." : "No expense records found."}
+              {!rows.length && viewOnly && <div style={{ marginTop: 14 }}><button className="ex-btn ex-btn-primary" onClick={() => setModal("new")}>＋ Submit your first claim</button></div>}
+            </div>
+          ) : (
+            <>
+              <div className="ex-list">
+                {paged.map(r => {
+                  const m = expMeta(r.category);
+                  return (
+                    <div key={r.id} role="button" tabIndex={0} className={`ex-item${r.status === "needs_correction" && viewOnly ? " flag" : ""}`} style={{ "--c": m.color }}
+                      onClick={() => setDetail(r.id)} onKeyDown={e => { if (e.key === "Enter") setDetail(r.id); }}>
+                      <div className="ex-ico">{m.icon}</div>
+                      <div className="ex-main">
+                        <div className="ex-item-t">{r.title}</div>
+                        <div className="ex-meta">
+                          {!viewOnly && r.employee_name && <b style={{ color: C.textDim }}>{r.employee_name} ·</b>}
+                          <span>{expDate(r.submitted_at)}</span>
+                          <span className="ex-tag" style={{ color: m.color, borderColor: m.color + "44", background: m.color + "14" }}>{r.category}</span>
+                          {r.project_code && <span className="ex-tag" style={{ color: C.purple, borderColor: C.purple + "44", background: C.purple + "14" }}>{r.project_code}</span>}
+                          {r.receipt_url && <span title="Receipt attached">📎</span>}
+                        </div>
+                        {r.admin_note && ["needs_correction", "rejected"].includes(r.status)
+                          ? <div className="ex-desc" style={{ color: expColor(r.status) }}>📝 {r.admin_note}</div>
+                          : r.description ? <div className="ex-desc">{r.description}</div> : null}
+                      </div>
+                      <div className="ex-side">
+                        <div className="ex-amt">{expINR(r.amount)}</div>
+                        <Pill s={r.status} />
+                        <div className="ex-acts" onClick={e => e.stopPropagation()}>{actionsFor(r, true)}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {filtered.length > expPerPage && <PaginationControls page={expPage} setPage={setExpPage} perPage={expPerPage} setPerPage={setExpPerPage} total={filtered.length} />}
+            </>
+          )}
+        </div>
+      </div>
 
-        {/* ── Admin Action Modal ── */}
-        {noteModal && (
-          <Modal
-            title={noteModal.action === "pay" ? "Mark Expense Paid" : noteModal.action === "approve" ? "Approve Expense" : noteModal.action === "reject" ? "Reject Expense" : "Send Back for Correction"}
-            onClose={() => { setNoteModal(null); setNote(""); }}
-          >
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              {noteModal.action !== "approve" && noteModal.action !== "pay" && (
-                <Inp label={noteModal.action === "reject" ? "Rejection reason" : "Correction notes"}
-                  value={note} onChange={setNote}
-                  placeholder={noteModal.action === "reject" ? "Please explain why…" : "What needs to be fixed…"} />
-              )}
-              {noteModal.action === "approve" && <p style={{ color: C.textDim, fontSize: 13, margin: 0 }}>Confirm approval of this expense?</p>}
-              {noteModal.action === "pay" && <p style={{ color: C.textDim, fontSize: 13, margin: 0 }}>Confirm this approved expense has been paid out?</p>}
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-                <Btn variant="ghost" onClick={() => { setNoteModal(null); setNote(""); }}>Cancel</Btn>
-                <Btn variant={noteModal.action === "approve" || noteModal.action === "pay" ? "success" : "danger"} onClick={handleAction} disabled={saving}>
-                  {saving ? "Saving…" : noteModal.action === "approve" ? "✓ Approve" : noteModal.action === "pay" ? "💵 Mark Paid" : noteModal.action === "reject" ? "✕ Reject" : "↩ Send Back"}
-                </Btn>
+      {/* Detail drawer */}
+      {det && (
+        <div className="exd-backdrop" onClick={() => setDetail(null)}>
+          <aside className="exd" role="dialog" aria-modal="true" aria-label="Expense details" onClick={e => e.stopPropagation()}>
+            <div className="exd-head">
+              <div className="ex-ico" style={{ "--c": expMeta(det.category).color }}>{expMeta(det.category).icon}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 16, fontWeight: 800, color: C.text, overflowWrap: "anywhere" }}>{det.title}</div>
+                <div className="ex-muted">{det.category}{det.employee_name && !viewOnly ? ` · ${det.employee_name}` : ""}</div>
+              </div>
+              <button className="ex-icon-btn" onClick={() => setDetail(null)} aria-label="Close">✕</button>
+            </div>
+            <div className="exd-body">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <div className="exd-amt">{expINR(det.amount)}</div><Pill s={det.status} />
+              </div>
+              {det.admin_note && <div className="ex-note" style={{ color: expColor(det.status), background: expColor(det.status) + "12", borderColor: expColor(det.status) + "40" }}>📝 <span><b>Reviewer note:</b> {det.admin_note}</span></div>}
+              <div className="exd-grid">
+                <div className="exd-kv"><small>Submitted</small><b>{expDate(det.submitted_at)}</b></div>
+                <div className="exd-kv"><small>Project</small><b>{det.project_code ? `${det.project_code}` : "—"}</b></div>
+                {det.description && <div className="exd-kv" style={{ gridColumn: "1 / -1" }}><small>Notes</small><b style={{ fontWeight: 500 }}>{det.description}</b></div>}
+              </div>
+              <div>
+                <div className="exm-lbl" style={{ marginBottom: 10 }}>Progress</div>
+                {flow(det).map((s, i) => (
+                  <div key={i} className="exd-step">
+                    <div className="exd-dot" style={{ borderColor: s.done ? s.c : C.border, background: s.done ? s.c : "transparent", color: s.done ? "#fff" : C.textMuted }}>{s.done ? (s.c === C.red ? "✕" : s.c === C.purple ? "↩" : "✓") : i + 1}</div>
+                    <div><b>{s.t}</b><span>{s.d}</span></div>
+                  </div>
+                ))}
+              </div>
+              <div>
+                <div className="exm-lbl" style={{ marginBottom: 10 }}>Receipt</div>
+                {det.receipt_url ? (
+                  <a className="exd-receipt" href={expReceiptUrl(det.receipt_url)} target="_blank" rel="noreferrer">
+                    {expIsImg(det.receipt_url) && <img src={expReceiptUrl(det.receipt_url)} alt="Receipt" loading="lazy" />}
+                    <div>{expIsImg(det.receipt_url) ? "Open full size ↗" : "📄 Open PDF receipt ↗"}</div>
+                  </a>
+                ) : <div className="ex-muted">No receipt attached{canEdit(det) ? " — edit the claim to add one." : "."}</div>}
               </div>
             </div>
-          </Modal>
-        )}
+            {(canEdit(det) || canReview(det)) && <div className="exd-foot">{actionsFor(det, false)}</div>}
+          </aside>
+        </div>
+      )}
 
-      </div>
+      {/* Submit / edit modal */}
+      {modal && (
+        <ExpenseModal
+          key={modal === "new" ? "new" : modal.id}
+          isEdit={modal !== "new"}
+          adminNote={modal !== "new" ? modal.admin_note : null}
+          init={modal === "new"
+            ? { title: "", amount: "", category: "Other", projectId: "", description: "", receiptUrl: "" }
+            : { title: modal.title, amount: String(modal.amount), category: modal.category, projectId: modal.project_id || "", description: modal.description || "", receiptUrl: modal.receipt_url || "" }}
+          projects={projects}
+          existing={rows}
+          onClose={() => setModal(null)}
+          onSubmit={handleSave}
+        />
+      )}
+
+      {/* Review action modal */}
+      {noteModal && (() => {
+        const { row, action } = noteModal;
+        const needsNote = action === "reject" || action === "sendback";
+        const titles = { approve: "Approve claim", pay: "Mark as paid", reject: "Reject claim", sendback: "Send back for correction" };
+        return (
+          <div className="exm-backdrop" onClick={() => { setNoteModal(null); setNote(""); }}>
+            <div className="exm" style={{ maxWidth: 460 }} role="dialog" aria-modal="true" aria-label={titles[action]} onClick={e => e.stopPropagation()}>
+              <div className="exm-head">
+                <div><div className="exm-title">{titles[action]}</div><div className="exm-sub">{row.employee_name} · {row.title} · {expINR(row.amount)}</div></div>
+                <button className="ex-icon-btn" onClick={() => { setNoteModal(null); setNote(""); }} aria-label="Close">✕</button>
+              </div>
+              <div className="exm-body">
+                {needsNote ? (
+                  <div className="exm-field">
+                    <label className="exm-lbl" htmlFor="ex-note">{action === "reject" ? "Reason for rejection" : "What needs fixing?"}</label>
+                    <textarea id="ex-note" className="exm-input" rows={3} value={note} onChange={e => setNote(e.target.value)} autoFocus
+                      placeholder={action === "reject" ? "e.g. Not a reimbursable expense per policy" : "e.g. Please attach the original invoice"} />
+                    <div className="exm-mini">The employee will see this note.</div>
+                  </div>
+                ) : <div style={{ fontSize: 13.5, color: C.textDim }}>{action === "approve" ? "Approve this claim? It will move to “to be paid”." : "Confirm this claim has been reimbursed to the employee."}</div>}
+              </div>
+              <div className="exm-foot">
+                <button className="ex-btn ex-btn-ghost" onClick={() => { setNoteModal(null); setNote(""); }}>Cancel</button>
+                <button className={`ex-btn ${needsNote ? "ex-btn-danger" : "ex-btn-primary"}`} onClick={handleAction} disabled={saving || (needsNote && !note.trim())}>
+                  {saving ? "Saving…" : { approve: "✓ Approve", pay: "💸 Mark paid", reject: "✕ Reject", sendback: "↩ Send back" }[action]}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </>
   );
 }
@@ -7749,10 +8293,10 @@ function ExpenseForm({ init, projects, employees, saving, onCancel, onSave, btnL
 // ════════════════════════════════════════════════════════
 function EmployeePerformance({ currentUser }) {
   const TABS = [
-    { id: "goals",    label: "My Goals",            icon: "🎯" },
-    { id: "self",     label: "Self-Assessment",     icon: "🪞" },
-    { id: "feedback", label: "Manager Feedback",    icon: "💬" },
-    { id: "reviews",  label: "Performance Reviews", icon: "📋" },
+    { id: "goals", label: "My Goals", icon: "🎯" },
+    { id: "self", label: "Self-Assessment", icon: "🪞" },
+    { id: "feedback", label: "Manager Feedback", icon: "💬" },
+    { id: "reviews", label: "Performance Reviews", icon: "📋" },
   ];
   const [tab, setTab] = useState("goals");
 
@@ -7766,7 +8310,7 @@ function EmployeePerformance({ currentUser }) {
   const [goalForm, setGoalForm] = useState(emptyGoal);
 
   // ── Self-Assessment ────────────────────────────────────
-  const PERIODS = ["Q1 2026","Q2 2026","Q3 2026","Q4 2026","Annual 2025","Annual 2026"];
+  const PERIODS = ["Q1 2026", "Q2 2026", "Q3 2026", "Q4 2026", "Annual 2025", "Annual 2026"];
   const [selfPeriod, setSelfPeriod] = useState("Q1 2026");
   const [selfRatings, setSelfRatings] = useState({ technical: 3, communication: 3, teamwork: 3, leadership: 3, innovation: 3 });
   const [selfText, setSelfText] = useState({ accomplishments: "", challenges: "", learnings: "", nextGoals: "", supportNeeded: "" });
@@ -7846,7 +8390,7 @@ function EmployeePerformance({ currentUser }) {
   const avgSelf = Math.round((Object.values(selfRatings).reduce((a, v) => a + v, 0) / 5) * 10) / 10;
 
   const openAddGoal = () => { setEditGoal(null); setGoalForm(emptyGoal); setGoalModal(true); };
-  const openEditGoal = g => { setEditGoal(g); setGoalForm({ title: g.title, type: g.type, target: g.target || "", current: g.current_value || "", due: g.due_date?.slice(0,10) || "", status: g.status, priority: g.priority, description: g.description || "" }); setGoalModal(true); };
+  const openEditGoal = g => { setEditGoal(g); setGoalForm({ title: g.title, type: g.type, target: g.target || "", current: g.current_value || "", due: g.due_date?.slice(0, 10) || "", status: g.status, priority: g.priority, description: g.description || "" }); setGoalModal(true); };
 
   async function saveGoal() {
     if (!goalForm.title.trim()) return;
@@ -7895,11 +8439,13 @@ function EmployeePerformance({ currentUser }) {
         <span style={{ fontSize: 13, fontWeight: 900, color: C.accent }}>{value}<span style={{ color: C.textMuted, fontWeight: 500 }}>/5</span></span>
       </div>
       <div style={{ display: "flex", gap: 6 }}>
-        {[1,2,3,4,5].map(n => (
+        {[1, 2, 3, 4, 5].map(n => (
           <button key={n} onClick={() => onChange(n)}
-            style={{ flex: 1, height: 8, borderRadius: 6, border: "none", cursor: "pointer", transition: "all 0.2s",
+            style={{
+              flex: 1, height: 8, borderRadius: 6, border: "none", cursor: "pointer", transition: "all 0.2s",
               background: n <= value ? `linear-gradient(90deg,${C.accent},${C.purple})` : C.border,
-              transform: n <= value ? "scaleY(1.3)" : "scaleY(1)" }} />
+              transform: n <= value ? "scaleY(1.3)" : "scaleY(1)"
+            }} />
         ))}
       </div>
     </div>
@@ -7965,7 +8511,7 @@ function EmployeePerformance({ currentUser }) {
           ) : (
             <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, overflow: "hidden" }}>
               <div style={{ display: "grid", gridTemplateColumns: "2fr 80px 100px 100px 110px 90px 90px 80px", background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "10px 20px", gap: 0 }}>
-                {["Goal / Objective","Type","Target","Current","Due Date","Priority","Status",""].map(h => (
+                {["Goal / Objective", "Type", "Target", "Current", "Due Date", "Priority", "Status", ""].map(h => (
                   <div key={h} style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: .5 }}>{h}</div>
                 ))}
               </div>
@@ -9470,10 +10016,10 @@ function AdminPayslips() {
                   </div>
                   <div className="ps-lines">
                     {[["Basic", estimate.basic], ["HRA", estimate.hra], ["LTA", estimate.lta], ["Conveyance", estimate.transport], ["Medical", estimate.medical], ["Internet", estimate.internet],
-                      ...(estimate.pda ? [["Prof. development", estimate.pda]] : []), ...(estimate.ins ? [["Insurance", estimate.ins]] : []),
-                      ["Special allowance", estimate.special], ...(estimate.vp ? [["Variable pay", estimate.vp]] : [])].map(([l, v]) => (
-                        <div key={l} className="ps-line"><span>{l}</span><b>{psINR(v)}</b></div>
-                      ))}
+                    ...(estimate.pda ? [["Prof. development", estimate.pda]] : []), ...(estimate.ins ? [["Insurance", estimate.ins]] : []),
+                    ["Special allowance", estimate.special], ...(estimate.vp ? [["Variable pay", estimate.vp]] : [])].map(([l, v]) => (
+                      <div key={l} className="ps-line"><span>{l}</span><b>{psINR(v)}</b></div>
+                    ))}
                     <div className="ps-line tot"><span>Gross</span><b>{psINR(estimate.gross)}</b></div>
                     {estimate.pf > 0 && <div className="ps-line neg"><span>PF</span><b>−{psINR(estimate.pf)}</b></div>}
                     {estimate.tds > 0 && <div className="ps-line neg"><span>TDS</span><b>−{psINR(estimate.tds)}</b></div>}
@@ -9765,54 +10311,54 @@ function DocumentGrid({ type = "document", allowEdit = false }) {
           </div>
         ) : (
           <>
-          <div className="doc-grid">
-            {docs.slice((docPage - 1) * docPerPage, docPage * docPerPage).map((d, i) => (
-              <div key={d.id} className="doc-card">
-                {/* Card top accent bar */}
-                <div style={{ height: 4, background: `linear-gradient(90deg, ${accentColor}, ${accentColor}88)` }} />
+            <div className="doc-grid">
+              {docs.slice((docPage - 1) * docPerPage, docPage * docPerPage).map((d, i) => (
+                <div key={d.id} className="doc-card">
+                  {/* Card top accent bar */}
+                  <div style={{ height: 4, background: `linear-gradient(90deg, ${accentColor}, ${accentColor}88)` }} />
 
-                <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14, flex: 1 }}>
-                  {/* Icon + title row */}
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <div style={{ width: 42, height: 42, borderRadius: 12, background: accentColor + "20", border: `1px solid ${accentColor}33`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
-                        {policyIcons[i % policyIcons.length]}
+                  <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14, flex: 1 }}>
+                    {/* Icon + title row */}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <div style={{ width: 42, height: 42, borderRadius: 12, background: accentColor + "20", border: `1px solid ${accentColor}33`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
+                          {policyIcons[i % policyIcons.length]}
+                        </div>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: C.text, lineHeight: 1.3 }}>{d.title}</div>
                       </div>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: C.text, lineHeight: 1.3 }}>{d.title}</div>
+                      {allowEdit && (
+                        <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                          <button onClick={() => setModal(d)} title="Edit"
+                            style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", fontSize: 13, padding: "5px 9px", color: C.textMuted, transition: "all .15s" }}>✏</button>
+                          <button onClick={() => del(d.id)} title="Delete"
+                            style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", fontSize: 13, padding: "5px 9px", color: C.red, transition: "all .15s" }}>🗑</button>
+                        </div>
+                      )}
                     </div>
-                    {allowEdit && (
-                      <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-                        <button onClick={() => setModal(d)} title="Edit"
-                          style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", fontSize: 13, padding: "5px 9px", color: C.textMuted, transition: "all .15s" }}>✏</button>
-                        <button onClick={() => del(d.id)} title="Delete"
-                          style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", fontSize: 13, padding: "5px 9px", color: C.red, transition: "all .15s" }}>🗑</button>
-                      </div>
-                    )}
+
+                    {/* Meta */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <div style={{ width: 20, height: 20, borderRadius: 6, background: C.surface, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11 }}>👤</div>
+                      <span style={{ fontSize: 12, color: C.textMuted }}>Added by <span style={{ color: C.textDim, fontWeight: 600 }}>{d.creator_name || "Unknown"}</span></span>
+                      <span style={{ fontSize: 12, color: C.border }}>·</span>
+                      <span style={{ fontSize: 12, color: C.textMuted }}>{d.created_at?.slice(0, 10)}</span>
+                    </div>
+
+                    {/* URL preview chip */}
+                    <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 10px", display: "flex", alignItems: "center", gap: 6, overflow: "hidden" }}>
+                      <span style={{ fontSize: 12 }}>🔗</span>
+                      <span style={{ fontSize: 11, color: C.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.url}</span>
+                    </div>
                   </div>
 
-                  {/* Meta */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <div style={{ width: 20, height: 20, borderRadius: 6, background: C.surface, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11 }}>👤</div>
-                    <span style={{ fontSize: 12, color: C.textMuted }}>Added by <span style={{ color: C.textDim, fontWeight: 600 }}>{d.creator_name || "Unknown"}</span></span>
-                    <span style={{ fontSize: 12, color: C.border }}>·</span>
-                    <span style={{ fontSize: 12, color: C.textMuted }}>{d.created_at?.slice(0, 10)}</span>
-                  </div>
-
-                  {/* URL preview chip */}
-                  <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 10px", display: "flex", alignItems: "center", gap: 6, overflow: "hidden" }}>
-                    <span style={{ fontSize: 12 }}>🔗</span>
-                    <span style={{ fontSize: 11, color: C.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.url}</span>
-                  </div>
+                  {/* Open link button */}
+                  <a href={d.url} target="_blank" rel="noreferrer" className="doc-open-btn">
+                    ↗ Open {isPolicy ? "Policy" : "Document"}
+                  </a>
                 </div>
-
-                {/* Open link button */}
-                <a href={d.url} target="_blank" rel="noreferrer" className="doc-open-btn">
-                  ↗ Open {isPolicy ? "Policy" : "Document"}
-                </a>
-              </div>
-            ))}
-          </div>
-          <PaginationControls page={docPage} setPage={setDocPage} perPage={docPerPage} setPerPage={setDocPerPage} total={docs.length} />
+              ))}
+            </div>
+            <PaginationControls page={docPage} setPage={setDocPage} perPage={docPerPage} setPerPage={setDocPerPage} total={docs.length} />
           </>
         )}
 
@@ -10985,11 +11531,11 @@ function PerformanceManagement({ currentUser }) {
   const isManager = currentUser?.role === "manager";
 
   const TABS = [
-    { id: "goals",    label: "Goals (All Employees)",    icon: "🎯" },
-    { id: "self",     label: "Self-Assessments",         icon: "🪞" },
-    { id: "feedback", label: "Manager Feedback",         icon: "💬" },
-    { id: "reviews",  label: "Performance Reviews",      icon: "📋" },
-    { id: "cycles",   label: "Review Cycles",            icon: "🗓" },
+    { id: "goals", label: "Goals (All Employees)", icon: "🎯" },
+    { id: "self", label: "Self-Assessments", icon: "🪞" },
+    { id: "feedback", label: "Manager Feedback", icon: "💬" },
+    { id: "reviews", label: "Performance Reviews", icon: "📋" },
+    { id: "cycles", label: "Review Cycles", icon: "🗓" },
   ];
   const [tab, setTab] = useState("goals");
 
@@ -11248,7 +11794,7 @@ function PerformanceManagement({ currentUser }) {
                   onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <div style={{ width: 28, height: 28, borderRadius: 8, background: C.accent + "22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 900, color: C.accent, flexShrink: 0 }}>
-                      {(g.employee_name || "?").split(" ").map(w => w[0]).join("").slice(0,2)}
+                      {(g.employee_name || "?").split(" ").map(w => w[0]).join("").slice(0, 2)}
                     </div>
                     <span style={{ fontSize: 12, fontWeight: 600, color: C.textDim, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.employee_name}</span>
                   </div>
@@ -11259,7 +11805,7 @@ function PerformanceManagement({ currentUser }) {
                   <span style={{ fontSize: 10, fontWeight: 700, color: g.priority === "high" ? C.red : g.priority === "medium" ? C.amber : C.textDim, textTransform: "uppercase" }}>{g.priority}</span>
                   <span style={{ background: sc(g.status) + "22", color: sc(g.status), borderRadius: 5, padding: "2px 6px", fontSize: 10, fontWeight: 700 }}>{sl(g.status)}</span>
                   <div style={{ display: "flex", gap: 4 }}>
-                    <button onClick={() => { setEditGoal(g); setGoalForm({ employeeId: g.employee_id, title: g.title, type: g.type, target: g.target || "", current: g.current_value || "", due: g.due_date?.slice(0,10) || "", status: g.status, priority: g.priority }); setGoalModal(true); }}
+                    <button onClick={() => { setEditGoal(g); setGoalForm({ employeeId: g.employee_id, title: g.title, type: g.type, target: g.target || "", current: g.current_value || "", due: g.due_date?.slice(0, 10) || "", status: g.status, priority: g.priority }); setGoalModal(true); }}
                       style={{ background: C.accent + "18", color: C.accent, border: `1px solid ${C.accent}33`, borderRadius: 5, padding: "3px 7px", fontSize: 11, cursor: "pointer" }}>✏</button>
                     {isAdmin && <button onClick={() => deleteGoal(g.id)}
                       style={{ background: C.red + "18", color: C.red, border: `1px solid ${C.red}33`, borderRadius: 5, padding: "3px 7px", fontSize: 11, cursor: "pointer" }}>🗑</button>}
@@ -11339,11 +11885,11 @@ function PerformanceManagement({ currentUser }) {
                     <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "16px 20px", cursor: "pointer", background: expanded ? C.surface : "transparent" }}
                       onClick={() => setExpandedSA(expanded ? null : sa.id)}>
                       <div style={{ width: 44, height: 44, borderRadius: 12, background: C.purple + "22", border: `1px solid ${C.purple}33`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 900, color: C.purple, flexShrink: 0 }}>
-                        {(sa.employee_name || "?").split(" ").map(w => w[0]).join("").slice(0,2)}
+                        {(sa.employee_name || "?").split(" ").map(w => w[0]).join("").slice(0, 2)}
                       </div>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{sa.employee_name}</div>
-                        <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>Period: {sa.period || sa.cycle_name || "—"} · Submitted: {sa.submitted_at?.slice(0,10) || "—"}</div>
+                        <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>Period: {sa.period || sa.cycle_name || "—"} · Submitted: {sa.submitted_at?.slice(0, 10) || "—"}</div>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                         <div style={{ textAlign: "center" }}>
@@ -11355,7 +11901,7 @@ function PerformanceManagement({ currentUser }) {
                             <div key={lbl} style={{ display: "flex", alignItems: "center", gap: 5 }}>
                               <span style={{ fontSize: 9, color: C.textMuted, width: 14 }}>{lbl}</span>
                               <div style={{ width: 50, height: 4, background: C.border, borderRadius: 3, overflow: "hidden" }}>
-                                <div style={{ width: `${(val/5)*100}%`, height: "100%", background: `linear-gradient(90deg,${C.accent},${C.purple})`, borderRadius: 3 }} />
+                                <div style={{ width: `${(val / 5) * 100}%`, height: "100%", background: `linear-gradient(90deg,${C.accent},${C.purple})`, borderRadius: 3 }} />
                               </div>
                               <span style={{ fontSize: 9, color: C.textMuted }}>{val}</span>
                             </div>
@@ -11417,15 +11963,15 @@ function PerformanceManagement({ currentUser }) {
             <div key={fb.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 20px", background: expandedFb === fb.id ? C.surface : "transparent" }}>
                 <div style={{ width: 40, height: 40, borderRadius: 10, background: C.purple + "22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 900, color: C.purple, flexShrink: 0 }}>
-                  {(fb.manager_name || "?").split(" ").map(w => w[0]).join("").slice(0,2)}
+                  {(fb.manager_name || "?").split(" ").map(w => w[0]).join("").slice(0, 2)}
                 </div>
                 <div style={{ flex: 1, cursor: "pointer" }} onClick={() => setExpandedFb(expandedFb === fb.id ? null : fb.id)}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>By {fb.manager_name}</div>
-                  <div style={{ fontSize: 12, color: C.textMuted }}>{fb.cycle_name || fb.period || "—"} · {fb.feedback_date?.slice(0,10) || ""}</div>
+                  <div style={{ fontSize: 12, color: C.textMuted }}>{fb.cycle_name || fb.period || "—"} · {fb.feedback_date?.slice(0, 10) || ""}</div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <div><Stars n={fb.overall_rating} /><div style={{ fontSize: 10, color: C.textMuted, textAlign: "right" }}>{fb.overall_rating}/5</div></div>
-                  <button onClick={() => { setEditFb(fb); setFbForm({ employeeId: fb.employee_id, reviewCycleId: fb.review_cycle_id || "", period: fb.period || "", feedbackDate: fb.feedback_date?.slice(0,10) || "", overallRating: fb.overall_rating, strengths: fb.strengths || "", areasToImprove: fb.areas_to_improve || "", managerComment: fb.manager_comment || "" }); setFbModal(true); }}
+                  <button onClick={() => { setEditFb(fb); setFbForm({ employeeId: fb.employee_id, reviewCycleId: fb.review_cycle_id || "", period: fb.period || "", feedbackDate: fb.feedback_date?.slice(0, 10) || "", overallRating: fb.overall_rating, strengths: fb.strengths || "", areasToImprove: fb.areas_to_improve || "", managerComment: fb.manager_comment || "" }); setFbModal(true); }}
                     style={{ background: C.accent + "18", color: C.accent, border: `1px solid ${C.accent}33`, borderRadius: 6, padding: "4px 8px", fontSize: 11, cursor: "pointer" }}>✏</button>
                   {(isAdmin || String(fb.manager_id) === String(currentUser?.employee_id)) && (
                     <button onClick={() => deleteFeedback(fb.id)} style={{ background: C.red + "18", color: C.red, border: `1px solid ${C.red}33`, borderRadius: 6, padding: "4px 8px", fontSize: 11, cursor: "pointer" }}>🗑</button>
@@ -11473,7 +12019,7 @@ function PerformanceManagement({ currentUser }) {
                 <div>
                   <div style={{ fontSize: 12, color: C.textDim, fontWeight: 600, marginBottom: 8 }}>Overall Rating: {fbForm.overallRating}/5</div>
                   <div style={{ display: "flex", gap: 8 }}>
-                    {[1,2,3,4,5].map(n => (
+                    {[1, 2, 3, 4, 5].map(n => (
                       <button key={n} onClick={() => setFbForm(p => ({ ...p, overallRating: n }))}
                         style={{ flex: 1, padding: "6px 0", borderRadius: 7, border: `1px solid ${n <= fbForm.overallRating ? "#F59E0B" : C.border}`, background: n <= fbForm.overallRating ? "#F59E0B22" : "transparent", color: n <= fbForm.overallRating ? "#F59E0B" : C.textMuted, fontSize: 18, cursor: "pointer" }}>★</button>
                     ))}
@@ -11521,7 +12067,7 @@ function PerformanceManagement({ currentUser }) {
                   {r.final_score && <div style={{ textAlign: "center" }}><div style={{ fontSize: 18, fontWeight: 900, color: C.green }}>{r.final_score}</div><div style={{ fontSize: 9, color: C.textMuted }}>SCORE</div></div>}
                   {r.badge && <span style={{ background: C.green + "18", color: C.green, border: `1px solid ${C.green}33`, borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>{r.badge}</span>}
                   {r.status === "pending" && <span style={{ background: C.amber + "18", color: C.amber, border: `1px solid ${C.amber}33`, borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 700 }}>Pending</span>}
-                  <button onClick={() => { setEditRev(r); setRevForm({ employeeId: r.employee_id, reviewCycleId: r.review_cycle_id || "", period: r.period || "", status: r.status, finalScore: r.final_score || "", badge: r.badge || "", reviewDate: r.review_date?.slice(0,10) || "", notes: r.notes || "" }); setRevModal(true); }}
+                  <button onClick={() => { setEditRev(r); setRevForm({ employeeId: r.employee_id, reviewCycleId: r.review_cycle_id || "", period: r.period || "", status: r.status, finalScore: r.final_score || "", badge: r.badge || "", reviewDate: r.review_date?.slice(0, 10) || "", notes: r.notes || "" }); setRevModal(true); }}
                     style={{ background: C.accent + "18", color: C.accent, border: `1px solid ${C.accent}33`, borderRadius: 6, padding: "4px 8px", fontSize: 11, cursor: "pointer" }}>✏</button>
                   {isAdmin && <button onClick={() => deleteReview(r.id)} style={{ background: C.red + "18", color: C.red, border: `1px solid ${C.red}33`, borderRadius: 6, padding: "4px 8px", fontSize: 11, cursor: "pointer" }}>🗑</button>}
                   <span style={{ color: C.textMuted, fontSize: 16, cursor: "pointer" }} onClick={() => setExpandedRev(expandedRev === r.id ? null : r.id)}>▾</span>
@@ -11587,12 +12133,12 @@ function PerformanceManagement({ currentUser }) {
               <div style={{ fontSize: 22, flexShrink: 0 }}>🗓</div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{c.name}</div>
-                <div style={{ fontSize: 12, color: C.textMuted }}>{c.start_date?.slice(0,10)} → {c.end_date?.slice(0,10)}</div>
+                <div style={{ fontSize: 12, color: C.textMuted }}>{c.start_date?.slice(0, 10)} → {c.end_date?.slice(0, 10)}</div>
               </div>
               <span style={{ background: c.status === "active" ? C.green + "18" : C.textMuted + "18", color: c.status === "active" ? C.green : C.textMuted, border: `1px solid ${c.status === "active" ? C.green : C.textMuted}33`, borderRadius: 20, padding: "3px 12px", fontSize: 12, fontWeight: 700 }}>
                 {c.status === "active" ? "Active" : "Closed"}
               </span>
-              <button onClick={() => { setEditCycle(c); setCycleForm({ name: c.name, startDate: c.start_date?.slice(0,10) || "", endDate: c.end_date?.slice(0,10) || "", status: c.status }); setCycleModal(true); }}
+              <button onClick={() => { setEditCycle(c); setCycleForm({ name: c.name, startDate: c.start_date?.slice(0, 10) || "", endDate: c.end_date?.slice(0, 10) || "", status: c.status }); setCycleModal(true); }}
                 style={{ background: C.accent + "18", color: C.accent, border: `1px solid ${C.accent}33`, borderRadius: 6, padding: "5px 9px", fontSize: 12, cursor: "pointer" }}>✏</button>
               {isAdmin && <button onClick={() => deleteCycle(c.id)} style={{ background: C.red + "18", color: C.red, border: `1px solid ${C.red}33`, borderRadius: 6, padding: "5px 9px", fontSize: 12, cursor: "pointer" }}>🗑</button>}
             </div>
@@ -11641,6 +12187,400 @@ const ADMIN_NAV = [
   { id: "compensation", label: "Compensation Details", icon: "🧮" },
   { id: "infra", label: "Infra / Assets", icon: "🖥" },
 ];
+
+// ════════════════════════════════════════════════════════
+// APP SHELL — sidebar, header, command palette, mobile bottom bar
+// ════════════════════════════════════════════════════════
+const PORTAL_TABS = [
+  { tab: "profile", label: "My Profile", icon: "👤" },
+  { tab: "timesheets", label: "Timesheets", icon: "⏱" },
+  { tab: "leave", label: "Leave", icon: "🌴" },
+  { tab: "expenses", label: "Expenses", icon: "💳" },
+  { tab: "pay", label: "My Pay", icon: "💰", noIntern: true },
+  { tab: "performance", label: "Performance", icon: "🎯", noIntern: true },
+  { tab: "policies", label: "Company Policy", icon: "📋" },
+];
+const ADMIN_GROUPS = [
+  { title: "Overview", ids: ["dashboard", "reports"] },
+  { title: "People", ids: ["people", "onboard", "performance", "attendance", "useraccounts"] },
+  { title: "Finance", ids: ["payslips", "compensation", "subscriptions"] },
+  { title: "Delivery", ids: ["project_management"] },
+  { title: "Company", ids: ["documents", "policies", "resumes", "infra"] },
+];
+
+function buildNav(user) {
+  const role = user.role;
+  const intern = role === "intras";
+  const portalPage = role === "manager" ? "mywork" : "employee-home";
+  const portal = PORTAL_TABS.filter(t => !(intern && t.noIntern)).map(t => ({ id: `${portalPage}:${t.tab}`, page: portalPage, tab: t.tab, label: t.label, icon: t.icon }));
+  const adminItem = id => { const n = ADMIN_NAV.find(x => x.id === id); return n && { id, page: id, label: n.label.replace("Generate ", "").replace(" (Client)", ""), icon: n.icon }; };
+  if (role === "admin") {
+    return { groups: ADMIN_GROUPS.map(g => ({ title: g.title, items: g.ids.map(adminItem).filter(Boolean) })), home: "dashboard", portalPage: null };
+  }
+  if (role === "manager") {
+    return {
+      groups: [
+        { title: "Overview", items: [{ id: "emp-dashboard", page: "emp-dashboard", label: "Dashboard", icon: "⊞" }] },
+        { title: "My work", items: portal },
+        { title: "Team & company", items: ["attendance", "documents", "resumes"].map(adminItem).filter(Boolean) },
+      ], home: "emp-dashboard", portalPage,
+    };
+  }
+  return {
+    groups: [
+      { title: "Overview", items: [{ id: "emp-dashboard", page: "emp-dashboard", label: "Dashboard", icon: "⊞" }] },
+      { title: "My work", items: portal },
+      { title: "Company", items: [{ id: "resumes", page: "resumes", label: "Company Resume", icon: "📑" }] },
+    ], home: "emp-dashboard", portalPage,
+  };
+}
+
+function AppShell({ currentUser, darkMode, onToggleTheme, onLogout, page, portalTab, onNavigate, children }) {
+  const { groups, home, portalPage } = buildNav(currentUser);
+  const items = groups.flatMap(g => g.items.map(i => ({ ...i, group: g.title })));
+  const isActive = i => i.page === page && (!i.tab || (portalTab || "profile") === i.tab);
+  const current = items.find(isActive) || items.find(i => i.page === page) || items[0];
+
+  const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem("pp_nav_collapsed") === "1"; } catch { return false; } });
+  const [drawer, setDrawer] = useState(false);
+  const [palette, setPalette] = useState(false);
+  const [menu, setMenu] = useState(null); // "profile" | "quick" | null
+  const [q, setQ] = useState("");
+  const [sel, setSel] = useState(0);
+  const [scrolled, setScrolled] = useState(false);
+  const paletteInput = useRef(null);
+
+  useEffect(() => { try { localStorage.setItem("pp_nav_collapsed", collapsed ? "1" : "0"); } catch { } }, [collapsed]);
+  useEffect(() => {
+    const onKey = e => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setPalette(p => !p); setMenu(null); }
+      else if (e.key === "Escape") { setPalette(false); setMenu(null); setDrawer(false); }
+    };
+    const onScroll = () => setScrolled(window.scrollY > 4);
+    const onClick = e => { if (!e.target.closest?.(".sh-pop") && !e.target.closest?.(".sh-pop-trigger")) setMenu(null); };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    document.addEventListener("mousedown", onClick);
+    return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("scroll", onScroll); document.removeEventListener("mousedown", onClick); };
+  }, []);
+  useEffect(() => { if (palette) { setQ(""); setSel(0); setTimeout(() => paletteInput.current?.focus(), 0); } }, [palette]);
+  useEffect(() => { document.body.style.overflow = drawer || palette ? "hidden" : ""; return () => { document.body.style.overflow = ""; }; }, [drawer, palette]);
+
+  const expand = () => (window.innerWidth >= 1200 ? setCollapsed(false) : setDrawer(true));
+  const go = i => { onNavigate(i.page, i.tab); setDrawer(false); setPalette(false); setMenu(null); };
+  const name = currentUser.emp_name || currentUser.username || "";
+  const first = name.split(" ")[0];
+  const roleLabel = { admin: "Administrator", manager: "Manager", intras: "Intern" }[currentUser.role] || "Employee";
+  const roleColor = { admin: C.purple, manager: C.green, intras: C.amber }[currentUser.role] || C.accent;
+  const initials = currentUser.avatar || mkAvi(name);
+
+  const quick = portalPage
+    ? [{ label: "Log time", icon: "⏱", page: portalPage, tab: "timesheets" }, { label: "Request leave", icon: "🌴", page: portalPage, tab: "leave" }, { label: "New expense claim", icon: "💳", page: portalPage, tab: "expenses" }]
+    : [{ label: "Generate payslip", icon: "💰", page: "payslips" }, { label: "Onboard employee", icon: "🧑‍💼", page: "onboard" }, { label: "View reports", icon: "◫", page: "reports" }];
+
+  const actions = [
+    ...items.map(i => ({ ...i, kind: "Go to", run: () => go(i) })),
+    ...quick.map(a => ({ ...a, id: `q-${a.label}`, kind: "Action", run: () => go(a) })),
+    { id: "theme", label: darkMode ? "Switch to light theme" : "Switch to dark theme", icon: darkMode ? "☀" : "🌙", kind: "Preference", run: () => { onToggleTheme(); setPalette(false); } },
+    { id: "collapse", label: collapsed ? "Expand sidebar" : "Collapse sidebar", icon: "⇤", kind: "Preference", run: () => { setCollapsed(c => !c); setPalette(false); } },
+    { id: "logout", label: "Sign out", icon: "↩", kind: "Account", run: () => onLogout() },
+  ];
+  const ql = q.trim().toLowerCase();
+  const results = actions.filter(a => !ql || `${a.label} ${a.group || ""} ${a.kind}`.toLowerCase().includes(ql)).slice(0, 12);
+
+  const mobileTabs = portalPage
+    ? [items.find(i => i.page === home), ...["timesheets", "leave", portalPage && currentUser.role !== "intras" ? "pay" : "expenses"].map(t => items.find(i => i.tab === t))].filter(Boolean)
+    : ["dashboard", "people", "attendance", "payslips"].map(id => items.find(i => i.id === id)).filter(Boolean);
+
+  const NavList = ({ mobile }) => (
+    <nav className="sh-nav" aria-label="Main">
+      {groups.map(g => (
+        <div key={g.title} className="sh-group">
+          <div className="sh-group-t">{g.title}</div>
+          {g.items.map(i => {
+            const on = isActive(i);
+            return (
+              <button key={i.id} className={`sh-item${on ? " on" : ""}`} onClick={() => go(i)} aria-current={on ? "page" : undefined} title={!mobile && collapsed ? i.label : undefined} data-tip={i.label}>
+                <span className="sh-item-ico">{i.icon}</span>
+                <span className="sh-item-l">{i.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      ))}
+    </nav>
+  );
+
+  const UserCard = () => (
+    <div className="sh-user">
+      <div className="sh-avi" style={{ background: `linear-gradient(135deg, ${roleColor}, ${C.accent})` }}>{initials}</div>
+      <div className="sh-user-txt"><b>{name}</b><span style={{ color: roleColor }}>{roleLabel}</span></div>
+      <button className="sh-icon sh-user-out" onClick={onLogout} title="Sign out" aria-label="Sign out">↩</button>
+    </div>
+  );
+
+  return (
+    <div className={`sh${collapsed ? " collapsed" : ""}${drawer ? " drawer" : ""}${darkMode ? " dark-mode" : ""}`} style={{ background: C.bg, color: C.text, fontFamily: "'DM Sans','Segoe UI',sans-serif" }}>
+      <style>{`
+        .sh { --side: 264px; --rail: 76px; min-height: 100vh; min-height: 100dvh; }
+        .sh-side { position: fixed; inset: 0 auto 0 0; width: var(--side); z-index: 400; display: flex; flex-direction: column; background: linear-gradient(180deg, #0B0F1A 0%, #0E1322 100%); border-right: 1px solid rgba(255,255,255,.06); transition: width .25s cubic-bezier(.4,0,.2,1), transform .25s cubic-bezier(.4,0,.2,1); color: #CBD5E1; }
+        .sh-brand { height: 80px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 14px 0 18px; flex-shrink: 0; border-bottom: 1px solid rgba(255,255,255,.06); }
+        .sh-brand .sh-wordmark { height: 48px; width: auto; max-width: calc(100% - 44px); object-fit: contain; filter: drop-shadow(0 4px 14px rgba(59,130,246,.25)); }
+        .sh-brand .sh-mark { display: none; width: 52px; height: 52px; padding: 6px; border-radius: 14px; background: transparent; align-items: center; justify-content: center; transition: background .15s; }
+        .sh-brand .sh-mark:hover { background: rgba(255,255,255,.06); }
+        .sh-brand .sh-mark img { width: 100%; height: 100%; max-width: none; object-fit: contain; display: block; filter: drop-shadow(0 4px 12px rgba(129,78,199,.35)); }
+        .sh-search-side { margin: 14px 14px 4px; display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 12px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); color: rgba(203,213,225,.6); font-size: 13px; cursor: pointer; font-family: inherit; text-align: left; }
+        .sh-search-side:hover { border-color: rgba(96,165,250,.5); color: #E2E8F0; }
+        .sh-search-side kbd, .sh-search kbd { margin-left: auto; font-family: inherit; font-size: 11px; font-weight: 700; padding: 2px 6px; border-radius: 6px; border: 1px solid rgba(148,163,184,.3); color: rgba(148,163,184,.9); }
+        .sh-nav { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 6px 10px 12px; scrollbar-width: thin; }
+        .sh-group { margin-top: 12px; }
+        .sh-group-t { font-size: 10.5px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: rgba(148,163,184,.55); padding: 6px 10px; white-space: nowrap; }
+        .sh-item { position: relative; width: 100%; display: flex; align-items: center; gap: 12px; padding: 8px 10px; margin: 1px 0; border-radius: 12px; border: none; background: transparent; color: rgba(203,213,225,.78); font-size: 13.5px; font-weight: 600; cursor: pointer; text-align: left; font-family: inherit; white-space: nowrap; transition: background .15s, color .15s; }
+        .sh-item:hover { background: rgba(255,255,255,.05); color: #fff; }
+        .sh-item.on { background: linear-gradient(90deg, rgba(59,130,246,.22), rgba(139,92,246,.10)); color: #fff; }
+        .sh-item.on::before { content: ""; position: absolute; left: -10px; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: linear-gradient(180deg, #60A5FA, #A78BFA); }
+        .sh-item-ico { width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; background: rgba(255,255,255,.04); }
+        .sh-item.on .sh-item-ico { background: rgba(59,130,246,.25); }
+        .sh-item-l { overflow: hidden; text-overflow: ellipsis; }
+        .sh-user { margin: 10px; padding: 10px; border-radius: 14px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.07); display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+        .sh-avi { width: 38px; height: 38px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 13.5px; flex-shrink: 0; }
+        .sh-user-txt { min-width: 0; flex: 1; }
+        .sh-user-txt b { display: block; font-size: 13px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .sh-user-txt span { font-size: 11.5px; font-weight: 700; }
+        .sh-icon { width: 38px; height: 38px; border-radius: 11px; border: 1px solid var(--sh-border); background: var(--sh-btn); color: var(--sh-dim); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; font-family: inherit; transition: color .15s, border-color .15s, background .15s; }
+        .sh-icon:hover { color: var(--sh-text); border-color: ${C.accent}88; }
+        .sh-side .sh-icon { --sh-border: rgba(255,255,255,.1); --sh-btn: transparent; --sh-dim: rgba(203,213,225,.7); --sh-text: #fff; width: 32px; height: 32px; font-size: 14px; }
+        .sh-collapse-btn { display: inline-flex; }
+        .sh-close { display: none; }
+
+        /* Collapsed rail */
+        .sh.collapsed .sh-side { width: var(--rail); }
+        .sh.collapsed .sh-brand { justify-content: center; padding: 0; }
+        .sh.collapsed .sh-brand .sh-wordmark, .sh.collapsed .sh-brand .sh-collapse-btn { display: none; }
+        .sh.collapsed .sh-brand .sh-mark { display: flex; cursor: pointer; border: none; }
+        .sh.collapsed .sh-search-side { justify-content: center; margin: 14px 16px 4px; padding: 9px 0; }
+        .sh.collapsed .sh-search-side span, .sh.collapsed .sh-search-side kbd { display: none; }
+        .sh.collapsed .sh-group-t { text-align: center; padding: 6px 0; font-size: 0; }
+        .sh.collapsed .sh-group-t::after { content: ""; display: block; width: 18px; height: 1px; background: rgba(148,163,184,.25); margin: 4px auto; }
+        .sh.collapsed .sh-item { justify-content: center; padding: 6px 0; }
+        .sh.collapsed .sh-item-l { display: none; }
+        .sh.collapsed .sh-item.on::before { left: -10px; }
+        .sh.collapsed .sh-item:hover::after { content: attr(data-tip); position: absolute; left: calc(100% + 14px); top: 50%; transform: translateY(-50%); background: #1E293B; color: #fff; font-size: 12.5px; font-weight: 700; padding: 6px 10px; border-radius: 8px; white-space: nowrap; box-shadow: 0 8px 24px rgba(0,0,0,.4); pointer-events: none; z-index: 10; }
+        .sh.collapsed .sh-user { flex-direction: column; padding: 8px 0; margin: 10px 12px; }
+        .sh.collapsed .sh-user-txt { display: none; }
+
+        /* Main column */
+        .sh-main { margin-left: var(--side); transition: margin-left .25s cubic-bezier(.4,0,.2,1); min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
+        .sh.collapsed .sh-main { margin-left: var(--rail); }
+        .sh-header { --sh-border: ${C.border}; --sh-btn: ${C.surface}; --sh-dim: ${C.textDim}; --sh-text: ${C.text}; position: sticky; top: 0; z-index: 300; height: 68px; display: flex; align-items: center; gap: 12px; padding: 0 clamp(14px, 2.4vw, 32px); background: color-mix(in srgb, ${C.bg} 82%, transparent); backdrop-filter: saturate(160%) blur(14px); -webkit-backdrop-filter: saturate(160%) blur(14px); border-bottom: 1px solid transparent; transition: border-color .2s, box-shadow .2s; }
+        .sh-header.scrolled { border-bottom-color: ${C.border}; box-shadow: 0 6px 24px -12px rgba(0,0,0,.45); }
+        .sh-burger { display: none; }
+        .sh-mlogo { display: none; height: 26px; }
+        .sh-title { min-width: 0; flex: 1; }
+        .sh-crumb { font-size: 11.5px; font-weight: 700; color: ${C.textMuted}; letter-spacing: .3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .sh-page { font-size: 17px; font-weight: 800; color: ${C.text}; letter-spacing: -.3px; display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .sh-search { display: flex; align-items: center; gap: 10px; width: min(320px, 30vw); height: 40px; padding: 0 12px; border-radius: 12px; border: 1px solid ${C.border}; background: ${C.surface}; color: ${C.textMuted}; font-size: 13px; cursor: pointer; font-family: inherit; }
+        .sh-search:hover { border-color: ${C.accent}88; color: ${C.text}; }
+        .sh-actions { display: flex; align-items: center; gap: 8px; position: relative; }
+        .sh-prof { display: flex; align-items: center; gap: 10px; height: 44px; padding: 3px 10px 3px 3px; border-radius: 14px; border: 1px solid ${C.border}; background: ${C.surface}; cursor: pointer; font-family: inherit; color: ${C.text}; }
+        .sh-prof:hover { border-color: ${C.accent}88; }
+        .sh-prof .sh-avi { width: 36px; height: 36px; font-size: 12.5px; }
+        .sh-prof-txt { text-align: left; line-height: 1.2; }
+        .sh-prof-txt b { display: block; font-size: 13px; max-width: 140px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .sh-prof-txt span { font-size: 11px; font-weight: 700; }
+        .sh-pop { position: absolute; top: calc(100% + 10px); right: 0; min-width: 240px; background: ${C.card}; border: 1px solid ${C.border}; border-radius: 16px; box-shadow: 0 20px 50px rgba(0,0,0,.45); padding: 8px; z-index: 500; animation: shPop .14s ease-out; }
+        @keyframes shPop { from { opacity: 0; transform: translateY(-6px) scale(.98); } }
+        .sh-pop-head { padding: 10px 10px 12px; border-bottom: 1px solid ${C.border}; margin-bottom: 6px; display: flex; gap: 10px; align-items: center; }
+        .sh-pop-item { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 10px; border: none; background: none; color: ${C.text}; font-size: 13.5px; font-weight: 600; cursor: pointer; text-align: left; font-family: inherit; }
+        .sh-pop-item:hover { background: ${C.surface}; }
+        .sh-pop-item span:first-child { width: 22px; text-align: center; }
+        .sh-pop-item.danger { color: ${C.red}; }
+        .sh-content { flex: 1; padding: clamp(16px, 2.4vw, 32px); padding-top: clamp(8px, 1.2vw, 16px); min-width: 0; }
+        .sh-footer { padding: 16px clamp(14px, 2.4vw, 32px) 20px; font-size: 12px; color: ${C.textMuted}; display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; border-top: 1px solid ${C.border}; }
+        .sh-footer button { background: none; border: none; color: ${C.textMuted}; font-size: 12px; cursor: pointer; font-family: inherit; padding: 0; }
+        .sh-footer button:hover { color: ${C.text}; }
+
+        /* Drawer backdrop + bottom bar */
+        .sh-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); backdrop-filter: blur(2px); z-index: 390; animation: shFade .2s; }
+        @keyframes shFade { from { opacity: 0; } }
+        .sh-bottom { display: none; }
+
+        /* Command palette */
+        .sh-pal-bg { position: fixed; inset: 0; z-index: 1200; background: rgba(2,6,23,.6); backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: flex-start; padding: 12vh 16px 16px; animation: shFade .15s; }
+        .sh-pal { width: 100%; max-width: 580px; background: ${C.card}; border: 1px solid ${C.border}; border-radius: 18px; box-shadow: 0 30px 80px rgba(0,0,0,.6); overflow: hidden; animation: shPop .16s ease-out; }
+        .sh-pal-in { display: flex; align-items: center; gap: 10px; padding: 0 16px; border-bottom: 1px solid ${C.border}; }
+        .sh-pal-in input { flex: 1; height: 56px; background: transparent; border: none; outline: none; color: ${C.text}; font-size: 16px; font-family: inherit; }
+        .sh-pal-list { max-height: min(56vh, 460px); overflow-y: auto; padding: 8px; }
+        .sh-pal-item { width: 100%; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; border: none; background: none; color: ${C.text}; font-size: 14px; font-weight: 600; cursor: pointer; text-align: left; font-family: inherit; }
+        .sh-pal-item.sel { background: ${C.accent}1f; box-shadow: inset 0 0 0 1px ${C.accent}55; }
+        .sh-pal-item .ico { width: 32px; height: 32px; border-radius: 9px; background: ${C.surface}; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
+        .sh-pal-item small { margin-left: auto; font-size: 11.5px; color: ${C.textMuted}; font-weight: 700; white-space: nowrap; }
+        .sh-pal-foot { display: flex; gap: 14px; padding: 10px 16px; border-top: 1px solid ${C.border}; font-size: 11.5px; color: ${C.textMuted}; }
+        .sh-pal-foot kbd { font-family: inherit; font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 6px; border: 1px solid ${C.border}; margin-right: 4px; }
+        .sh button:focus-visible { outline: 2px solid ${C.accent}; outline-offset: 2px; }
+
+        /* ── Tablet: rail by default, full drawer on demand ── */
+        @media (max-width: 1199px) {
+          .sh .sh-side { width: var(--rail); }
+          .sh .sh-main { margin-left: var(--rail); }
+          .sh .sh-brand { justify-content: center; padding: 0; }
+          .sh .sh-brand .sh-wordmark, .sh .sh-collapse-btn { display: none; }
+          .sh .sh-brand .sh-mark { display: flex; border: none; cursor: pointer; }
+          .sh .sh-search-side { justify-content: center; margin: 14px 16px 4px; padding: 9px 0; }
+          .sh .sh-search-side span, .sh .sh-search-side kbd { display: none; }
+          .sh .sh-group-t { font-size: 0; padding: 6px 0; }
+          .sh .sh-group-t::after { content: ""; display: block; width: 18px; height: 1px; background: rgba(148,163,184,.25); margin: 4px auto; }
+          .sh .sh-item { justify-content: center; padding: 6px 0; }
+          .sh .sh-item-l { display: none; }
+          .sh .sh-user { flex-direction: column; padding: 8px 0; margin: 10px 12px; }
+          .sh .sh-user-txt { display: none; }
+          .sh .sh-search { width: 40px; padding: 0; justify-content: center; }
+          .sh .sh-search span, .sh .sh-search kbd { display: none; }
+          .sh .sh-prof-txt { display: none; }
+          .sh .sh-prof { padding: 3px; }
+          /* drawer open: full sidebar over content */
+          .sh.drawer .sh-side { width: var(--side); box-shadow: 20px 0 60px rgba(0,0,0,.5); }
+          .sh.drawer .sh-brand { justify-content: space-between; padding: 0 14px 0 18px; }
+          .sh.drawer .sh-brand .sh-wordmark { display: block; }
+          .sh.drawer .sh-brand .sh-mark { display: none; }
+          .sh.drawer .sh-close { display: inline-flex; }
+          .sh.drawer .sh-search-side { justify-content: flex-start; margin: 14px 14px 4px; padding: 9px 12px; }
+          .sh.drawer .sh-search-side span, .sh.drawer .sh-search-side kbd { display: inline; }
+          .sh.drawer .sh-group-t { font-size: 10.5px; padding: 6px 10px; }
+          .sh.drawer .sh-group-t::after { display: none; }
+          .sh.drawer .sh-item { justify-content: flex-start; padding: 8px 10px; }
+          .sh.drawer .sh-item-l { display: inline; }
+          .sh.drawer .sh-item:hover::after { display: none; }
+          .sh.drawer .sh-user { flex-direction: row; padding: 10px; margin: 10px; }
+          .sh.drawer .sh-user-txt { display: block; }
+          .sh .sh-item:hover::after { content: attr(data-tip); position: absolute; left: calc(100% + 14px); top: 50%; transform: translateY(-50%); background: #1E293B; color: #fff; font-size: 12.5px; font-weight: 700; padding: 6px 10px; border-radius: 8px; white-space: nowrap; box-shadow: 0 8px 24px rgba(0,0,0,.4); pointer-events: none; z-index: 10; }
+        }
+        /* ── Phone: off-canvas drawer + bottom tab bar ── */
+        @media (max-width: 767px) {
+          .sh .sh-side, .sh.collapsed .sh-side { width: min(86vw, 320px); transform: translateX(-102%); }
+          .sh.drawer .sh-side, .sh.drawer.collapsed .sh-side { transform: none; width: min(86vw, 320px); }
+          .sh .sh-main, .sh.collapsed .sh-main { margin-left: 0; padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
+          .sh .sh-expand { display: none; }
+          .sh-header { height: 60px; gap: 8px; }
+          .sh-burger { display: inline-flex; }
+          .sh-title { display: flex; align-items: center; gap: 10px; }
+          .sh-crumb { display: none; }
+          .sh-page { font-size: 16px; }
+          .sh-footer { justify-content: center; text-align: center; }
+          .sh-bottom { display: grid; grid-template-columns: repeat(${mobileTabs.length + 1}, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 350; padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); background: color-mix(in srgb, ${C.card} 92%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-top: 1px solid ${C.border}; }
+          .sh-bottom button { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 2px; border: none; background: none; color: ${C.textMuted}; font-size: 10.5px; font-weight: 700; cursor: pointer; font-family: inherit; border-radius: 12px; min-width: 0; }
+          .sh-bottom button span:first-child { font-size: 19px; line-height: 1; width: 44px; height: 30px; border-radius: 999px; display: flex; align-items: center; justify-content: center; transition: background .15s; }
+          .sh-bottom button span:last-child { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+          .sh-bottom button.on { color: ${C.accent}; }
+          .sh-bottom button.on span:first-child { background: ${C.accent}22; }
+          .sh-pal-bg { padding: 0; align-items: stretch; }
+          .sh-pal { max-width: none; border-radius: 0; display: flex; flex-direction: column; }
+          .sh-pal-list { max-height: none; flex: 1; }
+          .sh-pal-foot { display: none; }
+          .sh-pop { position: fixed; top: auto; bottom: 0; left: 0; right: 0; border-radius: 22px 22px 0 0; padding: 10px 10px calc(14px + env(safe-area-inset-bottom)); }
+        }
+        @media (min-width: 768px) { .sh-mlogo { display: none !important; } }
+        @media (prefers-reduced-motion: reduce) { .sh *, .sh *::before, .sh *::after { animation: none !important; transition: none !important; } }
+      `}</style>
+
+      {/* ── Sidebar ── */}
+      <aside className="sh-side" aria-label="Sidebar">
+        <div className="sh-brand">
+          <img src="/image.png" alt="Fascinate IT" className="sh-wordmark" />
+          <button className="sh-mark" onClick={expand} title="Expand menu" aria-label="Expand menu"><img src="/logo-mark.svg" alt="" /></button>
+          <button className="sh-icon sh-collapse-btn" onClick={() => setCollapsed(true)} title="Collapse sidebar" aria-label="Collapse sidebar">⇤</button>
+          {drawer && <button className="sh-icon sh-close" onClick={() => setDrawer(false)} aria-label="Close menu">✕</button>}
+        </div>
+        <button className="sh-search-side" onClick={() => setPalette(true)} aria-label="Search">🔍 <span>Search or jump to…</span><kbd>⌘K</kbd></button>
+        <NavList />
+        {collapsed && !drawer && <button className="sh-item sh-expand" style={{ margin: "0 auto", width: 52 }} onClick={expand} data-tip="Expand sidebar" aria-label="Expand sidebar"><span className="sh-item-ico">⇥</span></button>}
+        <UserCard />
+      </aside>
+      {drawer && <div className="sh-backdrop" onClick={() => setDrawer(false)} aria-hidden />}
+
+      {/* ── Main column ── */}
+      <div className="sh-main">
+        <header className={`sh-header${scrolled ? " scrolled" : ""}`}>
+          <button className="sh-icon sh-burger" onClick={() => setDrawer(true)} aria-label="Open menu">☰</button>
+          <div className="sh-title">
+            <div className="sh-crumb">{current?.group}{portalPage && current?.tab ? " · My work" : ""}</div>
+            <div className="sh-page"><span>{current?.icon}</span>{current?.label}</div>
+          </div>
+          <button className="sh-search" onClick={() => setPalette(true)} aria-label="Search or jump to (Ctrl+K)">🔍 <span>Search or jump to…</span><kbd>⌘K</kbd></button>
+          <div className="sh-actions">
+            <button className="sh-icon" onClick={onToggleTheme} title={darkMode ? "Light theme" : "Dark theme"} aria-label="Toggle theme">{darkMode ? "☀" : "🌙"}</button>
+            <button className="sh-prof sh-pop-trigger" onClick={() => setMenu(m => m === "profile" ? null : "profile")} aria-haspopup="menu" aria-expanded={menu === "profile"}>
+              <div className="sh-avi" style={{ background: `linear-gradient(135deg, ${roleColor}, ${C.accent})` }}>{initials}</div>
+              <div className="sh-prof-txt"><b>{first}</b><span style={{ color: roleColor }}>{roleLabel}</span></div>
+            </button>
+            {menu === "profile" && (
+              <div className="sh-pop" role="menu">
+                <div className="sh-pop-head">
+                  <div className="sh-avi" style={{ background: `linear-gradient(135deg, ${roleColor}, ${C.accent})` }}>{initials}</div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 800, fontSize: 14, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
+                    <div style={{ fontSize: 12, color: C.textMuted }}>{roleLabel}{currentUser.emp_id ? ` · ${currentUser.emp_id}` : ""}</div>
+                  </div>
+                </div>
+                {portalPage && <button role="menuitem" className="sh-pop-item" onClick={() => go({ page: portalPage, tab: "profile" })}><span>👤</span>My profile</button>}
+                {portalPage && currentUser.role !== "intras" && <button role="menuitem" className="sh-pop-item" onClick={() => go({ page: portalPage, tab: "pay" })}><span>💰</span>My payslips</button>}
+                <button role="menuitem" className="sh-pop-item" onClick={() => { onToggleTheme(); setMenu(null); }}><span>{darkMode ? "☀" : "🌙"}</span>{darkMode ? "Light theme" : "Dark theme"}</button>
+                <button role="menuitem" className="sh-pop-item" onClick={() => { setPalette(true); setMenu(null); }}><span>⌘</span>Command menu <small style={{ marginLeft: "auto", color: C.textMuted, fontSize: 11.5 }}>Ctrl/⌘ K</small></button>
+                <div style={{ height: 1, background: C.border, margin: "6px 0" }} />
+                <button role="menuitem" className="sh-pop-item danger" onClick={onLogout}><span>↩</span>Sign out</button>
+              </div>
+            )}
+          </div>
+        </header>
+
+        <main className="sh-content" id="main-content">{children}</main>
+
+        <footer className="sh-footer">
+          <span>© {new Date().getFullYear()} Fascinate IT · All rights reserved</span>
+          <button onClick={() => setPalette(true)}>Press <b>Ctrl/⌘ K</b> to jump anywhere</button>
+        </footer>
+      </div>
+
+      {/* ── Mobile bottom bar ── */}
+      <nav className="sh-bottom" aria-label="Quick navigation">
+        {mobileTabs.map(i => (
+          <button key={i.id} className={isActive(i) ? "on" : ""} onClick={() => go(i)} aria-current={isActive(i) ? "page" : undefined}>
+            <span>{i.icon}</span><span>{i.label.replace("My ", "")}</span>
+          </button>
+        ))}
+        <button className={drawer ? "on" : ""} onClick={() => setDrawer(true)}><span>☰</span><span>More</span></button>
+      </nav>
+
+      {/* ── Command palette ── */}
+      {palette && (
+        <div className="sh-pal-bg" onClick={() => setPalette(false)}>
+          <div className="sh-pal" role="dialog" aria-modal="true" aria-label="Command menu" onClick={e => e.stopPropagation()}>
+            <div className="sh-pal-in">
+              <span>🔍</span>
+              <input ref={paletteInput} value={q} placeholder="Search pages and actions…" aria-label="Search pages and actions"
+                onChange={e => { setQ(e.target.value); setSel(0); }}
+                onKeyDown={e => {
+                  if (e.key === "ArrowDown") { e.preventDefault(); setSel(s => Math.min(results.length - 1, s + 1)); }
+                  else if (e.key === "ArrowUp") { e.preventDefault(); setSel(s => Math.max(0, s - 1)); }
+                  else if (e.key === "Enter" && results[sel]) { e.preventDefault(); results[sel].run(); }
+                }} />
+              <button className="sh-icon" style={{ "--sh-border": C.border, "--sh-btn": C.surface, "--sh-dim": C.textDim, "--sh-text": C.text, width: 32, height: 32, fontSize: 13 }} onClick={() => setPalette(false)} aria-label="Close">✕</button>
+            </div>
+            <div className="sh-pal-list" role="listbox">
+              {results.length === 0 && <div style={{ padding: 24, textAlign: "center", color: C.textMuted, fontSize: 13.5 }}>No matches for “{q}”</div>}
+              {results.map((a, i) => (
+                <button key={a.id} role="option" aria-selected={i === sel} className={`sh-pal-item${i === sel ? " sel" : ""}`} onMouseEnter={() => setSel(i)} onClick={a.run}>
+                  <span className="ico">{a.icon}</span>{a.label}<small>{a.kind === "Go to" ? a.group : a.kind}</small>
+                </button>
+              ))}
+            </div>
+            <div className="sh-pal-foot"><span><kbd>↑</kbd><kbd>↓</kbd>navigate</span><span><kbd>↵</kbd>open</span><span><kbd>esc</kbd>close</span></div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ════════════════════════════════════════════════════════
 // ROOT APP
@@ -11753,7 +12693,7 @@ export default function App() {
     } catch { return null; }
   });
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("pp_theme") !== "light");
-  const [page, setPage] = useState("dashboard");
+  const [page, setPage] = useState(() => { try { return JSON.parse(localStorage.getItem("pp_nav_state") || "{}").page || "dashboard"; } catch { return "dashboard"; } });
   const [navOpen, setNavOpen] = useState(false);
 
   // Apply theme tokens before render
@@ -11778,17 +12718,11 @@ export default function App() {
     localStorage.setItem("pp_theme", next ? "dark" : "light");
   }
 
-  // Theme toggle button used in both headers
-  const ThemeToggle = () => (
-    <button onClick={toggleTheme} title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-      style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.textDim, padding: "5px 10px", fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", gap: 5, transition: "all 0.2s" }}>
-      {darkMode ? "☀" : "🌙"}
-      <span style={{ fontSize: 11, fontWeight: 600, color: C.textMuted }}>{darkMode ? "Light" : "Dark"}</span>
-    </button>
-  );
-  const [portalTab, setPortalTab] = useState(null);
+  const [portalTab, setPortalTab] = useState(() => { try { return JSON.parse(localStorage.getItem("pp_nav_state") || "{}").tab || null; } catch { return null; } });
   const nav = (p) => { setPage(p); setNavOpen(false); };
   const navWithTab = (p, tab) => { if (tab) setPortalTab(tab); nav(p); };
+  useEffect(() => { try { localStorage.setItem("pp_nav_state", JSON.stringify({ page, tab: portalTab })); } catch { } }, [page, portalTab]);
+  useEffect(() => { window.scrollTo({ top: 0 }); }, [page, portalTab]);
 
   useEffect(() => {
     function onSessionExpired() { setCurrentUser(null); setPage("dashboard"); }
@@ -11805,175 +12739,48 @@ export default function App() {
   }
 
   function handleLogout() {
-    localStorage.removeItem("pp_token"); localStorage.removeItem("pp_user");
-    setCurrentUser(null); setPage("dashboard");
+    localStorage.removeItem("pp_token"); localStorage.removeItem("pp_user"); localStorage.removeItem("pp_nav_state");
+    setCurrentUser(null); setPage("dashboard"); setPortalTab(null);
   }
 
   if (!currentUser) return (<><style>{STYLE}</style><LoginPage onLogin={handleLogin} /></>);
 
   const isAdmin = currentUser.role === "admin" || currentUser.role === "manager";
   const isManager = currentUser.role === "manager";
-
-  if (!isAdmin) return (
-    <><DialogProvider />
-      <style>{STYLE}</style>
-      <style>{themeVars}</style>
-      <div className={`app-root${darkMode ? " dark-mode" : ""}`} style={{ background: C.bg, color: C.text, fontFamily: "'DM Sans','Segoe UI',sans-serif" }}>
-        {/* ── Header ── */}
-        <header className="app-header" style={{ background: C.surface, borderBottom: `1px solid ${C.border}` }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <button className="burger-btn" onClick={() => setNavOpen(v => !v)} aria-label="Toggle sidebar">
-              {navOpen ? "✕" : "☰"}
-            </button>
-            <div style={{ background: darkMode ? "transparent" : "#0A0D14", borderRadius: 8, padding: darkMode ? 0 : "3px 10px", display: "flex", alignItems: "center" }}>
-              <img src="/image.png" alt="Logo" style={{ height: 50, objectFit: "contain" }} />
-            </div>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <ThemeToggle />
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <Avatar initials={currentUser.avatar || mkAvi(currentUser.emp_name || "")} color={C.accent} size={28} />
-              <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{currentUser.emp_name || currentUser.username}</span>
-            </div>
-            <Btn variant="ghost" onClick={handleLogout} small style={{ fontSize: 12 }}>↩ Sign Out</Btn>
-          </div>
-        </header>
-        {/* ── Body ── */}
-        <div className="app-body">
-          {/* Sidebar */}
-          <nav className={`app-nav${navOpen ? "" : " nav-closed"}`}>
-            <div className="nav-items-wrap" style={{ paddingTop: 10 }}>
-              <div className="nav-section">Overview</div>
-              <button onClick={() => nav("emp-dashboard")} title="Dashboard"
-                className={`nav-item${page === "emp-dashboard" ? " active" : ""}`}>
-                <span className="nav-icon">⊞</span>
-                <span className="nav-label">Dashboard</span>
-              </button>
-              <div className="nav-section">My Portal</div>
-              <button onClick={() => nav("employee-home")} title="My Portal"
-                className={`nav-item${page === "employee-home" ? " active" : ""}`}>
-                <span className="nav-icon">🏠</span>
-                <span className="nav-label">My Portal</span>
-              </button>
-              <button onClick={() => nav("resumes")} title="Company Resume"
-                className={`nav-item${page === "resumes" ? " active" : ""}`}>
-                <span className="nav-icon">📑</span>
-                <span className="nav-label">Company Resume</span>
-              </button>
-            </div>
-          </nav>
-          {/* Main */}
-          <main className={`main-content${navOpen ? "" : " nav-closed"}`}>
-            {page === "emp-dashboard" && <EmployeeDashboard currentUser={currentUser} navFn={navWithTab} />}
-            {page === "employee-home" && <EmployeeHome currentUser={currentUser} defaultTab={portalTab} navFn={navWithTab} />}
-            {page === "resumes" && <AdminCompanyResume />}
-          </main>
-        </div>
-        {/* ── Footer ── */}
-        <footer className={`app-footer${navOpen ? "" : " nav-closed"}`} style={{ background: "#0D1119", borderTop: `1px solid ${C.border}`, color: C.textMuted }}>
-          © {new Date().getFullYear()} FascinateIT · All rights reserved
-        </footer>
-      </div>
-    </>
-  );
+  const navModel = buildNav(currentUser);
+  const allowed = new Set(navModel.groups.flatMap(g => g.items.map(i => i.page)));
+  const activePage = allowed.has(page) ? page : navModel.home;
 
   return (
     <><DialogProvider />
       <style>{STYLE}</style>
       <style>{themeVars}</style>
-      <div className={`app-root${darkMode ? " dark-mode" : ""}`} style={{ background: C.bg, color: C.text, fontFamily: "'DM Sans','Segoe UI',sans-serif" }}>
-        {/* ── Header ── */}
-        <header className="app-header" style={{ background: C.surface, borderBottom: `1px solid ${C.border}` }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <button className="burger-btn" onClick={() => setNavOpen(v => !v)} aria-label="Toggle sidebar">
-              {navOpen ? "✕" : "☰"}
-            </button>
-            <div style={{ background: darkMode ? "transparent" : "#0A0D14", borderRadius: 8, padding: darkMode ? 0 : "3px 10px", display: "flex", alignItems: "center" }}>
-              <img src="/image.png" alt="Logo" style={{ height: 34, objectFit: "contain" }} />
-            </div>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <ThemeToggle />
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <Avatar initials={currentUser.avatar || mkAvi(currentUser.emp_name || "")} color={currentUser.role === "manager" ? C.green : C.purple} size={28} />
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{currentUser.emp_name || currentUser.username}</div>
-                <div style={{ fontSize: 10, color: C.textMuted, textTransform: "capitalize" }}>{currentUser.role}</div>
-              </div>
-            </div>
-            <Btn variant="ghost" onClick={handleLogout} small style={{ fontSize: 12 }}>↩ Sign Out</Btn>
-          </div>
-        </header>
-        {/* ── Body ── */}
-        <div className="app-body">
-          {/* Sidebar */}
-          <nav className={`app-nav${navOpen ? "" : " nav-closed"}`}>
-            {/* Role badge */}
-            <div style={{ padding: "12px 8px 4px" }}>
-              {currentUser.role === "admin" && (
-                <div className="nav-badge" style={{ background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.22)" }}>
-                  <span style={{ fontSize: 14, flexShrink: 0 }}>🔑</span>
-                  <span className="nav-badge-text" style={{ color: C.purple }}>Administrator</span>
-                </div>
-              )}
-              {currentUser.role === "manager" && (
-                <div className="nav-badge" style={{ background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.2)" }}>
-                  <span style={{ fontSize: 14, flexShrink: 0 }}>📋</span>
-                  <span className="nav-badge-text" style={{ color: C.green }}>Manager</span>
-                </div>
-              )}
-            </div>
-            {/* Nav items */}
-            <div className="nav-items-wrap">
-              {isManager && (
-                <>
-                  <div className="nav-section">Overview</div>
-                  <button onClick={() => nav("emp-dashboard")} title="Dashboard" className={`nav-item${page === "emp-dashboard" ? " active" : ""}`}>
-                    <span className="nav-icon">⊞</span><span className="nav-label">Dashboard</span>
-                  </button>
-                  <div className="nav-section">My Portal</div>
-                  <button onClick={() => nav("mywork")} title="My Work" className={`nav-item${page === "mywork" ? " active" : ""}`}>
-                    <span className="nav-icon">🏠</span><span className="nav-label">My Work</span>
-                  </button>
-                </>
-              )}
-              <div className="nav-section">Navigation</div>
-              {ADMIN_NAV.filter(n =>
-                isManager ? ["attendance", "documents", "resumes"].includes(n.id) : true
-              ).map(n => (
-                <button key={n.id} onClick={() => nav(n.id)} title={n.label} className={`nav-item${page === n.id ? " active" : ""}`}>
-                  <span className="nav-icon">{n.icon}</span>
-                  <span className="nav-label">{n.label}</span>
-                </button>
-              ))}
-            </div>
-          </nav>
-          {/* Main */}
-          <main className={`main-content${navOpen ? "" : " nav-closed"}`}>
-            {page === "dashboard" && <Dashboard />}
-            {page === "project_management" && <ProjectManagement readOnly={isManager} currentUser={currentUser} />}
-            {page === "people" && <PeopleHub readOnly={isManager} currentUser={currentUser} />}
-            {page === "attendance" && <AttendanceClaims currentUser={currentUser} />}
-            {page === "payslips" && !isManager && <AdminPayslips />}
-            {page === "reports" && <Reports />}
-            {page === "useraccounts" && <UserAccounts />}
-            {page === "documents" && <DocumentGrid type="document" allowEdit={isAdmin} />}
-            {page === "policies" && <DocumentGrid type="policy" allowEdit={currentUser.role === "admin"} />}
-            {page === "resumes" && <AdminCompanyResume />}
-            {page === "subscriptions" && <SubscriptionManagement />}
-            {page === "onboard" && <OnboardEmployee />}
-            {page === "performance" && <PerformanceManagement currentUser={currentUser} />}
-            {page === "compensation" && currentUser.role === "admin" && <CompensationDetails />}
-            {page === "infra" && currentUser.role === "admin" && <AdminAssets />}
-            {page === "emp-dashboard" && isManager && <EmployeeDashboard currentUser={currentUser} navFn={navWithTab} />}
-            {page === "mywork" && <EmployeeHome currentUser={currentUser} defaultTab={portalTab} navFn={navWithTab} />}
-          </main>
-        </div>
-        {/* ── Footer ── */}
-        <footer className={`app-footer${navOpen ? "" : " nav-closed"}`} style={{ background: "#0D1119", borderTop: `1px solid ${C.border}`, color: C.textMuted }}>
-          © {new Date().getFullYear()} FascinateIT · All rights reserved
-        </footer>
-      </div>
+      <AppShell currentUser={currentUser} darkMode={darkMode} onToggleTheme={toggleTheme} onLogout={handleLogout}
+        page={activePage} portalTab={portalTab} onNavigate={navWithTab}>
+        {!isAdmin ? (<>
+          {activePage === "emp-dashboard" && <EmployeeDashboard currentUser={currentUser} navFn={navWithTab} />}
+          {activePage === "employee-home" && <EmployeeHome currentUser={currentUser} defaultTab={portalTab} navFn={navWithTab} onTabChange={setPortalTab} />}
+          {activePage === "resumes" && <AdminCompanyResume />}
+        </>) : (<>
+          {activePage === "dashboard" && <Dashboard />}
+          {activePage === "project_management" && <ProjectManagement readOnly={isManager} currentUser={currentUser} />}
+          {activePage === "people" && <PeopleHub readOnly={isManager} currentUser={currentUser} />}
+          {activePage === "attendance" && <AttendanceClaims currentUser={currentUser} />}
+          {activePage === "payslips" && !isManager && <AdminPayslips />}
+          {activePage === "reports" && <Reports />}
+          {activePage === "useraccounts" && <UserAccounts />}
+          {activePage === "documents" && <DocumentGrid type="document" allowEdit={isAdmin} />}
+          {activePage === "policies" && <DocumentGrid type="policy" allowEdit={currentUser.role === "admin"} />}
+          {activePage === "resumes" && <AdminCompanyResume />}
+          {activePage === "subscriptions" && <SubscriptionManagement />}
+          {activePage === "onboard" && <OnboardEmployee />}
+          {activePage === "performance" && <PerformanceManagement currentUser={currentUser} />}
+          {activePage === "compensation" && currentUser.role === "admin" && <CompensationDetails />}
+          {activePage === "infra" && currentUser.role === "admin" && <AdminAssets />}
+          {activePage === "emp-dashboard" && isManager && <EmployeeDashboard currentUser={currentUser} navFn={navWithTab} />}
+          {activePage === "mywork" && <EmployeeHome currentUser={currentUser} defaultTab={portalTab} navFn={navWithTab} onTabChange={setPortalTab} />}
+        </>)}
+      </AppShell>
     </>
   );
 }
