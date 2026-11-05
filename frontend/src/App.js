@@ -7002,233 +7002,421 @@ function computeSlip(ctc) {
   return { gross, basic, hra, transport, special, pfEmp, profTax, netPay: gross - pfEmp - profTax };
 }
 
+// ── My Pay helpers ──
+const MP_EARN = [
+  ["basic", "Basic salary"], ["hra", "House rent allowance"], ["leave_travel_allowance", "Leave travel allowance"],
+  ["special_allowance", "Special allowance"], ["transport", "Conveyance"], ["medical_allowance", "Medical"],
+  ["internet_allowance", "Internet & broadband"], ["professional_dev_allowance", "Professional development"],
+  ["insurance_allowance", "Insurance"], ["variable_pay", "Variable pay"], ["bonus", "Bonus"],
+];
+const MP_DED = [["pf_employee", "Provident fund"], ["income_tax", "Income tax (TDS)"], ["professional_tax", "Professional tax"], ["extra_deductions", "Other deductions"]];
+const MP_COLORS = ["#3B82F6", "#8B5CF6", "#06B6D4", "#10B981", "#F59E0B", "#EC4899", "#14B8A6", "#F97316", "#6366F1", "#84CC16", "#EAB308"];
+const mpDed = p => MP_DED.reduce((s, [k]) => s + (+p[k] || 0), 0);
+const mpINR = n => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+const mpFY = p => (p.month >= 4 ? p.year : p.year - 1);
+const mpKey = p => p.year * 100 + p.month;
+
 function MyPay({ currentUser }) {
   const [payslips, setPayslips] = useState([]);
-  const [selected, setSelected] = useState(null);
+  const [selId, setSelId] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [requesting, setRequesting] = useState(false);
-  const [showAmounts, setShowAmounts] = useState(false);
+  const [requestingId, setRequestingId] = useState(null);
+  const [show, setShow] = useState(() => { try { return localStorage.getItem("pp_pay_show") === "1"; } catch { return false; } });
+  const [autoHide, setAutoHide] = useState(() => { try { return localStorage.getItem("pp_pay_autohide") !== "0"; } catch { return true; } });
   const origin = window.location.origin;
 
   useEffect(() => {
     api.getPayslips().then(ps => {
-      setPayslips(ps);
-      if (ps.length > 0) setSelected(ps[0]);
-    }).catch(() => { }).finally(() => setLoading(false));
+      const sorted = [...(ps || [])].sort((a, b) => mpKey(b) - mpKey(a));
+      setPayslips(sorted);
+      if (sorted.length) setSelId(sorted[0].id);
+    }).catch(e => dialog.alert(e.message, { title: "Couldn't load payslips", dtype: "error" })).finally(() => setLoading(false));
   }, []);
+  useEffect(() => { try { localStorage.setItem("pp_pay_show", show ? "1" : "0"); localStorage.setItem("pp_pay_autohide", autoHide ? "1" : "0"); } catch { } }, [show, autoHide]);
+  // Privacy: hide amounts when the tab goes to the background
+  useEffect(() => {
+    if (!autoHide) return;
+    const onVis = () => { if (document.hidden) setShow(false); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [autoHide]);
 
-  async function handleRequestDownload(ps) {
-    setRequesting(true);
+  async function requestDownload(ps) {
+    setRequestingId(ps.id);
     try {
       const updated = await api.requestPayslipDownload(ps.id);
       setPayslips(prev => prev.map(p => p.id === ps.id ? { ...p, ...updated } : p));
-      setSelected(prev => prev?.id === ps.id ? { ...prev, ...updated } : prev);
     } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
-    finally { setRequesting(false); }
+    finally { setRequestingId(null); }
+  }
+  async function requestAll(list) {
+    if (!await dialog.confirm(`Request download access for ${list.length} payslip${list.length !== 1 ? "s" : ""}? Your admin will be notified.`, { title: "Request downloads", dtype: "info" })) return;
+    for (const p of list) await requestDownload(p);
   }
 
   if (loading) return <Spinner />;
 
-  const fmt = n => `₹${Number(n).toLocaleString("en-IN")}`;
-  const mask = n => showAmounts ? fmt(n) : "••••••";
+  const sel = payslips.find(p => p.id === selId) || payslips[0];
+  const idx = sel ? payslips.indexOf(sel) : -1;
+  const prev = idx >= 0 ? payslips[idx + 1] : null;
+  const m = v => (show ? mpINR(v) : "₹ ••••••");
+  const period = p => `${SLIP_MONTHS[p.month - 1]} ${p.year}`;
+  const short = p => `${SLIP_MONTHS[p.month - 1].slice(0, 3)} ${String(p.year).slice(2)}`;
+
+  const status = p => p.is_approved ? { k: "ready", label: "Ready to download", color: C.green }
+    : p.download_requested ? { k: "waiting", label: "Awaiting approval", color: C.amber }
+      : { k: "locked", label: "Download locked", color: C.textMuted };
+  const toRequest = payslips.filter(p => !p.is_approved && !p.download_requested);
+
+  const DownloadBtn = ({ p, small }) => {
+    const s = status(p);
+    if (s.k === "ready") return <button className={`mp-btn mp-btn-primary${small ? " sm" : ""}`} onClick={() => printPayslipData(p, origin)}>⬇ {small ? "PDF" : "Download PDF"}</button>;
+    if (s.k === "waiting") return <button className={`mp-btn mp-btn-ghost${small ? " sm" : ""}`} disabled>⏳ {small ? "Pending" : "Awaiting approval"}</button>;
+    return <button className={`mp-btn mp-btn-ghost${small ? " sm" : ""}`} onClick={() => requestDownload(p)} disabled={requestingId === p.id}>{requestingId === p.id ? "Requesting…" : small ? "📩 Request" : "📩 Request download"}</button>;
+  };
+
+  // ── derived for selected ──
+  let earn = [], ded = [], totalDed = 0, delta = null, ytd = null, trend = [];
+  if (sel) {
+    earn = MP_EARN.map(([k, l], i) => ({ k, l, v: +sel[k] || 0, c: MP_COLORS[i % MP_COLORS.length] })).filter(x => x.v > 0);
+    ded = MP_DED.map(([k, l]) => ({ k, l, v: +sel[k] || 0 })).filter(x => x.v > 0);
+    totalDed = mpDed(sel);
+    if (prev) delta = { net: (+sel.net_pay || 0) - (+prev.net_pay || 0), gross: (+sel.gross || 0) - (+prev.gross || 0) };
+    const fy = mpFY(sel);
+    const fyList = payslips.filter(p => mpFY(p) === fy && mpKey(p) <= mpKey(sel));
+    ytd = {
+      fy, n: fyList.length,
+      gross: fyList.reduce((s, p) => s + (+p.gross || 0), 0),
+      net: fyList.reduce((s, p) => s + (+p.net_pay || 0), 0),
+      tds: fyList.reduce((s, p) => s + (+p.income_tax || 0), 0),
+      pf: fyList.reduce((s, p) => s + (+p.pf_employee || 0), 0),
+    };
+    trend = payslips.slice(0, 12).reverse();
+  }
+  const maxNet = Math.max(1, ...trend.map(p => +p.gross || 0));
+  const gross = sel ? +sel.gross || 0 : 0;
+  const netPct = gross ? Math.round(((+sel.net_pay || 0) / gross) * 100) : 0;
 
   return (
     <>
       <style>{`
-        .pay-kpi-row { display: flex; gap: 12px; flex-wrap: wrap; }
-        .pay-kpi-card { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 14px; padding: 14px 18px; display: flex; align-items: center; gap: 12px; flex: 1 1 150px; transition: box-shadow .2s, transform .15s; }
-        .pay-kpi-card:hover { box-shadow: 0 6px 24px rgba(0,0,0,0.32); transform: translateY(-1px); }
-        .pay-ed-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
-        .pay-history-row { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid ${C.border}22; cursor: pointer; transition: background .15s; }
-        .pay-history-row:hover { background: ${C.accentGlow}; }
-        .pay-history-row:last-child { border-bottom: none; }
-        @media (max-width: 700px) {
-          .pay-ed-grid { grid-template-columns: 1fr; gap: 16px; }
-          .pay-kpi-card { flex: 1 1 140px; padding: 12px 14px; }
+        .mp { container-type: inline-size; container-name: mp; }
+        .mp-wrap { display: flex; flex-direction: column; gap: 18px; }
+        .mp-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 10px 16px; border-radius: 12px; font-size: 13px; font-weight: 700; cursor: pointer; border: 1px solid transparent; font-family: inherit; transition: transform .15s, opacity .15s, border-color .15s; white-space: nowrap; }
+        .mp-btn.sm { padding: 7px 11px; font-size: 12px; border-radius: 10px; }
+        .mp-btn:hover:not(:disabled) { transform: translateY(-1px); }
+        .mp-btn:disabled { opacity: .55; cursor: not-allowed; }
+        .mp-btn-primary { background: ${C.accent}; color: #fff; box-shadow: 0 8px 22px ${C.accent}40; }
+        .mp-btn-ghost { background: ${C.surface}; color: ${C.text}; border-color: ${C.border}; }
+        .mp-btn-ghost:hover:not(:disabled) { border-color: ${C.accent}77; }
+        .mp-wrap button:focus-visible { outline: 2px solid ${C.accent}; outline-offset: 2px; }
+
+        .mp-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+        .mp-title { margin: 0; font-size: clamp(22px, 2.4vw, 26px); font-weight: 800; color: ${C.text}; letter-spacing: -0.5px; }
+        .mp-sub { margin: 4px 0 0; color: ${C.textMuted}; font-size: 13px; }
+        .mp-head-acts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .mp-eye { display: inline-flex; align-items: center; gap: 8px; }
+        .mp-eye.on { color: ${C.accent}; border-color: ${C.accent}66; }
+
+        /* Month strip */
+        .mp-months { display: flex; align-items: center; gap: 8px; }
+        .mp-arrow { width: 38px; height: 38px; border-radius: 12px; border: 1px solid ${C.border}; background: ${C.card}; color: ${C.textDim}; font-size: 18px; cursor: pointer; flex-shrink: 0; font-family: inherit; }
+        .mp-arrow:disabled { opacity: .35; cursor: not-allowed; }
+        .mp-arrow:hover:not(:disabled) { color: ${C.text}; border-color: ${C.accent}77; }
+        .mp-chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; flex: 1; padding: 2px; scroll-snap-type: x proximity; }
+        .mp-chips::-webkit-scrollbar { display: none; }
+        .mp-chip { flex-shrink: 0; scroll-snap-align: start; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 14px; border-radius: 12px; border: 1px solid ${C.border}; background: ${C.card}; color: ${C.textDim}; cursor: pointer; font-family: inherit; min-width: 92px; text-align: left; }
+        .mp-chip b { font-size: 13px; color: ${C.text}; }
+        .mp-chip span { font-size: 11px; display: inline-flex; align-items: center; gap: 5px; }
+        .mp-chip i { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+        .mp-chip.on { border-color: ${C.accent}; background: color-mix(in srgb, ${C.accent} 14%, ${C.card}); box-shadow: 0 0 0 1px ${C.accent} inset; }
+
+        /* Hero */
+        .mp-hero-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; }
+        .mp-card { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 20px; padding: 20px; min-width: 0; }
+        .mp-hero { position: relative; overflow: hidden; background:
+            radial-gradient(500px 220px at 0% 0%, ${C.green}22, transparent 70%),
+            radial-gradient(500px 220px at 100% 100%, ${C.accent}1f, transparent 70%), ${C.card}; }
+        .mp-eyebrow { font-size: 11px; font-weight: 800; color: ${C.textMuted}; letter-spacing: .8px; text-transform: uppercase; }
+        .mp-net { font-size: clamp(30px, 4vw, 42px); font-weight: 800; color: ${C.green}; letter-spacing: -1.2px; line-height: 1.1; margin-top: 6px; font-variant-numeric: tabular-nums; }
+        .mp-net.hidden { color: ${C.textDim}; letter-spacing: 2px; }
+        .mp-delta { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 800; padding: 3px 9px; border-radius: 999px; }
+        .mp-hero-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
+        .mp-mini-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
+        .mp-mini { background: ${C.surface}cc; border: 1px solid ${C.border}66; border-radius: 14px; padding: 12px; min-width: 0; }
+        .mp-mini b { display: block; font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .mp-mini span { font-size: 11.5px; color: ${C.textMuted}; font-weight: 600; }
+        .mp-split { height: 10px; border-radius: 6px; overflow: hidden; display: flex; background: ${C.border}; margin-top: 16px; }
+        .mp-split-legend { display: flex; justify-content: space-between; font-size: 11.5px; color: ${C.textMuted}; margin-top: 6px; font-weight: 600; }
+
+        .mp-steps { display: flex; flex-direction: column; gap: 0; margin-top: 14px; }
+        .mp-step { display: flex; gap: 12px; align-items: flex-start; position: relative; padding-bottom: 14px; }
+        .mp-step:last-child { padding-bottom: 0; }
+        .mp-step:not(:last-child)::before { content: ""; position: absolute; left: 11px; top: 24px; bottom: 0; width: 2px; background: var(--line); }
+        .mp-step-dot { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; flex-shrink: 0; border: 2px solid; }
+        .mp-step b { display: block; font-size: 13px; color: ${C.text}; }
+        .mp-step span { font-size: 12px; color: ${C.textMuted}; }
+
+        /* Breakdown */
+        .mp-break { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px; }
+        .mp-card-h { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 14px; }
+        .mp-card-t { font-size: 15px; font-weight: 800; color: ${C.text}; }
+        .mp-line { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 0; border-bottom: 1px solid ${C.border}44; font-size: 13px; }
+        .mp-line:last-of-type { border-bottom: none; }
+        .mp-line i { width: 10px; height: 10px; border-radius: 3px; }
+        .mp-line-l { color: ${C.textDim}; min-width: 0; }
+        .mp-line-l small { display: block; height: 4px; border-radius: 3px; background: ${C.border}; margin-top: 6px; overflow: hidden; }
+        .mp-line-l small em { display: block; height: 100%; border-radius: 3px; }
+        .mp-line-v { font-weight: 700; color: ${C.text}; font-variant-numeric: tabular-nums; text-align: right; }
+        .mp-total { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-radius: 12px; margin-top: 12px; font-weight: 800; font-size: 14px; }
+        .mp-none { font-size: 13px; color: ${C.textMuted}; padding: 10px 0; }
+
+        /* Trend + YTD */
+        .mp-insights { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; }
+        .mp-trend { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; align-items: end; height: 150px; margin-top: 18px; }
+        .mp-tbar { display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; cursor: pointer; background: none; border: none; padding: 0; font-family: inherit; min-width: 0; }
+        .mp-tbar-track { width: 100%; max-width: 34px; flex: 1; display: flex; flex-direction: column; justify-content: flex-end; border-radius: 8px; overflow: hidden; background: ${C.border}55; }
+        .mp-tbar-track div { width: 100%; }
+        .mp-tbar span { font-size: 10.5px; font-weight: 700; color: ${C.textMuted}; white-space: nowrap; }
+        .mp-tbar.on span { color: ${C.accent}; font-weight: 800; }
+        .mp-tbar.on .mp-tbar-track { box-shadow: 0 0 0 2px ${C.accent}; }
+        .mp-legend { display: flex; gap: 14px; font-size: 11.5px; color: ${C.textMuted}; margin-top: 10px; flex-wrap: wrap; }
+        .mp-legend span { display: inline-flex; align-items: center; gap: 6px; }
+        .mp-legend i { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
+        .mp-ytd { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+        /* History */
+        .mp-hist-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; padding: 16px 18px; border-bottom: 1px solid ${C.border}; }
+        .mp-row { display: grid; grid-template-columns: 1.1fr 1fr 1fr 1fr 1.2fr 150px; gap: 12px; align-items: center; padding: 12px 18px; border-bottom: 1px solid ${C.border}44; font-size: 13px; cursor: pointer; transition: background .15s; }
+        .mp-row:last-child { border-bottom: none; }
+        .mp-row:not(.head):hover { background: ${C.accentGlow}; }
+        .mp-row.on { background: color-mix(in srgb, ${C.accent} 10%, transparent); }
+        .mp-row.head { cursor: default; background: ${C.surface}; font-size: 11px; font-weight: 800; color: ${C.textMuted}; letter-spacing: .5px; text-transform: uppercase; padding: 10px 18px; }
+        .mp-num { font-variant-numeric: tabular-nums; font-weight: 700; }
+        .mp-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 800; padding: 4px 10px; border-radius: 999px; border: 1px solid; white-space: nowrap; }
+        .mp-pill i { width: 6px; height: 6px; border-radius: 50%; }
+        .mp-cl { display: none; }
+
+        .mp-empty { text-align: center; padding: 56px 24px; }
+        .mp-empty div { font-size: 48px; margin-bottom: 10px; }
+
+        @container mp (max-width: 1000px) {
+          .mp-hero-grid, .mp-break, .mp-insights { grid-template-columns: 1fr; }
+          .mp-row { grid-template-columns: 1fr 1fr 1fr 1.2fr 130px; }
+          .mp-row > .c-gross { display: none; }
         }
-        @media (max-width: 480px) {
-          .pay-kpi-row { gap: 8px; }
-          .pay-kpi-card { flex: 1 1 120px; }
+        @container mp (max-width: 640px) {
+          .mp-wrap { gap: 14px; }
+          .mp-header { align-items: stretch; }
+          .mp-head-acts { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
+          .mp-card { padding: 16px; border-radius: 18px; }
+          .mp-arrow { display: none; }
+          .mp-mini-stats { grid-template-columns: 1fr 1fr; }
+          .mp-mini-stats > :last-child { grid-column: 1 / -1; }
+          .mp-hero-row > .mp-btn { width: 100%; }
+          .mp-trend { height: 120px; gap: 4px; }
+          .mp-tbar span { font-size: 9.5px; }
+          .mp-row.head { display: none; }
+          .mp-row { grid-template-columns: 1fr 1fr; gap: 8px 12px; padding: 14px; }
+          .mp-row > .c-per { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; }
+          .mp-row > .c-gross { display: block; }
+          .mp-row > .c-act { grid-column: 1 / -1; }
+          .mp-row > .c-act .mp-btn { width: 100%; }
+          .mp-row > .c-st { display: none; }
+          .mp-cl { display: block; font-size: 10.5px; color: ${C.textMuted}; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 2px; }
         }
       `}</style>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-
-        {/* ── Header ── */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: -0.5 }}>My Pay</h2>
-            <p style={{ margin: "5px 0 0", color: C.textMuted, fontSize: 13 }}>Monthly salary slips issued by your admin</p>
+      <div className="mp">
+        <div className="mp-wrap">
+          {/* Header */}
+          <div className="mp-header">
+            <div>
+              <h2 className="mp-title">My Pay</h2>
+              <p className="mp-sub">Your monthly salary slips, breakdown and year-to-date totals</p>
+            </div>
+            {payslips.length > 0 && (
+              <div className="mp-head-acts">
+                <button className={`mp-btn mp-btn-ghost mp-eye${show ? " on" : ""}`} onClick={() => setShow(v => !v)} aria-pressed={show}>
+                  {show ? "🙈 Hide amounts" : "👁 Show amounts"}
+                </button>
+                {sel && <DownloadBtn p={sel} />}
+              </div>
+            )}
           </div>
-          {payslips.length > 0 && (
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <button onClick={() => setShowAmounts(v => !v)}
-                style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, color: showAmounts ? C.accent : C.textMuted, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, transition: "all .2s" }}>
-                {showAmounts ? "🙈 Hide Amounts" : "👁 Show Amounts"}
-              </button>
-              <select value={selected?.id || ""} onChange={e => setSelected(payslips.find(p => p.id === +e.target.value))}
-                style={{ background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                {payslips.map(p => (
-                  <option key={p.id} value={p.id}>{SLIP_MONTHS[p.month - 1]} {p.year}</option>
+
+          {payslips.length === 0 ? (
+            <div className="mp-card mp-empty">
+              <div>💰</div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: C.text, marginBottom: 6 }}>No payslips yet</div>
+              <p style={{ fontSize: 13, color: C.textMuted, margin: 0 }}>Your payslips will appear here once your admin generates them.</p>
+            </div>
+          ) : (<>
+            {/* Month strip */}
+            <div className="mp-months">
+              <button className="mp-arrow" onClick={() => payslips[idx + 1] && setSelId(payslips[idx + 1].id)} disabled={!payslips[idx + 1]} aria-label="Previous payslip">‹</button>
+              <div className="mp-chips" role="tablist" aria-label="Payslip month">
+                {payslips.map(p => {
+                  const s = status(p);
+                  return (
+                    <button key={p.id} role="tab" aria-selected={p.id === sel.id} className={`mp-chip${p.id === sel.id ? " on" : ""}`} onClick={() => setSelId(p.id)}>
+                      <b>{SLIP_MONTHS[p.month - 1].slice(0, 3)} {p.year}</b>
+                      <span><i style={{ background: s.color }} />{s.k === "ready" ? "Ready" : s.k === "waiting" ? "Pending" : "Locked"}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <button className="mp-arrow" onClick={() => idx > 0 && setSelId(payslips[idx - 1].id)} disabled={idx <= 0} aria-label="Next payslip">›</button>
+            </div>
+
+            {/* Hero */}
+            <div className="mp-hero-grid">
+              <section className="mp-card mp-hero">
+                <div className="mp-hero-row">
+                  <div style={{ minWidth: 0 }}>
+                    <div className="mp-eyebrow">Take-home · {period(sel)}</div>
+                    <div className={`mp-net${show ? "" : " hidden"}`}>{m(sel.net_pay)}</div>
+                    {delta && show && Math.abs(delta.net) >= 1 && (
+                      <span className="mp-delta" style={{ color: delta.net > 0 ? C.green : C.red, background: (delta.net > 0 ? C.green : C.red) + "18", marginTop: 8 }}>
+                        {delta.net > 0 ? "▲" : "▼"} {mpINR(Math.abs(delta.net))} vs {SLIP_MONTHS[prev.month - 1].slice(0, 3)}
+                      </span>
+                    )}
+                    {delta && show && Math.abs(delta.net) < 1 && <span className="mp-delta" style={{ color: C.textDim, background: C.surface, marginTop: 8 }}>Same as {SLIP_MONTHS[prev.month - 1].slice(0, 3)}</span>}
+                  </div>
+                </div>
+                <div className="mp-mini-stats">
+                  <div className="mp-mini"><b style={{ color: C.text }}>{m(sel.gross)}</b><span>Gross earnings</span></div>
+                  <div className="mp-mini"><b style={{ color: C.red }}>{show ? `−${mpINR(totalDed)}` : m(0)}</b><span>Deductions</span></div>
+                  <div className="mp-mini"><b style={{ color: C.accent }}>{netPct}%</b><span>Kept of gross</span></div>
+                </div>
+                <div className="mp-split" aria-hidden>
+                  <div style={{ width: `${netPct}%`, background: C.green }} />
+                  <div style={{ width: `${100 - netPct}%`, background: C.red }} />
+                </div>
+                <div className="mp-split-legend"><span>● Take-home {netPct}%</span><span>Deductions {100 - netPct}%</span></div>
+              </section>
+
+              <section className="mp-card">
+                <div className="mp-eyebrow">Payslip PDF</div>
+                {(() => {
+                  const s = status(sel);
+                  const steps = [
+                    { t: "Payslip generated", d: sel.generated_at ? `On ${String(sel.generated_at).slice(0, 10)}` : "By your admin", done: true },
+                    { t: "Download requested", d: sel.download_requested || sel.is_approved ? "Admin notified" : "Request access to the PDF", done: !!(sel.download_requested || sel.is_approved) },
+                    { t: "Approved", d: sel.is_approved ? (sel.approved_at ? `On ${String(sel.approved_at).slice(0, 10)}` : "Ready to download") : "Waiting for admin", done: !!sel.is_approved },
+                  ];
+                  return (
+                    <>
+                      <div className="mp-steps">
+                        {steps.map((st, i) => {
+                          const col = st.done ? C.green : i === steps.findIndex(x => !x.done) ? C.amber : C.border;
+                          return (
+                            <div key={st.t} className="mp-step" style={{ "--line": steps[i + 1]?.done ? C.green : C.border }}>
+                              <div className="mp-step-dot" style={{ borderColor: col, background: st.done ? C.green : "transparent", color: st.done ? "#fff" : col }}>{st.done ? "✓" : i + 1}</div>
+                              <div><b>{st.t}</b><span>{st.d}</span></div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div style={{ marginTop: 16 }}><DownloadBtn p={sel} /></div>
+                      {s.k === "locked" && <div className="mp-sub" style={{ fontSize: 12 }}>You can view everything here; the PDF needs admin approval.</div>}
+                    </>
+                  );
+                })()}
+              </section>
+            </div>
+
+            {/* Breakdown */}
+            <div className="mp-break">
+              <section className="mp-card">
+                <div className="mp-card-h"><div className="mp-card-t">Earnings</div><span className="mp-sub" style={{ margin: 0 }}>{earn.length} components</span></div>
+                {earn.map(x => (
+                  <div key={x.k} className="mp-line">
+                    <i style={{ background: x.c }} />
+                    <div className="mp-line-l">{x.l}<small><em style={{ width: `${gross ? Math.min(100, (x.v / gross) * 100) : 0}%`, background: x.c }} /></small></div>
+                    <div className="mp-line-v">{m(x.v)}{show && gross ? <span style={{ display: "block", fontSize: 11, color: C.textMuted, fontWeight: 600 }}>{((x.v / gross) * 100).toFixed(1)}%</span> : null}</div>
+                  </div>
                 ))}
-              </select>
-              {selected && (
-                selected.is_approved
-                  ? <Btn onClick={() => printPayslipData(selected, origin)}>🖨 Download PDF</Btn>
-                  : selected.download_requested
-                    ? <Btn variant="ghost" disabled style={{ opacity: 0.6, cursor: "not-allowed" }}>⏳ Awaiting Approval</Btn>
-                    : <Btn variant="ghost" onClick={() => handleRequestDownload(selected)} disabled={requesting}>📩 Request Download</Btn>
-              )}
+                <div className="mp-total" style={{ background: C.green + "14", color: C.green }}><span>Gross earnings</span><span>{m(sel.gross)}</span></div>
+              </section>
+              <section className="mp-card">
+                <div className="mp-card-h"><div className="mp-card-t">Deductions</div><span className="mp-sub" style={{ margin: 0 }}>{ded.length || "No"} item{ded.length !== 1 ? "s" : ""}</span></div>
+                {ded.length === 0 ? <div className="mp-none">No deductions this month 🎉</div> : ded.map(x => (
+                  <div key={x.k} className="mp-line">
+                    <i style={{ background: C.red }} />
+                    <div className="mp-line-l">{x.l}</div>
+                    <div className="mp-line-v" style={{ color: C.red }}>{show ? `−${mpINR(x.v)}` : m(0)}</div>
+                  </div>
+                ))}
+                <div className="mp-total" style={{ background: C.red + "12", color: C.red }}><span>Total deductions</span><span>{show ? `−${mpINR(totalDed)}` : m(0)}</span></div>
+                <div className="mp-total" style={{ background: `linear-gradient(135deg, ${C.green}22, ${C.accent}18)`, color: C.text, border: `1px solid ${C.green}40` }}>
+                  <span>Net pay</span><span style={{ color: C.green, fontSize: 17 }}>{m(sel.net_pay)}</span>
+                </div>
+              </section>
             </div>
-          )}
+
+            {/* Insights */}
+            <div className="mp-insights">
+              <section className="mp-card">
+                <div className="mp-card-h"><div className="mp-card-t">Pay trend</div><span className="mp-sub" style={{ margin: 0 }}>Last {trend.length} month{trend.length !== 1 ? "s" : ""}{show ? "" : " · amounts hidden"}</span></div>
+                <div className="mp-trend" role="img" aria-label="Monthly net pay and deductions">
+                  {trend.map(p => {
+                    const g = +p.gross || 0, n = +p.net_pay || 0;
+                    return (
+                      <button key={p.id} className={`mp-tbar${p.id === sel.id ? " on" : ""}`} onClick={() => setSelId(p.id)} title={show ? `${period(p)}: net ${mpINR(n)} · gross ${mpINR(g)}` : period(p)}>
+                        <div className="mp-tbar-track" style={{ height: `${(g / maxNet) * 100}%`, flex: "none" }}>
+                          <div style={{ height: `${g ? ((g - n) / g) * 100 : 0}%`, background: C.red + "aa" }} />
+                          <div style={{ flex: 1, background: `linear-gradient(180deg, ${C.green}, ${C.green}99)` }} />
+                        </div>
+                        <span>{short(p)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mp-legend"><span><i style={{ background: C.green }} />Take-home</span><span><i style={{ background: C.red + "aa" }} />Deductions</span><span>Tap a bar to open that month</span></div>
+              </section>
+              <section className="mp-card">
+                <div className="mp-card-h"><div className="mp-card-t">Year to date</div><span className="mp-sub" style={{ margin: 0 }}>FY {ytd.fy}–{String(ytd.fy + 1).slice(2)} · {ytd.n} slip{ytd.n !== 1 ? "s" : ""}</span></div>
+                <div className="mp-ytd">
+                  <div className="mp-mini"><b style={{ color: C.green }}>{m(ytd.net)}</b><span>Net received</span></div>
+                  <div className="mp-mini"><b style={{ color: C.text }}>{m(ytd.gross)}</b><span>Gross earned</span></div>
+                  <div className="mp-mini"><b style={{ color: C.amber }}>{m(ytd.tds)}</b><span>Tax (TDS) paid</span></div>
+                  <div className="mp-mini"><b style={{ color: C.purple }}>{m(ytd.pf)}</b><span>PF contributed</span></div>
+                </div>
+                <div className="mp-sub" style={{ fontSize: 12, marginTop: 12 }}>April – {SLIP_MONTHS[sel.month - 1]} {sel.year}, based on payslips issued so far.</div>
+              </section>
+            </div>
+
+            {/* History */}
+            <section className="mp-card" style={{ padding: 0, overflow: "hidden" }}>
+              <div className="mp-hist-head">
+                <div><div className="mp-card-t">Payslip history</div><div className="mp-sub" style={{ margin: 0, fontSize: 12 }}>{payslips.length} payslip{payslips.length !== 1 ? "s" : ""} · tap a row to view</div></div>
+                {toRequest.length > 1 && <button className="mp-btn sm mp-btn-ghost" onClick={() => requestAll(toRequest)} disabled={!!requestingId}>📩 Request all ({toRequest.length})</button>}
+              </div>
+              <div className="mp-row head">{["Period", "Gross", "Deductions", "Net pay", "Status", ""].map((h, i) => <div key={i} className={h === "Gross" ? "c-gross" : undefined}>{h}</div>)}</div>
+              {payslips.map(p => {
+                const s = status(p);
+                return (
+                  <div key={p.id} className={`mp-row${p.id === sel.id ? " on" : ""}`} onClick={() => { setSelId(p.id); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
+                    <div className="c-per" style={{ fontWeight: 800, color: C.text }}>
+                      <span>{p.id === sel.id && <span style={{ color: C.accent }}>● </span>}{period(p)}</span>
+                      <span className="mp-pill mp-cl" style={{ color: s.color, background: s.color + "18", borderColor: s.color + "40", margin: 0, textTransform: "none", letterSpacing: 0 }}>{s.label}</span>
+                    </div>
+                    <div className="c-gross"><span className="mp-cl">Gross</span><span className="mp-num" style={{ color: C.text }}>{m(p.gross)}</span></div>
+                    <div><span className="mp-cl">Deductions</span><span className="mp-num" style={{ color: C.red }}>{show ? (mpDed(p) ? `−${mpINR(mpDed(p))}` : "—") : m(0)}</span></div>
+                    <div><span className="mp-cl">Net pay</span><span className="mp-num" style={{ color: C.green, fontWeight: 800 }}>{m(p.net_pay)}</span></div>
+                    <div className="c-st"><span className="mp-pill" style={{ color: s.color, background: s.color + "18", borderColor: s.color + "40" }}><i style={{ background: s.color }} />{s.label}</span></div>
+                    <div className="c-act" onClick={e => e.stopPropagation()}><DownloadBtn p={p} small /></div>
+                  </div>
+                );
+              })}
+            </section>
+
+            <label className="mp-sub" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, cursor: "pointer", width: "fit-content" }}>
+              <input type="checkbox" checked={autoHide} onChange={e => setAutoHide(e.target.checked)} /> Hide amounts automatically when I switch tabs or apps
+            </label>
+          </>)}
         </div>
-
-        {payslips.length === 0 ? (
-          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "56px 32px", textAlign: "center" }}>
-            <div style={{ fontSize: 52, marginBottom: 14 }}>💰</div>
-            <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 8 }}>No payslips yet</div>
-            <p style={{ fontSize: 13, color: C.textMuted, margin: 0 }}>Your admin hasn't generated any payslips for you yet. Check back later.</p>
-          </div>
-        ) : selected ? (
-          <>
-            {/* ── KPI Summary Cards ── */}
-            <div className="pay-kpi-row">
-              {[
-                { label: "Monthly Gross", value: mask(selected.gross), color: C.green, icon: "💵" },
-                { label: "Basic Salary", value: mask(selected.basic), color: C.accent, icon: "🏦" },
-                { label: "HRA", value: mask(selected.hra), color: C.purple, icon: "🏠" },
-                { label: "Conveyance", value: mask(selected.transport), color: C.amber, icon: "🚗" },
-                { label: "PF Deduction", value: mask(selected.pf_employee), color: C.red, icon: "📉" },
-                { label: "Net Pay", value: mask(selected.net_pay), color: C.green, icon: "✅" },
-              ].map(s => (
-                <div key={s.label} className="pay-kpi-card">
-                  <div style={{ width: 38, height: 38, borderRadius: 10, background: s.color + "22", border: `1px solid ${s.color}33`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, flexShrink: 0 }}>{s.icon}</div>
-                  <div>
-                    <div style={{ fontSize: 15, fontWeight: 800, color: s.color, lineHeight: 1 }}>{s.value}</div>
-                    <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 600, marginTop: 3, letterSpacing: .3 }}>{s.label}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* ── Earnings & Deductions ── */}
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "24px 28px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
-                <div style={{ width: 36, height: 36, borderRadius: 10, background: C.accent + "22", border: `1px solid ${C.accent}33`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17 }}>📋</div>
-                <div>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Earnings &amp; Deductions</div>
-                  <div style={{ fontSize: 12, color: C.textMuted }}>{SLIP_MONTHS[selected.month - 1]} {selected.year}</div>
-                </div>
-              </div>
-
-              <div className="pay-ed-grid">
-                {/* Earnings column */}
-                <div style={{ background: C.surface, borderRadius: 12, padding: "16px 18px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 14 }}>
-                    <div style={{ width: 6, height: 6, borderRadius: 3, background: C.green }} />
-                    <span style={{ fontSize: 11, color: C.green, fontWeight: 700, textTransform: "uppercase", letterSpacing: .6 }}>Earnings</span>
-                  </div>
-                  {[
-                    ["Basic Salary", selected.basic],
-                    ["HRA", selected.hra],
-                    ["Leave Travel Allowance", selected.leave_travel_allowance],
-                    ["Special Allowance", selected.special_allowance],
-                    ["Conveyance Allowance", selected.transport],
-                    ["Medical Allowance", selected.medical_allowance],
-                    ["Internet & Broadband", selected.internet_allowance],
-                    ["Professional Dev.", selected.professional_dev_allowance],
-                    ["Insurance", selected.insurance_allowance],
-                    ["Variable Pay", selected.variable_pay],
-                    ["Bonus", selected.bonus],
-                  ].map(([k, v]) => Number(v) > 0 ? (
-                    <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: `1px solid ${C.border}22`, fontSize: 13 }}>
-                      <span style={{ color: C.textDim }}>{k}</span>
-                      <span style={{ fontWeight: 600, color: C.text }}>{mask(v)}</span>
-                    </div>
-                  ) : null)}
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0 2px", fontSize: 14, fontWeight: 800, color: C.green, borderTop: `2px solid ${C.green}33`, marginTop: 6 }}>
-                    <span>Gross Salary</span><span>{mask(selected.gross)}</span>
-                  </div>
-                </div>
-
-                {/* Deductions column */}
-                <div style={{ background: C.surface, borderRadius: 12, padding: "16px 18px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 14 }}>
-                    <div style={{ width: 6, height: 6, borderRadius: 3, background: C.red }} />
-                    <span style={{ fontSize: 11, color: C.red, fontWeight: 700, textTransform: "uppercase", letterSpacing: .6 }}>Deductions</span>
-                  </div>
-                  {[
-                    ["Professional Tax", selected.professional_tax],
-                    ["Income Tax (TDS)", selected.income_tax],
-                    ["Provident Fund", selected.pf_employee],
-                    ["Other Deductions", selected.extra_deductions],
-                  ].map(([k, v]) => Number(v) > 0 ? (
-                    <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: `1px solid ${C.border}22`, fontSize: 13 }}>
-                      <span style={{ color: C.textDim }}>{k}</span>
-                      <span style={{ fontWeight: 600, color: C.red }}>{mask(v)}</span>
-                    </div>
-                  ) : null)}
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0 2px", fontSize: 14, fontWeight: 800, color: C.red, borderTop: `2px solid ${C.red}33`, marginTop: 6 }}>
-                    <span>Total Deductions</span>
-                    <span>{mask(Number(selected.pf_employee) + Number(selected.professional_tax) + Number(selected.income_tax) + Number(selected.extra_deductions))}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Net Pay Banner */}
-              <div style={{ background: `linear-gradient(135deg, ${C.green}18, ${C.accent}14)`, border: `1px solid ${C.green}44`, borderRadius: 12, padding: "18px 24px", marginTop: 20, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{ width: 40, height: 40, borderRadius: 10, background: C.green + "25", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>💳</div>
-                  <div>
-                    <div style={{ fontSize: 12, color: C.textMuted, fontWeight: 600 }}>Take-Home Pay</div>
-                    <div style={{ fontSize: 13, color: C.textDim }}>{SLIP_MONTHS[selected.month - 1]} {selected.year}</div>
-                  </div>
-                </div>
-                <div style={{ fontSize: 30, fontWeight: 900, color: C.green, letterSpacing: -1 }}>{mask(selected.net_pay)}</div>
-              </div>
-            </div>
-          </>
-        ) : null}
-
-        {/* ── Payslip History ── */}
-        {payslips.length > 1 && (
-          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, overflow: "hidden" }}>
-            <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 8, background: C.accent + "22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }}>📅</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Payslip History</div>
-              <div style={{ marginLeft: "auto", fontSize: 12, color: C.textMuted, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 20, padding: "3px 10px" }}>{payslips.length} slips</div>
-            </div>
-
-            {/* Table header */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr auto", gap: 0, padding: "10px 20px", background: C.surface, borderBottom: `1px solid ${C.border}` }}>
-              {["Period", "Gross", "Deductions", "Net Pay", ""].map(h => (
-                <div key={h} style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>{h}</div>
-              ))}
-            </div>
-
-            {payslips.map(p => (
-              <div key={p.id} className="pay-history-row"
-                style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr auto", gap: 0, background: selected?.id === p.id ? C.accentGlow : "transparent" }}
-                onClick={() => setSelected(p)}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: C.text, display: "flex", alignItems: "center", gap: 8 }}>
-                  {selected?.id === p.id && <div style={{ width: 6, height: 6, borderRadius: 3, background: C.accent }} />}
-                  {SLIP_MONTHS[p.month - 1]} {p.year}
-                </div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: C.green, display: "flex", alignItems: "center" }}>{mask(p.gross)}</div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: C.red, display: "flex", alignItems: "center" }}>{mask(Number(p.pf_employee) + Number(p.professional_tax))}</div>
-                <div style={{ fontSize: 14, fontWeight: 800, color: C.green, display: "flex", alignItems: "center" }}>{mask(p.net_pay)}</div>
-                <div onClick={e => e.stopPropagation()} style={{ display: "flex", alignItems: "center" }}>
-                  {p.is_approved
-                    ? <Btn small variant="ghost" onClick={() => printPayslipData(p, origin)}>🖨 PDF</Btn>
-                    : p.download_requested
-                      ? <span style={{ fontSize: 12, color: C.textMuted, padding: "4px 10px", border: `1px solid ${C.border}`, borderRadius: 8 }}>⏳ Pending</span>
-                      : <Btn small variant="ghost" onClick={() => handleRequestDownload(p)} disabled={requesting}>📩 Request</Btn>
-                  }
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
     </>
   );
@@ -8723,261 +8911,772 @@ function printPayslipData(ps) {
 
 
 
+// ── Payslip helpers ──
+const PS_DEFAULTS = { conveyance: 1600, medical: 1250, internet: 1200 };
+const psR = n => Math.round((+n || 0) * 100) / 100;
+const psHas = v => v !== null && v !== undefined && String(v).trim() !== "";
+const psINR = n => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+const psNext = (m, y) => (+m === 12 ? { month: 1, year: +y + 1 } : { month: +m + 1, year: +y });
+const psPeriod = (m, y) => `${SLIP_MONTHS[m - 1]} ${y}`;
+const psEmptyForm = () => ({
+  employeeId: "", month: new Date().getMonth() + 1, year: new Date().getFullYear(),
+  usePf: false, pfAmount: "", useTds: false, tdsAmount: "", useVp: false, vpAmount: "",
+  usePda: false, pdaAmount: "", useIns: false, insAmount: "",
+  conveyanceAmount: "", medicalAmount: "", internetAmount: "",
+});
+// Mirrors backend routes/payslips.py::_compute — used for the live estimate only.
+function psCompute(emp, f) {
+  const ctc = +emp?.ctc_annual || 0;
+  if (!ctc) return null;
+  const basic = psR(ctc * 0.5 / 12), hra = psR(basic * 0.5), lta = psR(basic * 0.1);
+  const fixed = (o, d) => (psHas(o) ? psR(o) : d);
+  const transport = fixed(f.conveyanceAmount, PS_DEFAULTS.conveyance);
+  const medical = fixed(f.medicalAmount, PS_DEFAULTS.medical);
+  const internet = fixed(f.internetAmount, PS_DEFAULTS.internet);
+  const pda = f.usePda && psHas(f.pdaAmount) ? psR(f.pdaAmount) : 0;
+  const ins = f.useIns && psHas(f.insAmount) ? psR(f.insAmount) : 0;
+  const gratuityA = psR(basic * 12 * 0.0481);
+  const vp = f.useVp && psHas(f.vpAmount) ? psR(f.vpAmount) : 0;
+  const grossM = psR((ctc - gratuityA - (+emp.variable_pay_amount || 0)) / 12);
+  const special = psR(grossM - basic - hra - lta - transport - medical - internet - pda - ins);
+  const gross = psR(grossM + vp);
+  const pf = f.usePf ? (psHas(f.pfAmount) && +f.pfAmount ? psR(f.pfAmount) : psR(basic * 0.12)) : 0;
+  const tds = f.useTds && psHas(f.tdsAmount) && +f.tdsAmount ? psR(f.tdsAmount) : 0;
+  const pre = psR(gross - pf - tds);
+  const pt = pre < 25000 ? 0 : 200;
+  return { basic, hra, lta, transport, medical, internet, pda, ins, special, vp, gross, pf, tds, pt, net: psR(pre - pt), deductions: psR(pf + tds + pt) };
+}
+// Rebuild generator options from a stored payslip (auto values stay blank so they keep tracking CTC).
+function psFormFrom(ps, emp) {
+  const basic = psR((+emp?.ctc_annual || 0) * 0.5 / 12);
+  const pf = +ps.pf_employee || 0, tds = +ps.income_tax || 0, vp = +ps.variable_pay || 0;
+  const pda = +ps.professional_dev_allowance || 0, ins = +ps.insurance_allowance || 0;
+  const keep = (v, d) => (Math.abs((+v || 0) - d) < 0.01 ? "" : String(+v || 0));
+  return {
+    usePf: pf > 0, pfAmount: pf > 0 && Math.abs(pf - psR(basic * 0.12)) >= 0.01 ? String(pf) : "",
+    useTds: tds > 0, tdsAmount: tds > 0 ? String(tds) : "",
+    useVp: vp > 0, vpAmount: vp > 0 ? String(vp) : "",
+    usePda: pda > 0, pdaAmount: pda > 0 ? String(pda) : "",
+    useIns: ins > 0, insAmount: ins > 0 ? String(ins) : "",
+    conveyanceAmount: keep(ps.transport, PS_DEFAULTS.conveyance),
+    medicalAmount: keep(ps.medical_allowance, PS_DEFAULTS.medical),
+    internetAmount: keep(ps.internet_allowance, PS_DEFAULTS.internet),
+  };
+}
+const psPayload = f => ({
+  employeeId: +f.employeeId, month: +f.month, year: +f.year,
+  usePf: f.usePf, pfAmount: f.pfAmount, useTds: f.useTds, tdsAmount: f.tdsAmount,
+  useVp: f.useVp, vpAmount: f.vpAmount, usePda: f.usePda, pdaAmount: f.pdaAmount,
+  useIns: f.useIns, insAmount: f.insAmount,
+  conveyanceAmount: f.conveyanceAmount || null, medicalAmount: f.medicalAmount || null, internetAmount: f.internetAmount || null,
+});
+const psStatus = ps => ps.is_approved ? { k: "approved", label: "Approved", color: C.green }
+  : ps.download_requested ? { k: "requested", label: "Download requested", color: C.amber }
+    : { k: "generated", label: "Generated", color: C.textDim };
+
+function PsToggle({ on, onToggle, title, hint, kind, value, onValue, placeholder, note }) {
+  return (
+    <div className={`ps-tog${on ? " on" : ""}`}>
+      <label className="ps-tog-head">
+        <input type="checkbox" checked={on} onChange={e => onToggle(e.target.checked)} />
+        <span className="ps-switch" aria-hidden />
+        <span className="ps-tog-title">{title}</span>
+      </label>
+      <div className="ps-hint" style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+        <span className={`ps-kind ${kind}`}>{kind === "ded" ? "Deduction" : "Earning"}</span>{hint}
+      </div>
+      <div className="ps-money">
+        <span>₹</span>
+        <input type="number" min="0" inputMode="decimal" value={value} disabled={!on} placeholder={placeholder} onChange={e => onValue(e.target.value)} aria-label={`${title} amount`} />
+      </div>
+      {on && note && <div className="ps-hint">{note}</div>}
+    </div>
+  );
+}
+
 function AdminPayslips() {
   const [employees, setEmployees] = useState([]);
   const [payslips, setPayslips] = useState([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [form, setForm] = useState(psEmptyForm);
+  const [prefilledFrom, setPrefilledFrom] = useState(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [filterEmp, setFilterEmp] = useState("");
   const [filterYear, setFilterYear] = useState("");
-  // Pagination
+  const [filterStatus, setFilterStatus] = useState("");
+  const [search, setSearch] = useState("");
   const [psPage, setPsPage] = useState(1);
   const [psPerPage, setPsPerPage] = useState(10);
-  const [form, setForm] = useState({
-    employeeId: "", month: new Date().getMonth() + 1, year: new Date().getFullYear(),
-    usePf: false, pfAmount: "", useTds: false, tdsAmount: "", useVp: true, vpAmount: "",
-    usePda: false, pdaAmount: "", useIns: false, insAmount: "",
-    conveyanceAmount: "", medicalAmount: "", internetAmount: ""
-  });
-  const [msg, setMsg] = useState("");
+  const [rollFrom, setRollFrom] = useState(null);   // payslip used for "Next month"
+  const [runOpen, setRunOpen] = useState(false);
+  const [runPeriod, setRunPeriod] = useState(() => ({ month: new Date().getMonth() + 1, year: new Date().getFullYear() }));
+  const [runSel, setRunSel] = useState({});
+  const [runProgress, setRunProgress] = useState(null); // { done, total, failed: [] }
+  const [busyId, setBusyId] = useState(null);
+  const [flash, setFlash] = useState(null);
+  const formRef = useRef(null);
   const origin = window.location.origin;
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = async (silent) => {
+    if (!silent) setLoading(true);
     try {
       const [e, ps] = await Promise.all([api.getEmployees(), api.getPayslips()]);
-      setEmployees(e); setPayslips(ps);
-    } catch (e) { console.error(e); } finally { setLoading(false); }
-  }, []);
+      setEmployees(e || []); setPayslips(ps || []);
+    } catch (e) { dialog.alert(e.message, { title: "Couldn't load payslips", dtype: "error" }); } finally { setLoading(false); }
+  };
   useEffect(() => { load(); }, []);
+  useEffect(() => { setPsPage(1); }, [filterEmp, filterYear, filterStatus, search]);
+  useEffect(() => { if (!flash) return; const t = setTimeout(() => setFlash(null), 4500); return () => clearTimeout(t); }, [flash]);
+
+  const empById = id => employees.find(e => e.id === +id);
+  const slipFor = (empId, m, y) => payslips.find(p => p.employee_id === +empId && p.month === +m && p.year === +y);
+  const latestFor = empId => payslips.filter(p => p.employee_id === +empId).sort((a, b) => b.year - a.year || b.month - a.month)[0];
+  const latestBefore = (empId, m, y) => payslips.filter(p => p.employee_id === +empId && (p.year < +y || (p.year === +y && p.month < +m)))
+    .sort((a, b) => b.year - a.year || b.month - a.month)[0];
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const selEmp = empById(form.employeeId);
+  const estimate = selEmp ? psCompute(selEmp, form) : null;
+  const existing = form.employeeId ? slipFor(form.employeeId, form.month, form.year) : null;
+  const prevSlip = form.employeeId ? latestBefore(form.employeeId, form.month, form.year) : null;
+
+  const confirmReplace = async (ps, m, y, name) => {
+    if (!ps) return true;
+    return dialog.confirm(`${name} already has a payslip for ${psPeriod(m, y)}${ps.is_approved ? " that is APPROVED" : ""}. Generating again will overwrite it with the new figures. Continue?`, { title: "Replace existing payslip?", dtype: "warning" });
+  };
+
+  function selectEmployee(id) {
+    const emp = empById(id);
+    const last = id ? latestFor(id) : null;
+    setPrefilledFrom(null);
+    if (last && emp) {
+      const nx = psNext(last.month, last.year);
+      setForm(f => ({ ...psEmptyForm(), ...psFormFrom(last, emp), employeeId: id, month: nx.month, year: nx.year }));
+      setPrefilledFrom(last);
+    } else {
+      setForm(f => ({ ...psEmptyForm(), employeeId: id, month: f.month, year: f.year }));
+    }
+  }
+  function applyTemplate(ps, period) {
+    const emp = empById(ps.employee_id);
+    const p = period || psNext(ps.month, ps.year);
+    setForm({ ...psEmptyForm(), ...psFormFrom(ps, emp), employeeId: String(ps.employee_id), month: p.month, year: p.year });
+    setPrefilledFrom(ps);
+    setShowAdvanced(true);
+    setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  }
 
   async function generate() {
-    if (!form.employeeId) return;
-    setGenerating(true); setMsg("");
+    if (!form.employeeId || !selEmp) return;
+    if (!(+selEmp.ctc_annual > 0)) { dialog.alert(`${selEmp.name} has no CTC configured. Set CTC first.`, { title: "Missing CTC", dtype: "warning" }); return; }
+    if (!await confirmReplace(existing, form.month, form.year, selEmp.name)) return;
+    setGenerating(true);
     try {
-      await api.generatePayslip({
-        employeeId: +form.employeeId,
-        month: +form.month,
-        year: +form.year,
-        usePf: form.usePf, pfAmount: form.pfAmount,
-        useTds: form.useTds, tdsAmount: form.tdsAmount,
-        useVp: form.useVp, vpAmount: form.vpAmount,
-        usePda: form.usePda, pdaAmount: form.pdaAmount,
-        useIns: form.useIns, insAmount: form.insAmount,
-        conveyanceAmount: form.conveyanceAmount || null,
-        medicalAmount: form.medicalAmount || null,
-        internetAmount: form.internetAmount || null,
-      });
-      setMsg("✅ Payslip generated successfully!");
-      await load();
-    } catch (e) { setMsg(`❌ ${e.message}`); } finally { setGenerating(false); }
+      await api.generatePayslip(psPayload(form));
+      setFlash({ ok: true, text: `Payslip for ${selEmp.name} · ${psPeriod(form.month, form.year)} ${existing ? "updated" : "generated"}.` });
+      await load(true);
+    } catch (e) { setFlash({ ok: false, text: e.message }); } finally { setGenerating(false); }
   }
 
-  async function del(id) {
-    if (!await dialog.confirm("Delete this payslip?", { dtype: "warning" })) return;
-    try { await api.deletePayslip(id); setPayslips(ps => ps.filter(p => p.id !== id)); } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+  async function rollForward(ps, edit) {
+    const nx = psNext(ps.month, ps.year);
+    if (edit) { setRollFrom(null); applyTemplate(ps, nx); return; }
+    const emp = empById(ps.employee_id);
+    const ex = slipFor(ps.employee_id, nx.month, nx.year);
+    if (!await confirmReplace(ex, nx.month, nx.year, ps.employee_name)) return;
+    setBusyId(ps.id);
+    try {
+      await api.generatePayslip(psPayload({ ...psEmptyForm(), ...psFormFrom(ps, emp), employeeId: ps.employee_id, month: nx.month, year: nx.year }));
+      setRollFrom(null);
+      setFlash({ ok: true, text: `${ps.employee_name} · ${psPeriod(nx.month, nx.year)} generated from ${psPeriod(ps.month, ps.year)}.` });
+      await load(true);
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setBusyId(null); }
   }
 
+  async function del(ps) {
+    if (!await dialog.confirm(`Delete ${ps.employee_name}'s payslip for ${psPeriod(ps.month, ps.year)}?${ps.is_approved ? " It is already approved." : ""}`, { title: "Delete payslip", dtype: "warning" })) return;
+    try { await api.deletePayslip(ps.id); setPayslips(list => list.filter(p => p.id !== ps.id)); } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+  }
   async function approve(id) {
-    try {
-      const updated = await api.approvePayslip(id);
-      setPayslips(ps => ps.map(p => p.id === id ? { ...p, ...updated } : p));
-    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+    setBusyId(id);
+    try { const updated = await api.approvePayslip(id); setPayslips(list => list.map(p => p.id === id ? { ...p, ...updated } : p)); }
+    catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setBusyId(null); }
   }
 
+  // ── Payroll run (bulk next month) ──
+  const runRows = employees.filter(e => +e.ctc_annual > 0).map(e => {
+    const has = slipFor(e.id, runPeriod.month, runPeriod.year);
+    const src = latestBefore(e.id, runPeriod.month, runPeriod.year);
+    const est = src ? psCompute(e, psFormFrom(src, e)) : null;
+    return { e, has, src, est, ready: !has && !!src };
+  }).sort((a, b) => (b.ready - a.ready) || a.e.name.localeCompare(b.e.name));
+  const readyRows = runRows.filter(r => r.ready);
+  const selectedRun = readyRows.filter(r => runSel[r.e.id] !== false);
+  const openRun = () => { setRunSel({}); setRunProgress(null); setRunOpen(true); };
+  async function executeRun() {
+    if (!selectedRun.length) return;
+    if (!await dialog.confirm(`Generate ${selectedRun.length} payslip${selectedRun.length !== 1 ? "s" : ""} for ${psPeriod(runPeriod.month, runPeriod.year)} using each employee's previous payslip settings?`, { title: "Run payroll", dtype: "info" })) return;
+    const failed = [];
+    setRunProgress({ done: 0, total: selectedRun.length, failed });
+    for (let i = 0; i < selectedRun.length; i++) {
+      const r = selectedRun[i];
+      try { await api.generatePayslip(psPayload({ ...psEmptyForm(), ...psFormFrom(r.src, r.e), employeeId: r.e.id, month: runPeriod.month, year: runPeriod.year })); }
+      catch (err) { failed.push(`${r.e.name}: ${err.message}`); }
+      setRunProgress({ done: i + 1, total: selectedRun.length, failed: [...failed] });
+    }
+    await load(true);
+  }
+
+  // ── list / KPIs ──
+  const now = new Date();
+  const curM = now.getMonth() + 1, curY = now.getFullYear();
+  const thisMonth = payslips.filter(p => p.month === curM && p.year === curY);
+  const payroll = thisMonth.reduce((s, p) => s + (+p.net_pay || 0), 0);
+  const requested = payslips.filter(p => p.download_requested && !p.is_approved);
+  const ctcEmps = employees.filter(e => +e.ctc_annual > 0);
+  const missing = ctcEmps.filter(e => !slipFor(e.id, curM, curY));
+  const years = Array.from(new Set([curY + 1, curY, curY - 1, curY - 2, curY - 3, ...payslips.map(p => p.year)])).sort((a, b) => b - a);
+
+  const q = search.trim().toLowerCase();
   const shown = payslips.filter(p => {
     if (filterEmp && p.employee_id !== +filterEmp) return false;
     if (filterYear && p.year !== +filterYear) return false;
+    if (filterStatus && psStatus(p).k !== filterStatus) return false;
+    if (q && !`${p.employee_name} ${p.group_name || ""} ${SLIP_MONTHS[p.month - 1]} ${p.year}`.toLowerCase().includes(q)) return false;
     return true;
   });
+  const paged = shown.slice((psPage - 1) * psPerPage, psPage * psPerPage);
+  const latestIds = new Set(employees.map(e => latestFor(e.id)?.id).filter(Boolean));
 
-  const fmt = n => `₹${Number(n).toLocaleString("en-IN")}`;
-  const years = [2023, 2024, 2025, 2026];
-  const inpStyle = { width: "100%", background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13 };
+  const rollTarget = rollFrom ? psNext(rollFrom.month, rollFrom.year) : null;
+  const rollEmp = rollFrom ? empById(rollFrom.employee_id) : null;
+  const rollEst = rollFrom && rollEmp ? psCompute(rollEmp, psFormFrom(rollFrom, rollEmp)) : null;
+  const rollExisting = rollFrom ? slipFor(rollFrom.employee_id, rollTarget.month, rollTarget.year) : null;
+
+  if (loading) return <Spinner />;
+
+  const toggles = [
+    { k: "Pf", title: "Provident Fund (PF)", kind: "ded", placeholder: estimate ? `Auto · ${psINR(estimate.basic * 0.12)}` : "Auto: 12% of Basic", hint: "Employee contribution" },
+    { k: "Tds", title: "Income Tax (TDS)", kind: "ded", placeholder: "Monthly TDS amount", hint: "Blank = ₹0" },
+    { k: "Vp", title: "Variable Pay", kind: "earn", placeholder: "Monthly amount", hint: "Added on top of gross · blank = ₹0" },
+    { k: "Pda", title: "Professional Development", kind: "earn", placeholder: "Monthly amount", note: "Taken from the Special Allowance pool" },
+    { k: "Ins", title: "Insurance", kind: "earn", placeholder: "Monthly amount", note: "Taken from the Special Allowance pool" },
+  ];
+  const tKey = { Pf: ["usePf", "pfAmount"], Tds: ["useTds", "tdsAmount"], Vp: ["useVp", "vpAmount"], Pda: ["usePda", "pdaAmount"], Ins: ["useIns", "insAmount"] };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <div>
-        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>Payslips</h2>
-        <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>Generate and manage employee salary slips</p>
+    <>
+      <style>{`
+        .ps { container-type: inline-size; container-name: ps; }
+        .ps-wrap { display: flex; flex-direction: column; gap: 18px; }
+        .ps-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 10px 16px; border-radius: 12px; font-size: 13px; font-weight: 700; cursor: pointer; border: 1px solid transparent; font-family: inherit; transition: transform .15s, opacity .15s, border-color .15s; white-space: nowrap; }
+        .ps-btn.sm { padding: 7px 11px; font-size: 12px; border-radius: 10px; }
+        .ps-btn:hover:not(:disabled) { transform: translateY(-1px); }
+        .ps-btn:disabled { opacity: .5; cursor: not-allowed; }
+        .ps-btn-primary { background: ${C.accent}; color: #fff; box-shadow: 0 8px 22px ${C.accent}40; }
+        .ps-btn-ghost { background: ${C.surface}; color: ${C.text}; border-color: ${C.border}; }
+        .ps-btn-ghost:hover:not(:disabled) { border-color: ${C.accent}77; }
+        .ps-btn-roll { background: ${C.purple}1c; color: ${C.purple}; border-color: ${C.purple}55; }
+        .ps-btn-roll:hover:not(:disabled) { border-color: ${C.purple}; }
+        .ps-btn-success { background: ${C.green}18; color: ${C.green}; border-color: ${C.green}44; }
+        .ps-btn-danger { background: ${C.red}12; color: ${C.red}; border-color: ${C.red}40; }
+        .ps-icon { width: 34px; height: 34px; padding: 0; }
+        .ps-wrap button:focus-visible, .psm button:focus-visible { outline: 2px solid ${C.accent}; outline-offset: 2px; }
+
+        .ps-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+        .ps-title { margin: 0; font-size: clamp(22px, 2.4vw, 26px); font-weight: 800; color: ${C.text}; letter-spacing: -0.5px; }
+        .ps-sub { margin: 4px 0 0; color: ${C.textMuted}; font-size: 13px; }
+        .ps-head-acts { display: flex; gap: 8px; flex-wrap: wrap; }
+
+        .ps-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+        .ps-kpi { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 18px; padding: 16px; display: flex; gap: 12px; align-items: center; min-width: 0; text-align: left; font-family: inherit; }
+        button.ps-kpi { cursor: pointer; transition: border-color .15s, transform .15s; }
+        button.ps-kpi:hover { border-color: ${C.accent}77; transform: translateY(-1px); }
+        .ps-kpi-ico { width: 42px; height: 42px; border-radius: 13px; display: flex; align-items: center; justify-content: center; font-size: 19px; flex-shrink: 0; }
+        .ps-kpi-v { font-size: 20px; font-weight: 800; letter-spacing: -0.4px; color: ${C.text}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ps-kpi-l { font-size: 12px; color: ${C.textMuted}; font-weight: 600; margin-top: 2px; }
+
+        .ps-flash { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-radius: 14px; font-size: 13px; font-weight: 600; border: 1px solid; }
+
+        .ps-gen { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; scroll-margin-top: 16px; }
+        .ps-card { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 20px; padding: 20px; min-width: 0; }
+        .ps-card-h { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+        .ps-card-t { font-size: 15px; font-weight: 800; color: ${C.text}; display: flex; align-items: center; gap: 10px; }
+        .ps-card-t span.ico { width: 34px; height: 34px; border-radius: 11px; background: ${C.accent}1a; border: 1px solid ${C.accent}33; display: inline-flex; align-items: center; justify-content: center; font-size: 16px; }
+        .ps-row3 { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, .7fr); gap: 12px; }
+        .ps-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+        .ps-lbl { font-size: 12px; font-weight: 800; color: ${C.textDim}; }
+        .ps-input { width: 100%; box-sizing: border-box; background: ${C.surface}; border: 1px solid ${C.border}; border-radius: 12px; color: ${C.text}; padding: 10px 12px; font-size: 14px; font-family: inherit; outline: none; }
+        .ps-input:focus { border-color: ${C.accent}; box-shadow: 0 0 0 3px ${C.accentGlow}; }
+        .ps-banner { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; padding: 10px 14px; border-radius: 12px; font-size: 12.5px; font-weight: 600; border: 1px solid; }
+        .ps-banner span { flex: 1; min-width: 180px; }
+        .ps-section { font-size: 11px; font-weight: 800; color: ${C.textMuted}; letter-spacing: .8px; text-transform: uppercase; margin: 20px 0 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+        .ps-toggles { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+        .ps-tog { background: ${C.surface}; border: 1px solid ${C.border}; border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 8px; transition: border-color .15s, background .15s; min-width: 0; }
+        .ps-tog.on { border-color: ${C.accent}77; background: color-mix(in srgb, ${C.accent} 7%, ${C.surface}); }
+        .ps-tog-head { display: flex; align-items: center; gap: 10px; cursor: pointer; min-width: 0; }
+        .ps-tog-head input { position: absolute; opacity: 0; width: 0; height: 0; }
+        .ps-switch { width: 34px; height: 20px; border-radius: 999px; background: ${C.border}; position: relative; flex-shrink: 0; transition: background .2s; }
+        .ps-switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .2s; }
+        .ps-tog-head input:checked + .ps-switch { background: ${C.accent}; }
+        .ps-tog-head input:checked + .ps-switch::after { transform: translateX(14px); }
+        .ps-tog-head input:focus-visible + .ps-switch { outline: 2px solid ${C.accent}; outline-offset: 2px; }
+        .ps-tog-title { font-size: 13px; font-weight: 700; color: ${C.text}; flex: 1; min-width: 0; line-height: 1.3; }
+        .ps-kind { font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 999px; text-transform: uppercase; letter-spacing: .4px; flex-shrink: 0; }
+        .ps-kind.ded { color: ${C.red}; background: ${C.red}18; }
+        .ps-kind.earn { color: ${C.green}; background: ${C.green}18; }
+        .ps-hint { font-size: 11.5px; color: ${C.textMuted}; }
+        .ps-money { display: flex; align-items: center; background: ${C.card}; border: 1px solid ${C.border}; border-radius: 10px; overflow: hidden; }
+        .ps-money span { padding: 0 10px; color: ${C.textMuted}; font-weight: 700; font-size: 13px; }
+        .ps-money input { flex: 1; min-width: 0; background: transparent; border: none; outline: none; color: ${C.text}; padding: 9px 10px 9px 0; font-size: 14px; font-family: inherit; }
+        .ps-money input:disabled { opacity: .45; }
+        .ps-money:focus-within { border-color: ${C.accent}; }
+        .ps-adv-btn { background: none; border: none; color: ${C.accent}; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; text-transform: none; letter-spacing: 0; }
+        .ps-fixed { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+        .ps-gen-foot { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+
+        .ps-prev { position: sticky; top: 16px; }
+        .ps-prev-net { border-radius: 16px; padding: 16px; background: linear-gradient(135deg, ${C.green}22, transparent 70%), ${C.surface}; border: 1px solid ${C.green}40; }
+        .ps-prev-net b { display: block; font-size: 28px; font-weight: 800; color: ${C.green}; letter-spacing: -0.6px; }
+        .ps-lines { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
+        .ps-line { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; color: ${C.textDim}; }
+        .ps-line b { color: ${C.text}; font-variant-numeric: tabular-nums; font-weight: 700; }
+        .ps-line.tot { border-top: 1px dashed ${C.border}; padding-top: 8px; margin-top: 2px; font-weight: 800; color: ${C.text}; }
+        .ps-line.neg b { color: ${C.red}; }
+        .ps-empty-prev { text-align: center; color: ${C.textMuted}; font-size: 13px; padding: 30px 10px; }
+        .ps-empty-prev div { font-size: 30px; margin-bottom: 6px; }
+
+        .ps-list-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 16px 18px; border-bottom: 1px solid ${C.border}; }
+        .ps-filters { display: flex; gap: 8px; flex-wrap: wrap; }
+        .ps-filters .ps-input { width: auto; padding: 8px 12px; font-size: 13px; border-radius: 10px; }
+        .ps-row { display: grid; grid-template-columns: minmax(0, 1.5fr) .9fr .9fr .9fr 1fr 1.2fr 330px; gap: 12px; align-items: center; padding: 12px 18px; border-bottom: 1px solid ${C.border}44; font-size: 13px; }
+        .ps-row:last-child { border-bottom: none; }
+        .ps-row:not(.head):hover { background: ${C.accentGlow}; }
+        .ps-row.head { background: ${C.surface}; font-size: 11px; font-weight: 800; color: ${C.textMuted}; letter-spacing: .5px; text-transform: uppercase; padding: 10px 18px; }
+        .ps-emp { display: flex; align-items: center; gap: 10px; min-width: 0; }
+        .ps-avi { width: 34px; height: 34px; border-radius: 11px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; flex-shrink: 0; }
+        .ps-emp b { display: block; font-size: 13.5px; color: ${C.text}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ps-emp small { font-size: 11.5px; color: ${C.textMuted}; }
+        .ps-num { font-variant-numeric: tabular-nums; font-weight: 700; }
+        .ps-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 800; padding: 4px 10px; border-radius: 999px; border: 1px solid; white-space: nowrap; }
+        .ps-pill i { width: 6px; height: 6px; border-radius: 50%; }
+        .ps-acts { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+        .ps-latest { font-size: 10px; font-weight: 800; color: ${C.purple}; background: ${C.purple}18; padding: 1px 6px; border-radius: 999px; margin-left: 6px; }
+        .ps-cell-l { display: none; }
+        .ps-empty { padding: 48px 20px; text-align: center; color: ${C.textMuted}; font-size: 13.5px; }
+        .ps-empty div { font-size: 32px; margin-bottom: 8px; }
+
+        /* Modals */
+        .psm-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.66); backdrop-filter: blur(3px); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .psm { width: 100%; max-width: 520px; max-height: min(92vh, 900px); display: flex; flex-direction: column; background: ${C.card}; border: 1px solid ${C.border}; border-radius: 22px; box-shadow: 0 30px 80px rgba(0,0,0,.6); overflow: hidden; animation: psmIn .18s ease-out; }
+        .psm.wide { max-width: 760px; }
+        @keyframes psmIn { from { transform: translateY(12px); opacity: 0; } }
+        .psm-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 20px 22px 14px; border-bottom: 1px solid ${C.border}; }
+        .psm-title { font-size: 18px; font-weight: 800; color: ${C.text}; }
+        .psm-sub { font-size: 12.5px; color: ${C.textMuted}; margin-top: 3px; }
+        .psm-body { padding: 18px 22px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+        .psm-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 22px; border-top: 1px solid ${C.border}; background: ${C.surface}; flex-wrap: wrap; }
+        .psm-flow { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; }
+        .psm-per { background: ${C.surface}; border: 1px solid ${C.border}; border-radius: 14px; padding: 12px; text-align: center; }
+        .psm-per small { display: block; font-size: 11px; color: ${C.textMuted}; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; }
+        .psm-per b { display: block; font-size: 15px; color: ${C.text}; margin-top: 4px; }
+        .psm-per.to { border-color: ${C.purple}77; background: ${C.purple}12; }
+        .psm-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+        .psm-chips span { font-size: 12px; font-weight: 700; color: ${C.textDim}; background: ${C.surface}; border: 1px solid ${C.border}; border-radius: 999px; padding: 4px 10px; }
+        .psm-warn { font-size: 12.5px; color: ${C.amber}; background: ${C.amber}12; border: 1px solid ${C.amber}40; border-radius: 12px; padding: 10px 12px; font-weight: 600; }
+        .ps-run-list { border: 1px solid ${C.border}; border-radius: 14px; overflow: hidden; }
+        .ps-run-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 10px 14px; border-bottom: 1px solid ${C.border}44; font-size: 13px; }
+        .ps-run-row:last-child { border-bottom: none; }
+        .ps-run-row.dim { opacity: .6; }
+        .ps-run-row input { width: 16px; height: 16px; accent-color: ${C.accent}; cursor: pointer; }
+        .ps-progress { height: 8px; border-radius: 6px; background: ${C.border}; overflow: hidden; }
+        .ps-progress div { height: 100%; background: linear-gradient(90deg, ${C.accent}, ${C.purple}); transition: width .3s; }
+
+        /* ── Responsive ── */
+        @container ps (max-width: 1100px) {
+          .ps-gen { grid-template-columns: 1fr; }
+          .ps-prev { position: static; }
+          .ps-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .ps-row { grid-template-columns: minmax(0, 1.5fr) .8fr .9fr 1.2fr 330px; }
+          .ps-row > .c-gross, .ps-row > .c-ded { display: none; }
+        }
+        @container ps (max-width: 700px) {
+          .ps-wrap { gap: 14px; }
+          .ps-header { align-items: stretch; }
+          .ps-head-acts, .ps-head-acts > * { width: 100%; }
+          .ps-head-acts { display: grid; grid-template-columns: 1fr 1fr; }
+          .ps-kpi { padding: 12px; gap: 10px; }
+          .ps-kpi-ico { width: 34px; height: 34px; font-size: 16px; border-radius: 10px; }
+          .ps-kpi-v { font-size: 17px; }
+          .ps-card { padding: 14px; border-radius: 18px; }
+          .ps-row3 { grid-template-columns: 1fr 1fr; }
+          .ps-row3 > :first-child { grid-column: 1 / -1; }
+          .ps-fixed { grid-template-columns: 1fr; }
+          .ps-gen-foot .ps-btn { flex: 1; }
+          .ps-filters, .ps-filters .ps-input { width: 100%; }
+          .ps-row.head { display: none; }
+          .ps-row { grid-template-columns: 1fr 1fr; gap: 10px 12px; padding: 14px; }
+          .ps-row > .c-emp { grid-column: 1 / -1; }
+          .ps-row > .c-gross, .ps-row > .c-ded { display: block; }
+          .ps-row > .c-acts { grid-column: 1 / -1; }
+          .ps-acts { justify-content: stretch; }
+          .ps-acts .ps-btn { flex: 1; }
+          .ps-cell-l { display: block; font-size: 10.5px; color: ${C.textMuted}; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 2px; }
+        }
+        @media (max-width: 640px) {
+          .psm-backdrop { align-items: flex-end; padding: 0; }
+          .psm, .psm.wide { max-width: none; border-radius: 22px 22px 0 0; max-height: 94vh; }
+          .psm-head, .psm-body, .psm-foot { padding-left: 16px; padding-right: 16px; }
+          .psm-foot .ps-btn { flex: 1; }
+          .ps-run-row { grid-template-columns: auto minmax(0, 1fr) auto; }
+          .ps-run-row > :nth-child(4) { grid-column: 2 / -1; }
+        }
+      `}</style>
+
+      <div className="ps">
+        <div className="ps-wrap">
+          {/* Header */}
+          <div className="ps-header">
+            <div>
+              <h2 className="ps-title">Payslips</h2>
+              <p className="ps-sub">Generate, roll forward and approve employee salary slips</p>
+            </div>
+            <div className="ps-head-acts">
+              <button className="ps-btn ps-btn-roll" onClick={openRun}>⟳ Payroll run</button>
+              <button className="ps-btn ps-btn-primary" onClick={() => { setForm(psEmptyForm()); setPrefilledFrom(null); formRef.current?.scrollIntoView({ behavior: "smooth" }); }}>＋ New payslip</button>
+            </div>
+          </div>
+
+          {/* KPIs */}
+          <div className="ps-kpis">
+            <div className="ps-kpi">
+              <div className="ps-kpi-ico" style={{ background: C.accent + "1a" }}>🧾</div>
+              <div style={{ minWidth: 0 }}><div className="ps-kpi-v">{thisMonth.length}<span style={{ fontSize: 13, color: C.textMuted }}> / {ctcEmps.length}</span></div><div className="ps-kpi-l">Generated · {SLIP_MONTHS[curM - 1].slice(0, 3)} {curY}</div></div>
+            </div>
+            <div className="ps-kpi">
+              <div className="ps-kpi-ico" style={{ background: C.green + "1a" }}>💰</div>
+              <div style={{ minWidth: 0 }}><div className="ps-kpi-v" style={{ color: C.green }}>{psINR(Math.round(payroll))}</div><div className="ps-kpi-l">Net payout this month</div></div>
+            </div>
+            <button className="ps-kpi" onClick={() => { setFilterStatus("requested"); setFilterEmp(""); setFilterYear(""); }} disabled={!requested.length}>
+              <div className="ps-kpi-ico" style={{ background: C.amber + "1a" }}>⏳</div>
+              <div style={{ minWidth: 0 }}><div className="ps-kpi-v" style={{ color: requested.length ? C.amber : C.text }}>{requested.length}</div><div className="ps-kpi-l">Awaiting approval</div></div>
+            </button>
+            <button className="ps-kpi" onClick={openRun}>
+              <div className="ps-kpi-ico" style={{ background: C.purple + "1a" }}>⟳</div>
+              <div style={{ minWidth: 0 }}><div className="ps-kpi-v" style={{ color: missing.length ? C.purple : C.green }}>{missing.length}</div><div className="ps-kpi-l">{missing.length ? "Missing this month →" : "All generated ✓"}</div></div>
+            </button>
+          </div>
+
+          {flash && (
+            <div className="ps-flash" role="status" style={{ color: flash.ok ? C.green : C.red, background: (flash.ok ? C.green : C.red) + "12", borderColor: (flash.ok ? C.green : C.red) + "40" }}>
+              {flash.ok ? "✅" : "⚠️"} <span style={{ flex: 1 }}>{flash.text}</span>
+              <button className="ps-btn sm ps-btn-ghost" onClick={() => setFlash(null)} aria-label="Dismiss">✕</button>
+            </div>
+          )}
+
+          {/* Generator + preview */}
+          <div className="ps-gen" ref={formRef}>
+            <section className="ps-card">
+              <div className="ps-card-h">
+                <div className="ps-card-t"><span className="ico">🖨</span>Generate payslip</div>
+                {prevSlip && !prefilledFrom && (
+                  <button className="ps-btn sm ps-btn-roll" onClick={() => applyTemplate(prevSlip, { month: form.month, year: form.year })}>⧉ Copy from {psPeriod(prevSlip.month, prevSlip.year)}</button>
+                )}
+              </div>
+
+              <div className="ps-row3">
+                <div className="ps-field">
+                  <label className="ps-lbl" htmlFor="ps-emp">Employee</label>
+                  <select id="ps-emp" className="ps-input" value={form.employeeId} onChange={e => selectEmployee(e.target.value)}>
+                    <option value="">Select employee…</option>
+                    {employees.map(e => <option key={e.id} value={e.id}>{e.name} {+e.ctc_annual > 0 ? `· ₹${(e.ctc_annual / 100000).toFixed(1)}L` : "· No CTC"}</option>)}
+                  </select>
+                </div>
+                <div className="ps-field">
+                  <label className="ps-lbl" htmlFor="ps-month">Month</label>
+                  <select id="ps-month" className="ps-input" value={form.month} onChange={e => set("month", +e.target.value)}>
+                    {SLIP_MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+                  </select>
+                </div>
+                <div className="ps-field">
+                  <label className="ps-lbl" htmlFor="ps-year">Year</label>
+                  <select id="ps-year" className="ps-input" value={form.year} onChange={e => set("year", +e.target.value)}>
+                    {years.map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {prefilledFrom && (
+                <div className="ps-banner" style={{ color: C.purple, background: C.purple + "12", borderColor: C.purple + "40" }}>
+                  ⧉ <span>Settings copied from <b>{psPeriod(prefilledFrom.month, prefilledFrom.year)}</b> payslip. Review and adjust before generating.</span>
+                  <button className="ps-btn sm ps-btn-ghost" onClick={() => { setForm(f => ({ ...psEmptyForm(), employeeId: f.employeeId, month: f.month, year: f.year })); setPrefilledFrom(null); }}>Reset to defaults</button>
+                </div>
+              )}
+              {selEmp && !(+selEmp.ctc_annual > 0) && (
+                <div className="ps-banner" style={{ color: C.red, background: C.red + "12", borderColor: C.red + "40" }}>⚠ <span>{selEmp.name} has no CTC configured — set it in Compensation before generating.</span></div>
+              )}
+              {existing && (
+                <div className="ps-banner" style={{ color: C.amber, background: C.amber + "12", borderColor: C.amber + "40" }}>
+                  ⚠ <span>A payslip for {psPeriod(form.month, form.year)} already exists{existing.is_approved ? " and is approved" : ""} — generating will overwrite it.</span>
+                </div>
+              )}
+
+              <div className="ps-section">Earnings & deductions</div>
+              <div className="ps-toggles">
+                {toggles.map(t => {
+                  const [onK, valK] = tKey[t.k];
+                  return <PsToggle key={t.k} on={form[onK]} onToggle={v => set(onK, v)} title={t.title} kind={t.kind} hint={t.hint} note={t.note}
+                    value={form[valK]} onValue={v => set(valK, v)} placeholder={t.placeholder} />;
+                })}
+              </div>
+
+              <div className="ps-section">
+                <span>Fixed components {!showAdvanced && (form.conveyanceAmount || form.medicalAmount || form.internetAmount) ? "· customised" : ""}</span>
+                <button className="ps-adv-btn" onClick={() => setShowAdvanced(v => !v)} aria-expanded={showAdvanced}>{showAdvanced ? "Hide ▲" : "Override ▼"}</button>
+              </div>
+              {showAdvanced && (
+                <div className="ps-fixed">
+                  {[["conveyanceAmount", "Conveyance", PS_DEFAULTS.conveyance], ["medicalAmount", "Medical", PS_DEFAULTS.medical], ["internetAmount", "Internet & broadband", PS_DEFAULTS.internet]].map(([k, l, d]) => (
+                    <div key={k} className="ps-field">
+                      <label className="ps-lbl" htmlFor={`ps-${k}`}>{l} <span className="ps-hint">default {psINR(d)}</span></label>
+                      <div className="ps-money"><span>₹</span><input id={`ps-${k}`} type="number" min="0" inputMode="decimal" value={form[k]} placeholder={String(d)} onChange={e => set(k, e.target.value)} /></div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="ps-gen-foot">
+                <button className="ps-btn ps-btn-ghost" onClick={() => { setForm(psEmptyForm()); setPrefilledFrom(null); }} disabled={generating}>Clear</button>
+                <button className="ps-btn ps-btn-primary" onClick={generate} disabled={generating || !form.employeeId || !(+selEmp?.ctc_annual > 0)}>
+                  {generating ? "Generating…" : existing ? `Regenerate ${SLIP_MONTHS[form.month - 1].slice(0, 3)} ${form.year}` : `Generate ${SLIP_MONTHS[form.month - 1].slice(0, 3)} ${form.year}`}
+                </button>
+              </div>
+            </section>
+
+            <aside className="ps-card ps-prev">
+              <div className="ps-card-h" style={{ marginBottom: 12 }}>
+                <div className="ps-card-t">Live estimate</div>
+                {estimate && <span className="ps-hint">{psPeriod(form.month, form.year)}</span>}
+              </div>
+              {!estimate ? (
+                <div className="ps-empty-prev"><div>🧮</div>{selEmp ? "Set a CTC for this employee to see the breakdown." : "Pick an employee to preview take-home pay."}</div>
+              ) : (
+                <>
+                  <div className="ps-prev-net">
+                    <div className="ps-hint">Estimated net pay</div>
+                    <b>{psINR(estimate.net)}</b>
+                    <div className="ps-hint">Gross {psINR(estimate.gross)} · Deductions {psINR(estimate.deductions)}</div>
+                  </div>
+                  <div className="ps-lines">
+                    {[["Basic", estimate.basic], ["HRA", estimate.hra], ["LTA", estimate.lta], ["Conveyance", estimate.transport], ["Medical", estimate.medical], ["Internet", estimate.internet],
+                      ...(estimate.pda ? [["Prof. development", estimate.pda]] : []), ...(estimate.ins ? [["Insurance", estimate.ins]] : []),
+                      ["Special allowance", estimate.special], ...(estimate.vp ? [["Variable pay", estimate.vp]] : [])].map(([l, v]) => (
+                        <div key={l} className="ps-line"><span>{l}</span><b>{psINR(v)}</b></div>
+                      ))}
+                    <div className="ps-line tot"><span>Gross</span><b>{psINR(estimate.gross)}</b></div>
+                    {estimate.pf > 0 && <div className="ps-line neg"><span>PF</span><b>−{psINR(estimate.pf)}</b></div>}
+                    {estimate.tds > 0 && <div className="ps-line neg"><span>TDS</span><b>−{psINR(estimate.tds)}</b></div>}
+                    {estimate.pt > 0 && <div className="ps-line neg"><span>Professional tax</span><b>−{psINR(estimate.pt)}</b></div>}
+                    <div className="ps-line tot"><span>Net pay</span><b style={{ color: C.green }}>{psINR(estimate.net)}</b></div>
+                  </div>
+                  {estimate.special < 0 && <div className="psm-warn" style={{ marginTop: 12 }}>Special allowance is negative — fixed components exceed the CTC pool.</div>}
+                  <div className="ps-hint" style={{ marginTop: 10 }}>Estimate mirrors the server formula; the generated slip is authoritative.</div>
+                </>
+              )}
+            </aside>
+          </div>
+
+          {/* History */}
+          <section className="ps-card" style={{ padding: 0, overflow: "hidden" }}>
+            <div className="ps-list-head">
+              <div>
+                <div className="ps-card-t">Generated payslips</div>
+                <div className="ps-hint">{shown.length} of {payslips.length} · use <b style={{ color: C.purple }}>Next month</b> to roll a slip forward</div>
+              </div>
+              <div className="ps-filters">
+                <input className="ps-input" placeholder="Search name, team, month…" value={search} onChange={e => setSearch(e.target.value)} aria-label="Search payslips" />
+                <select className="ps-input" value={filterEmp} onChange={e => setFilterEmp(e.target.value)} aria-label="Filter by employee">
+                  <option value="">All employees</option>
+                  {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                </select>
+                <select className="ps-input" value={filterYear} onChange={e => setFilterYear(e.target.value)} aria-label="Filter by year">
+                  <option value="">All years</option>
+                  {years.map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+                <select className="ps-input" value={filterStatus} onChange={e => setFilterStatus(e.target.value)} aria-label="Filter by status">
+                  <option value="">All statuses</option>
+                  <option value="requested">Download requested</option>
+                  <option value="approved">Approved</option>
+                  <option value="generated">Generated</option>
+                </select>
+              </div>
+            </div>
+            <div className="ps-row head">{["Employee", "Period", "Gross", "Deductions", "Net pay", "Status", "Actions"].map(h => <div key={h} style={h === "Actions" ? { textAlign: "right" } : undefined} className={h === "Gross" ? "c-gross" : h === "Deductions" ? "c-ded" : undefined}>{h}</div>)}</div>
+            {shown.length === 0 ? (
+              <div className="ps-empty"><div>{payslips.length ? "🔍" : "🧾"}</div>{payslips.length ? "No payslips match these filters." : "No payslips generated yet."}</div>
+            ) : paged.map(ps => {
+              const st = psStatus(ps);
+              const ded = (+ps.pf_employee || 0) + (+ps.professional_tax || 0) + (+ps.income_tax || 0) + (+ps.extra_deductions || 0);
+              const gc = ps.group_color || C.accent;
+              const nx = psNext(ps.month, ps.year);
+              return (
+                <div key={ps.id} className="ps-row">
+                  <div className="c-emp ps-emp">
+                    <div className="ps-avi" style={{ background: gc + "22", color: gc }}>{ps.avatar || mkAvi(ps.employee_name)}</div>
+                    <div style={{ minWidth: 0 }}><b>{ps.employee_name}</b><small title={ps.generated_at ? `Generated ${ps.generated_at.slice(0, 10)}` : undefined}>{ps.group_name || "—"}</small></div>
+                  </div>
+                  <div><span className="ps-cell-l">Period</span><span style={{ fontWeight: 700, color: C.text }}>{SLIP_MONTHS[ps.month - 1].slice(0, 3)} {ps.year}</span>{latestIds.has(ps.id) && <span className="ps-latest">LATEST</span>}</div>
+                  <div className="c-gross"><span className="ps-cell-l">Gross</span><span className="ps-num" style={{ color: C.text }}>{psINR(ps.gross)}</span></div>
+                  <div className="c-ded"><span className="ps-cell-l">Deductions</span><span className="ps-num" style={{ color: C.red }}>{ded ? `−${psINR(ded)}` : "—"}</span></div>
+                  <div><span className="ps-cell-l">Net pay</span><span className="ps-num" style={{ color: C.green, fontSize: 14.5, fontWeight: 800 }}>{psINR(ps.net_pay)}</span></div>
+                  <div><span className="ps-cell-l">Status</span><span className="ps-pill" style={{ color: st.color, background: st.color + "18", borderColor: st.color + "40" }}><i style={{ background: st.color }} />{st.label}</span></div>
+                  <div className="c-acts ps-acts">
+                    {st.k === "requested" && <button className="ps-btn sm ps-btn-success" onClick={() => approve(ps.id)} disabled={busyId === ps.id}>✓ Approve</button>}
+                    <button className="ps-btn sm ps-btn-roll" onClick={() => setRollFrom(ps)} disabled={busyId === ps.id} title={`Generate ${psPeriod(nx.month, nx.year)} using this payslip's settings`}>⟳ Next: {SLIP_MONTHS[nx.month - 1].slice(0, 3)}{nx.year !== ps.year ? ` ${nx.year}` : ""}</button>
+                    <button className="ps-btn sm ps-btn-ghost" onClick={() => printPayslipData(ps, origin)} aria-label="Print payslip">🖨 Print</button>
+                    <button className="ps-btn sm ps-btn-danger ps-icon" onClick={() => del(ps)} aria-label="Delete payslip">🗑</button>
+                  </div>
+                </div>
+              );
+            })}
+            {shown.length > psPerPage && <PaginationControls page={psPage} setPage={setPsPage} perPage={psPerPage} setPerPage={setPsPerPage} total={shown.length} />}
+          </section>
+        </div>
       </div>
 
-      {/* Generate Panel */}
-      <Card>
-        <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 14 }}>🖨 Generate Payslip</div>
-        {/* Row 1: employee / month / year */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 4 }}>Employee</div>
-            <select value={form.employeeId} onChange={e => setForm(f => ({ ...f, employeeId: e.target.value }))} style={inpStyle}>
-              <option value="">— Select Employee —</option>
-              {employees.map(e => (
-                <option key={e.id} value={e.id}>{e.name} {e.ctc_annual > 0 ? `(₹${(e.ctc_annual / 100000).toFixed(1)}L CTC)` : "(No CTC)"}</option>
-              ))}
-            </select>
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 4 }}>Month</div>
-            <select value={form.month} onChange={e => setForm(f => ({ ...f, month: +e.target.value }))} style={inpStyle}>
-              {SLIP_MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
-            </select>
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 4 }}>Year</div>
-            <select value={form.year} onChange={e => setForm(f => ({ ...f, year: +e.target.value }))} style={inpStyle}>
-              {years.map(y => <option key={y} value={y}>{y}</option>)}
-            </select>
-          </div>
-        </div>
-        {/* Row 2: PF / TDS / Variable Pay Toggles */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginTop: 16 }}>
-          <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: C.text }}>
-              <input type="checkbox" checked={form.usePf} onChange={e => setForm(f => ({ ...f, usePf: e.target.checked }))} style={{ cursor: "pointer", width: 16, height: 16 }} />
-              Provident Fund (PF)
-            </label>
-            <input type="number" min="0" placeholder="Auto calculate 12% Basic" value={form.pfAmount} disabled={!form.usePf}
-              onChange={e => setForm(f => ({ ...f, pfAmount: e.target.value }))}
-              style={{ ...inpStyle, opacity: form.usePf ? 1 : 0.5 }} />
-          </div>
-          <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: C.text }}>
-              <input type="checkbox" checked={form.useTds} onChange={e => setForm(f => ({ ...f, useTds: e.target.checked }))} style={{ cursor: "pointer", width: 16, height: 16 }} />
-              Income Tax (TDS)
-            </label>
-            <input type="number" min="0" placeholder="Override default ₹ 0" value={form.tdsAmount} disabled={!form.useTds}
-              onChange={e => setForm(f => ({ ...f, tdsAmount: e.target.value }))}
-              style={{ ...inpStyle, opacity: form.useTds ? 1 : 0.5 }} />
-          </div>
-          <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: C.text }}>
-              <input type="checkbox" checked={form.useVp} onChange={e => setForm(f => ({ ...f, useVp: e.target.checked }))} style={{ cursor: "pointer", width: 16, height: 16 }} />
-              Variable Pay
-            </label>
-            <input type="number" min="0" placeholder="Monthly amount (auto: 5% of CTC ÷ 12)" value={form.vpAmount} disabled={!form.useVp}
-              onChange={e => setForm(f => ({ ...f, vpAmount: e.target.value }))}
-              style={{ ...inpStyle, opacity: form.useVp ? 1 : 0.5 }} />
-            {form.useVp && !form.vpAmount && <div style={{ fontSize: 11, color: C.textMuted }}>Default: 5% of annual CTC ÷ 12 — enter monthly amount to override</div>}
-          </div>
-        </div>
-        {/* Row 3: Professional Dev & Insurance */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginTop: 16 }}>
-          <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: C.text }}>
-              <input type="checkbox" checked={form.usePda} onChange={e => setForm(f => ({ ...f, usePda: e.target.checked }))} style={{ cursor: "pointer", width: 16, height: 16 }} />
-              Professional Development Allowance
-            </label>
-            <input type="number" min="0" placeholder="Enter amount (₹)" value={form.pdaAmount} disabled={!form.usePda}
-              onChange={e => setForm(f => ({ ...f, pdaAmount: e.target.value }))}
-              style={{ ...inpStyle, opacity: form.usePda ? 1 : 0.5 }} />
-            {form.usePda && <div style={{ fontSize: 11, color: C.textMuted }}>Deducted from Special Allowance pool</div>}
-          </div>
-          <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: C.text }}>
-              <input type="checkbox" checked={form.useIns} onChange={e => setForm(f => ({ ...f, useIns: e.target.checked }))} style={{ cursor: "pointer", width: 16, height: 16 }} />
-              Insurance
-            </label>
-            <input type="number" min="0" placeholder="Enter amount (₹)" value={form.insAmount} disabled={!form.useIns}
-              onChange={e => setForm(f => ({ ...f, insAmount: e.target.value }))}
-              style={{ ...inpStyle, opacity: form.useIns ? 1 : 0.5 }} />
-            {form.useIns && <div style={{ fontSize: 11, color: C.textMuted }}>Deducted from Special Allowance pool</div>}
-          </div>
-        </div>
-        {/* Row 4: Fixed Component Overrides */}
-        <div style={{ marginTop: 16 }}>
-          <div style={{ fontSize: 12, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>
-            Override Fixed Components <span style={{ fontWeight: 400, textTransform: "none" }}>(leave blank to use defaults)</span>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 4 }}>Conveyance (default ₹1,600)</div>
-              <input type="number" min="0" placeholder="₹ 1,600" value={form.conveyanceAmount}
-                onChange={e => setForm(f => ({ ...f, conveyanceAmount: e.target.value }))} style={inpStyle} />
+      {/* Roll-forward (Next month) modal */}
+      {rollFrom && (
+        <div className="psm-backdrop" onClick={() => busyId !== rollFrom.id && setRollFrom(null)}>
+          <div className="psm" role="dialog" aria-modal="true" aria-label="Generate next month" onClick={e => e.stopPropagation()}>
+            <div className="psm-head">
+              <div>
+                <div className="psm-title">Generate next month</div>
+                <div className="psm-sub">{rollFrom.employee_name} · reuse this payslip's settings</div>
+              </div>
+              <button className="ps-btn sm ps-btn-ghost" onClick={() => setRollFrom(null)} aria-label="Close">✕</button>
             </div>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 4 }}>Medical Allowance (default ₹1,250)</div>
-              <input type="number" min="0" placeholder="₹ 1,250" value={form.medicalAmount}
-                onChange={e => setForm(f => ({ ...f, medicalAmount: e.target.value }))} style={inpStyle} />
+            <div className="psm-body">
+              <div className="psm-flow">
+                <div className="psm-per"><small>From</small><b>{psPeriod(rollFrom.month, rollFrom.year)}</b><span className="ps-hint">{psINR(rollFrom.net_pay)} net</span></div>
+                <span style={{ fontSize: 20, color: C.purple }}>→</span>
+                <div className="psm-per to"><small>Generate</small><b>{psPeriod(rollTarget.month, rollTarget.year)}</b><span className="ps-hint">{rollEst ? `≈ ${psINR(rollEst.net)} net` : "—"}</span></div>
+              </div>
+              <div>
+                <div className="ps-lbl" style={{ marginBottom: 8 }}>Settings carried forward</div>
+                <div className="psm-chips">
+                  {(() => {
+                    const f = psFormFrom(rollFrom, rollEmp);
+                    const c = [];
+                    c.push(f.usePf ? `PF ${f.pfAmount ? psINR(f.pfAmount) : "auto 12%"}` : "No PF");
+                    c.push(f.useTds ? `TDS ${psINR(f.tdsAmount)}` : "No TDS");
+                    if (f.useVp) c.push(`Variable ${psINR(f.vpAmount)}`);
+                    if (f.usePda) c.push(`Prof. dev ${psINR(f.pdaAmount)}`);
+                    if (f.useIns) c.push(`Insurance ${psINR(f.insAmount)}`);
+                    if (f.conveyanceAmount || f.medicalAmount || f.internetAmount) c.push("Custom fixed components");
+                    return c.map(x => <span key={x}>{x}</span>);
+                  })()}
+                </div>
+              </div>
+              {rollEmp && rollEst && Math.abs(rollEst.net - (+rollFrom.net_pay || 0)) >= 1 && (
+                <div className="psm-warn">Net pay differs from {SLIP_MONTHS[rollFrom.month - 1]} by {psINR(Math.abs(rollEst.net - rollFrom.net_pay))} — the employee's CTC may have changed since.</div>
+              )}
+              {rollExisting && <div className="psm-warn">⚠ {psPeriod(rollTarget.month, rollTarget.year)} already exists{rollExisting.is_approved ? " and is approved" : ""} — it will be overwritten.</div>}
+              {!rollEmp?.ctc_annual && <div className="psm-warn">This employee no longer has a CTC configured.</div>}
             </div>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 4 }}>Internet & Broadband (default ₹1,200)</div>
-              <input type="number" min="0" placeholder="₹ 1,200" value={form.internetAmount}
-                onChange={e => setForm(f => ({ ...f, internetAmount: e.target.value }))} style={inpStyle} />
+            <div className="psm-foot">
+              <button className="ps-btn ps-btn-ghost" onClick={() => rollForward(rollFrom, true)}>✎ Edit first</button>
+              <button className="ps-btn ps-btn-primary" onClick={() => rollForward(rollFrom, false)} disabled={busyId === rollFrom.id || !(+rollEmp?.ctc_annual > 0)}>
+                {busyId === rollFrom.id ? "Generating…" : `Generate ${SLIP_MONTHS[rollTarget.month - 1].slice(0, 3)} ${rollTarget.year}`}
+              </button>
             </div>
           </div>
         </div>
-        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
-          <Btn onClick={generate} disabled={generating || !form.employeeId}>
-            {generating ? "Generating…" : "Generate Payslip"}
-          </Btn>
-        </div>
-        {msg && <div style={{ marginTop: 10, fontSize: 13, color: msg.startsWith("✅") ? C.green : C.red }}>{msg}</div>}
-      </Card>
+      )}
 
-      {/* Filter + Table */}
-      <Card style={{ padding: 0, overflow: "hidden" }}>
-        <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.text, flex: 1 }}>Generated Payslips ({shown.length})</div>
-          <select value={filterEmp} onChange={e => { setFilterEmp(e.target.value); setPsPage(1); }}
-            style={{ background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "7px 12px", fontSize: 13 }}>
-            <option value="">All Employees</option>
-            {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-          </select>
-          <select value={filterYear} onChange={e => { setFilterYear(e.target.value); setPsPage(1); }}
-            style={{ background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "7px 12px", fontSize: 13 }}>
-            <option value="">All Years</option>
-            {years.map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
+      {/* Payroll run modal (bulk next month) */}
+      {runOpen && (
+        <div className="psm-backdrop" onClick={() => !(runProgress && runProgress.done < runProgress.total) && setRunOpen(false)}>
+          <div className="psm wide" role="dialog" aria-modal="true" aria-label="Payroll run" onClick={e => e.stopPropagation()}>
+            <div className="psm-head">
+              <div>
+                <div className="psm-title">Payroll run</div>
+                <div className="psm-sub">Generate a month for everyone from their previous payslip</div>
+              </div>
+              <button className="ps-btn sm ps-btn-ghost" onClick={() => setRunOpen(false)} disabled={!!runProgress && runProgress.done < runProgress.total} aria-label="Close">✕</button>
+            </div>
+            <div className="psm-body">
+              <div className="ps-row3" style={{ gridTemplateColumns: "1fr 1fr" }}>
+                <div className="ps-field">
+                  <label className="ps-lbl" htmlFor="run-m">Month</label>
+                  <select id="run-m" className="ps-input" value={runPeriod.month} disabled={!!runProgress} onChange={e => { setRunPeriod(p => ({ ...p, month: +e.target.value })); setRunSel({}); }}>
+                    {SLIP_MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+                  </select>
+                </div>
+                <div className="ps-field">
+                  <label className="ps-lbl" htmlFor="run-y">Year</label>
+                  <select id="run-y" className="ps-input" value={runPeriod.year} disabled={!!runProgress} onChange={e => { setRunPeriod(p => ({ ...p, year: +e.target.value })); setRunSel({}); }}>
+                    {years.map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {runProgress ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700, color: C.text }}>
+                    <span>{runProgress.done < runProgress.total ? "Generating…" : "Done"}</span><span>{runProgress.done} / {runProgress.total}</span>
+                  </div>
+                  <div className="ps-progress"><div style={{ width: `${(runProgress.done / runProgress.total) * 100}%` }} /></div>
+                  {runProgress.done === runProgress.total && (
+                    <div style={{ fontSize: 13, color: runProgress.failed.length ? C.amber : C.green, fontWeight: 600 }}>
+                      {runProgress.total - runProgress.failed.length} generated{runProgress.failed.length ? `, ${runProgress.failed.length} failed` : " ✓"}
+                    </div>
+                  )}
+                  {runProgress.failed.map(f => <div key={f} className="psm-warn" style={{ color: C.red, borderColor: C.red + "40", background: C.red + "10" }}>{f}</div>)}
+                </div>
+              ) : (
+                <>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <div className="ps-hint"><b style={{ color: C.text }}>{readyRows.length}</b> ready · {runRows.filter(r => r.has).length} already generated · {runRows.filter(r => !r.has && !r.src).length} need a first payslip</div>
+                    {readyRows.length > 0 && (
+                      <button className="ps-adv-btn" onClick={() => { const all = selectedRun.length === readyRows.length; setRunSel(Object.fromEntries(readyRows.map(r => [r.e.id, !all]))); }}>
+                        {selectedRun.length === readyRows.length ? "Deselect all" : "Select all"}
+                      </button>
+                    )}
+                  </div>
+                  <div className="ps-run-list">
+                    {runRows.length === 0 && <div className="ps-empty" style={{ padding: 24 }}>No employees with a CTC configured.</div>}
+                    {runRows.map(r => (
+                      <label key={r.e.id} className={`ps-run-row${r.ready ? "" : " dim"}`} style={{ cursor: r.ready ? "pointer" : "default" }}>
+                        <input type="checkbox" disabled={!r.ready} checked={r.ready && runSel[r.e.id] !== false} onChange={e => setRunSel(s => ({ ...s, [r.e.id]: e.target.checked }))} />
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontWeight: 700, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.e.name}</div>
+                          <div className="ps-hint">{r.has ? "Already generated" : r.src ? `From ${psPeriod(r.src.month, r.src.year)}` : "No previous payslip — generate manually"}</div>
+                        </div>
+                        <span className="ps-num" style={{ color: r.est ? C.green : C.textMuted }}>{r.has ? psINR(r.has.net_pay) : r.est ? `≈ ${psINR(r.est.net)}` : "—"}</span>
+                        <span className="ps-pill" style={{ color: r.has ? C.green : r.ready ? C.purple : C.textMuted, borderColor: (r.has ? C.green : r.ready ? C.purple : C.border) + "55", background: (r.has ? C.green : r.ready ? C.purple : C.border) + "14", justifySelf: "end" }}>
+                          {r.has ? "✓ Done" : r.ready ? "Ready" : "Manual"}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+            <div className="psm-foot">
+              {runProgress && runProgress.done === runProgress.total ? (
+                <button className="ps-btn ps-btn-primary" onClick={() => setRunOpen(false)}>Close</button>
+              ) : (<>
+                <button className="ps-btn ps-btn-ghost" onClick={() => setRunOpen(false)} disabled={!!runProgress}>Cancel</button>
+                <button className="ps-btn ps-btn-primary" onClick={executeRun} disabled={!selectedRun.length || !!runProgress}>
+                  {runProgress ? "Working…" : `Generate ${selectedRun.length} payslip${selectedRun.length !== 1 ? "s" : ""}`}
+                </button>
+              </>)}
+            </div>
+          </div>
         </div>
-        {loading ? <div style={{ padding: 32 }}><Spinner /></div> : shown.length === 0 ? (
-          <div style={{ padding: 40, textAlign: "center", color: C.textMuted }}>No payslips generated yet.</div>
-        ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead><tr style={{ background: C.surface }}>
-              {["Employee", "Period", "Gross", "Bonus", "Deductions", "Net Pay", "Generated", "Approval", ""].map(h => (
-                <th key={h} style={{ padding: "10px 16px", textAlign: "left", fontSize: 11, color: C.textMuted, textTransform: "uppercase", letterSpacing: .5, fontWeight: 700, borderBottom: `1px solid ${C.border}` }}>{h}</th>
-              ))}
-            </tr></thead>
-            <tbody>
-              {shown.slice((psPage - 1) * psPerPage, psPage * psPerPage).map(ps => (
-                <tr key={ps.id} style={{ borderBottom: `1px solid ${C.border}22` }}>
-                  <td style={{ padding: "12px 16px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                      <Avatar initials={ps.avatar} color={ps.group_color || C.accent} size={30} />
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{ps.employee_name}</div>
-                        <div style={{ fontSize: 11, color: C.textMuted }}>{ps.group_name}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td style={{ padding: "12px 16px", fontSize: 13, fontWeight: 600, color: C.text }}>{SLIP_MONTHS[ps.month - 1]} {ps.year}</td>
-                  <td style={{ padding: "12px 16px", fontSize: 13, color: C.green, fontWeight: 600 }}>{fmt(ps.gross)}</td>
-                  <td style={{ padding: "12px 16px", fontSize: 13, color: C.amber }}>{Number(ps.bonus) > 0 ? fmt(ps.bonus) : "—"}</td>
-                  <td style={{ padding: "12px 16px", fontSize: 13, color: C.red }}>{fmt(Number(ps.pf_employee) + Number(ps.professional_tax) + Number(ps.extra_deductions || 0))}</td>
-                  <td style={{ padding: "12px 16px", fontSize: 14, fontWeight: 800, color: C.green }}>{fmt(ps.net_pay)}</td>
-                  <td style={{ padding: "12px 16px", fontSize: 11, color: C.textMuted }}>{ps.generated_at?.slice(0, 10)}</td>
-                  <td style={{ padding: "12px 16px" }}>
-                    {ps.is_approved
-                      ? <Badge color={C.green}>✓ Approved</Badge>
-                      : ps.download_requested
-                        ? <Btn small variant="success" onClick={() => approve(ps.id)}>Approve</Btn>
-                        : <span style={{ fontSize: 12, color: C.textMuted }}>—</span>
-                    }
-                  </td>
-                  <td style={{ padding: "12px 16px" }}>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <Btn small variant="ghost" onClick={() => printPayslipData(ps, origin)}>🖨 Print</Btn>
-                      <Btn small variant="ghost" onClick={() => del(ps.id)} style={{ color: C.red }}>🗑</Btn>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-        <PaginationControls page={psPage} setPage={setPsPage} perPage={psPerPage} setPerPage={setPsPerPage} total={shown.length} />
-      </Card>
-    </div>
+      )}
+    </>
   );
 }
 
@@ -10950,6 +11649,10 @@ const STYLE = [
   "@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');",
   "* { box-sizing: border-box; }",
   "input, select, button { font-family: inherit !important; }",
+  "/* Consistent dropdown chevron (replaces the native arrow that hugs the edge) */",
+  "select:not([multiple]):not([size]) { -webkit-appearance: none !important; -moz-appearance: none !important; appearance: none !important; background-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\") !important; background-repeat: no-repeat !important; background-position: right 12px center !important; background-size: 14px 14px !important; padding-right: 36px !important; text-overflow: ellipsis; cursor: pointer; }",
+  "select:not([multiple]):not([size]):disabled { cursor: not-allowed; }",
+  "select::-ms-expand { display: none; }",
   "input[type='date'], input[type='time'], input[type='datetime-local'] { color-scheme: var(--color-scheme, dark); }",
   ".dark-mode input[type='date']::-webkit-calendar-picker-indicator, .dark-mode input[type='time']::-webkit-calendar-picker-indicator, .dark-mode input[type='datetime-local']::-webkit-calendar-picker-indicator { filter: brightness(0) invert(1) !important; opacity: 1 !important; cursor: pointer; }",
   "::-webkit-scrollbar { width: 4px; height: 4px; }",
