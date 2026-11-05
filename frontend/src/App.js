@@ -3550,32 +3550,203 @@ function isoDate(d) { const p = n => String(n).padStart(2, "0"); return `${d.get
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+// ── Timesheet helpers (module-level so modal inputs keep focus) ──
+const TS_DAY_TARGET = 9;
+const TS_STATUS = {
+  draft: { label: "Draft", color: () => C.textDim },
+  pending: { label: "Submitted", color: () => C.amber },
+  approved: { label: "Approved", color: () => C.green },
+  rejected: { label: "Rejected", color: () => C.red },
+};
+const tsStatusColor = s => (TS_STATUS[s] ? TS_STATUS[s].color() : C.textMuted);
+const tsStatusLabel = s => (TS_STATUS[s] ? TS_STATUS[s].label : s);
+const tsH = h => `${Math.round((+h || 0) * 100) / 100}h`;
+const tsDay = r => String(r.work_date || "").slice(0, 10);
+const tsProjColor = id => { const P = ["#3B82F6", "#10B981", "#8B5CF6", "#F59E0B", "#EF4444", "#06B6D4", "#F97316", "#EC4899"]; return P[Math.abs(+id || 0) % P.length]; };
+const tsWorkdays = (y, m) => { let n = 0; const last = new Date(y, m + 1, 0).getDate(); for (let d = 1; d <= last; d++) { const w = new Date(y, m, d).getDay(); if (w !== 0 && w !== 6) n++; } return n; };
+
+function TsEntryModal({ init, projects, recentIds, dayTotals, onClose, onSubmit, onDelete }) {
+  const isEdit = !!init.id;
+  const [projectId, setProjectId] = useState(init.projectId ? String(init.projectId) : "");
+  const [hours, setHours] = useState(init.hours ? String(init.hours) : "");
+  const [task, setTask] = useState(init.task || "");
+  const [search, setSearch] = useState("");
+  const [days, setDays] = useState([init.date]);
+  const [busy, setBusy] = useState(false);
+  const [tried, setTried] = useState(false);
+
+  useEffect(() => {
+    const onKey = e => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const wk = Array.from({ length: 7 }, (_, i) => isoDate(addDays(weekStart(new Date(init.date + "T12:00:00")), i)));
+  const h = parseFloat(hours);
+  const origOnDay = isEdit ? (+init.hours || 0) : 0;
+  const overDays = days.filter(d => (dayTotals[d] || 0) - origOnDay + (h || 0) > 24);
+  const errs = {
+    project: !projectId ? "Choose a project" : null,
+    hours: !hours ? "Enter hours" : !(h > 0) ? "Hours must be greater than 0" : h > 24 ? "Max 24h per entry" : overDays.length ? `Exceeds 24h on ${overDays.map(d => new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })).join(", ")}` : null,
+    days: !days.length ? "Pick at least one day" : null,
+  };
+  const valid = !errs.project && !errs.hours && !errs.days;
+  const longDay = !errs.hours && days.some(d => (dayTotals[d] || 0) - origOnDay + (h || 0) > TS_DAY_TARGET);
+
+  const q = search.trim().toLowerCase();
+  const list = projects.filter(p => !q || `${p.code} ${p.name}`.toLowerCase().includes(q));
+  const recents = recentIds.map(id => projects.find(p => p.id === id)).filter(Boolean).slice(0, 4);
+
+  async function submit() {
+    setTried(true);
+    if (!valid || busy) return;
+    setBusy(true);
+    const ok = await onSubmit({ id: init.id, dates: days, projectId: +projectId, hours: h, task: task.trim() });
+    setBusy(false);
+    if (ok) onClose();
+  }
+
+  const title = isEdit ? "Edit entry" : "Log time";
+  const dateLabel = new Date(init.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" });
+
+  return (
+    <div className="tsm-backdrop" onClick={onClose}>
+      <div className="tsm" role="dialog" aria-modal="true" aria-label={title} onClick={e => e.stopPropagation()}
+        onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit(); }}>
+        <div className="tsm-head">
+          <div>
+            <div className="tsm-title">{title}</div>
+            <div className="tsm-sub">{dateLabel}{isEdit && init.status ? <> · <span style={{ color: tsStatusColor(init.status) }}>{tsStatusLabel(init.status)}</span></> : null}</div>
+          </div>
+          <button className="ts-icon-btn" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+
+        <div className="tsm-body">
+          {/* Project */}
+          <div className="tsm-field">
+            <label className="tsm-lbl">Project</label>
+            {recents.length > 0 && (
+              <div className="tsm-chips" style={{ marginBottom: 8 }}>
+                <span className="tsm-mini">Recent</span>
+                {recents.map(p => (
+                  <button key={p.id} className={`tsm-chip${String(p.id) === projectId ? " on" : ""}`} onClick={() => setProjectId(String(p.id))}
+                    style={{ "--c": tsProjColor(p.id) }}>
+                    <span className="tsm-dot" />{p.code}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className={`tsm-proj${tried && errs.project ? " err" : ""}`}>
+              {projects.length > 6 && (
+                <input className="tsm-input tsm-search" placeholder="Search projects…" value={search} onChange={e => setSearch(e.target.value)} aria-label="Search projects" />
+              )}
+              <div className="tsm-proj-list" role="listbox" aria-label="Projects">
+                {list.length === 0 && <div className="tsm-none">No matching projects</div>}
+                {list.map(p => {
+                  const on = String(p.id) === projectId;
+                  return (
+                    <button key={p.id} role="option" aria-selected={on} className={`tsm-proj-item${on ? " on" : ""}`} onClick={() => setProjectId(String(p.id))}>
+                      <span className="tsm-proj-badge" style={{ background: tsProjColor(p.id) + "22", color: tsProjColor(p.id), borderColor: tsProjColor(p.id) + "44" }}>{(p.code || "").slice(0, 4)}</span>
+                      <span className="tsm-proj-name"><b>{p.code}</b><span>{p.name}</span></span>
+                      {on && <span className="tsm-check">✓</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            {tried && errs.project && <div className="tsm-err">{errs.project}</div>}
+          </div>
+
+          {/* Hours */}
+          <div className="tsm-field">
+            <label className="tsm-lbl" htmlFor="tsm-hours">Hours</label>
+            <div className="tsm-hours-row">
+              <div className="tsm-stepper">
+                <button onClick={() => setHours(v => String(Math.max(0.5, (parseFloat(v) || 0) - 0.5)))} aria-label="Decrease hours">−</button>
+                <input id="tsm-hours" className={`tsm-input${tried && errs.hours ? " err" : ""}`} type="number" inputMode="decimal" min="0.25" max="24" step="0.25"
+                  value={hours} placeholder="0" onChange={e => setHours(e.target.value)} />
+                <button onClick={() => setHours(v => String(Math.min(24, (parseFloat(v) || 0) + 0.5)))} aria-label="Increase hours">+</button>
+              </div>
+              <div className="tsm-chips">
+                {[1, 2, 4, 6, 8, 9].map(n => (
+                  <button key={n} className={`tsm-chip${h === n ? " on" : ""}`} onClick={() => setHours(String(n))}>{n}h</button>
+                ))}
+              </div>
+            </div>
+            {tried && errs.hours ? <div className="tsm-err">{errs.hours}</div>
+              : longDay ? <div className="tsm-warn">Heads up — this takes the day past {TS_DAY_TARGET}h.</div> : null}
+          </div>
+
+          {/* Days (add only) */}
+          {!isEdit && (
+            <div className="tsm-field">
+              <label className="tsm-lbl">Log on <span className="tsm-mini" style={{ marginLeft: 6 }}>select multiple days to repeat</span></label>
+              <div className="tsm-days">
+                {wk.map((d, i) => {
+                  const on = days.includes(d);
+                  return (
+                    <button key={d} className={`tsm-day${on ? " on" : ""}${i >= 5 ? " we" : ""}`} aria-pressed={on}
+                      onClick={() => setDays(ds => on ? ds.filter(x => x !== d) : [...ds, d].sort())}>
+                      <span>{DAY_NAMES[i].slice(0, 1)}</span><b>{+d.slice(8)}</b>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="tsm-chips" style={{ marginTop: 8 }}>
+                <button className="tsm-link" onClick={() => setDays(wk.slice(0, 5))}>Weekdays</button>
+                <button className="tsm-link" onClick={() => setDays([init.date])}>Just this day</button>
+              </div>
+              {tried && errs.days && <div className="tsm-err">{errs.days}</div>}
+            </div>
+          )}
+
+          {/* Task */}
+          <div className="tsm-field">
+            <label className="tsm-lbl" htmlFor="tsm-task">What did you work on? <span className="tsm-mini" style={{ marginLeft: 6 }}>optional</span></label>
+            <textarea id="tsm-task" className="tsm-input" rows={3} maxLength={500} value={task} onChange={e => setTask(e.target.value)} placeholder="e.g. API integration, code review, client call…" />
+            <div className="tsm-mini" style={{ textAlign: "right" }}>{task.length}/500</div>
+          </div>
+        </div>
+
+        <div className="tsm-foot">
+          {isEdit && onDelete ? <button className="ts-btn ts-btn-danger" onClick={async () => { if (await onDelete(init.id)) onClose(); }}>🗑 Delete</button> : <span className="tsm-mini tsm-kbd">Ctrl/⌘ + Enter to save</span>}
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="ts-btn ts-btn-ghost" onClick={onClose}>Cancel</button>
+            <button className="ts-btn ts-btn-primary" onClick={submit} disabled={busy || (tried && !valid)}>
+              {busy ? "Saving…" : isEdit ? "Save changes" : days.length > 1 ? `Log ${days.length} days · ${tsH((h || 0) * days.length)}` : "Save entry"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Timesheets({ currentUser, viewOnly }) {
   const [rows, setRows] = useState([]);
   const [projects, setProjects] = useState([]);
-  const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [err, setErr] = useState("");
   const [calView, setCalView] = useState("week"); // "week" | "month"
   const [weekOf, setWeekOf] = useState(() => weekStart(new Date()));
   const [monthOf, setMonthOf] = useState(() => { const n = new Date(); return { y: n.getFullYear(), m: n.getMonth() }; });
-  // addRow: {dayIso, projectId, hours}
-  const [addRow, setAddRow] = useState(null);
-  const [saving, setSaving] = useState(false);
-  const [dayPanel, setDayPanel] = useState(null);
-
-  // Admin filter states
+  const [entry, setEntry] = useState(null);       // entry modal init
+  const [dayPanel, setDayPanel] = useState(null); // iso
+  const [busy, setBusy] = useState(false);
   const [filterEmp, setFilterEmp] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [search, setSearch] = useState("");
 
-  const load = useCallback(async () => {
-    setLoading(true); setErr("");
+  const load = async (silent) => {
+    silent ? setRefreshing(true) : setLoading(true);
+    setErr("");
     try {
       const params = {}; if (viewOnly) params.employee_id = currentUser.employee_id;
-      const [ts, pr, em] = await Promise.all([api.getTimesheets(params), api.getProjects(), api.getEmployees()]);
-      setRows(ts); setProjects(pr); setEmployees(em);
-    } catch (e) { setErr(e.message); } finally { setLoading(false); }
-  });
+      const [ts, pr] = await Promise.all([api.getTimesheets(params), api.getProjects()]);
+      setRows(ts || []); setProjects(pr || []);
+    } catch (e) { setErr(e.message); } finally { setLoading(false); setRefreshing(false); }
+  };
   useEffect(() => { load(); }, []);
 
   const activeProjs = projects.filter(p => !["closed", "completed"].includes(p.status));
@@ -3584,501 +3755,724 @@ function Timesheets({ currentUser, viewOnly }) {
     (p.assigned_groups || []).includes(currentUser.group_id)
   ) : activeProjs;
 
-  async function handleAdd() {
-    if (!addRow || !addRow.projectId || !addRow.hours) return;
-    setSaving(true);
+  const errAlert = e => dialog.alert(e.message, { title: "Error", dtype: "error" });
+  const isMine = r => r.employee_id === currentUser.employee_id;
+  const canEdit = r => viewOnly && isMine(r) && (r.status === "draft" || r.status === "pending");
+
+  async function saveEntry({ id, dates, projectId, hours, task }) {
     try {
-      await api.createTimesheet({ employeeId: currentUser.employee_id, projectId: +addRow.projectId, date: addRow.dayIso, hours: +addRow.hours, task: "" });
-      setAddRow(null); await load();
-    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setSaving(false); }
+      if (id) await api.updateTimesheet(id, { projectId, hours, task });
+      else for (const date of dates) await api.createTimesheet({ employeeId: currentUser.employee_id, projectId, date, hours, task });
+      await load(true);
+      return true;
+    } catch (e) { errAlert(e); await load(true); return false; }
   }
-
-  async function handleSubmitWeek() {
-    const startDate = isoDate(weekOf);
-    const endDate = isoDate(addDays(weekOf, 6));
-    const draftCount = rows.filter(r => r.work_date?.slice(0, 10) >= startDate && r.work_date?.slice(0, 10) <= endDate && r.status === "draft").length;
-    if (draftCount === 0) { dialog.alert("No saved (draft) entries to submit for this week."); return; }
-    if (!await dialog.confirm(`Submit ${draftCount} draft entr${draftCount === 1 ? "y" : "ies"} for this week to your manager?`, { title: "Submit Timesheet", dtype: "info" })) return;
-    setSaving(true);
-    try {
-      await api.submitWeekTimesheets(startDate, endDate);
-      await load();
-    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setSaving(false); }
+  async function deleteEntry(id) {
+    if (!await dialog.confirm("Delete this entry? This can't be undone.", { title: "Delete entry", dtype: "warning" })) return false;
+    try { await api.deleteTimesheet(id); await load(true); return true; } catch (e) { errAlert(e); return false; }
   }
-
-  async function handleDelete(id) {
-    if (!await dialog.confirm("Remove this entry?", { dtype: "warning" })) return;
-    try { await api.deleteTimesheet(id); await load(); } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
-  }
-
-  async function handleApprove(id) { try { await api.approveTimesheet(id); await load(); } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } }
-  async function handleReject(id) { try { await api.rejectTimesheet(id); await load(); } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } }
-
-  function handleDownloadCSV(filteredRows) {
-    if (filteredRows.length === 0) { dialog.alert("No data to download."); return; }
-    const headers = ["ID", "Employee", "Project Code", "Date", "Hours", "Task", "Status"];
-    const csvContent = "data:text/csv;charset=utf-8,"
-      + headers.join(",") + "\n"
-      + filteredRows.map(r => [
-        r.id, `"${r.employee_name}"`, `"${r.project_code}"`, r.work_date?.split("T")[0],
-        r.hours, `"${r.task || ""}"`, r.status
-      ].join(",")).join("\n");
-
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `timesheets_${isoDate(weekOf)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-  }
+  async function handleApprove(id) { try { await api.approveTimesheet(id); await load(true); } catch (e) { errAlert(e); } }
+  async function handleReject(id) { try { await api.rejectTimesheet(id); await load(true); } catch (e) { errAlert(e); } }
 
   if (loading) return <Spinner />;
-  if (err) return <ErrBox msg={err} onRetry={load} />;
+  if (err && !rows.length) return <ErrBox msg={err} onRetry={() => load()} />;
 
-  // ── Week view ────────────────────────────────────────────
+  // ── derived: week ──
+  const todayIso = isoDate(new Date());
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekOf, i));
-
-  function WeekView() {
-    const todayIso = isoDate(new Date());
-    const wStart = isoDate(weekDays[0]);
-    const wEnd = isoDate(weekDays[6]);
-    const draftCount = rows.filter(r => r.work_date?.slice(0, 10) >= wStart && r.work_date?.slice(0, 10) <= wEnd && r.status === "draft").length;
-
-    const statusColor = s => s === "approved" ? C.green : s === "rejected" ? C.red : s === "draft" ? C.border : C.amber;
-
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        {/* Week Nav */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: "4px 6px" }}>
-            <button onClick={() => setWeekOf(d => addDays(d, -7))}
-              style={{ background: "transparent", border: "none", borderRadius: 8, padding: "5px 12px", color: C.textMuted, cursor: "pointer", fontSize: 17, lineHeight: 1, transition: "color .15s" }}
-              onMouseEnter={e => e.currentTarget.style.color = C.text}
-              onMouseLeave={e => e.currentTarget.style.color = C.textMuted}>‹</button>
-            <span style={{ fontSize: 14, fontWeight: 700, color: C.text, minWidth: 200, textAlign: "center" }}>
-              {weekDays[0].toLocaleDateString("en-US", { month: "short", day: "numeric" })} — {weekDays[6].toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-            </span>
-            <button onClick={() => setWeekOf(d => addDays(d, 7))}
-              style={{ background: "transparent", border: "none", borderRadius: 8, padding: "5px 12px", color: C.textMuted, cursor: "pointer", fontSize: 17, lineHeight: 1, transition: "color .15s" }}
-              onMouseEnter={e => e.currentTarget.style.color = C.text}
-              onMouseLeave={e => e.currentTarget.style.color = C.textMuted}>›</button>
-          </div>
-          <button onClick={() => setWeekOf(weekStart(new Date()))}
-            style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: "7px 14px", color: C.textMuted, fontSize: 12, fontWeight: 700, cursor: "pointer", letterSpacing: .3 }}>
-            Today
-          </button>
-          {viewOnly && draftCount > 0 && (
-            <button onClick={handleSubmitWeek} disabled={saving}
-              style={{ background: C.accent, border: "none", borderRadius: 10, padding: "7px 18px", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 7, boxShadow: `0 4px 14px ${C.accent}44` }}>
-              <span>📤</span>{saving ? "Submitting…" : `Submit Week (${draftCount})`}
-            </button>
-          )}
-        </div>
-
-        {/* Day columns */}
-        <div style={{ overflowX: "auto" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(120px, 1fr))", gap: 8, minWidth: 600 }}>
-            {weekDays.map((day, i) => {
-              const iso = isoDate(day);
-              const isToday = iso === todayIso;
-              const isWeekend = i >= 5;
-              const dayRows = rows.filter(r => r.work_date?.slice(0, 10) === iso);
-              const totalHrs = dayRows.reduce((s, r) => s + (+r.hours || 0), 0);
-              const isAdding = addRow && addRow.dayIso === iso;
-
-              return (
-                <div key={iso} style={{
-                  background: isToday ? `linear-gradient(160deg, ${C.accent}14, ${C.accent}06)` : isWeekend ? C.bg + "88" : C.card,
-                  border: `1px solid ${isToday ? C.accent + "66" : C.border}`,
-                  borderRadius: 14, padding: "12px 10px", minHeight: 180,
-                  display: "flex", flexDirection: "column", gap: 6,
-                  transition: "box-shadow .2s",
-                }}>
-                  {/* Day header */}
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
-                    <div>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: isWeekend ? C.textMuted : C.textMuted, textTransform: "uppercase", letterSpacing: .8 }}>{DAY_NAMES[i]}</div>
-                      <div style={{
-                        marginTop: 3, width: 30, height: 30, borderRadius: "50%",
-                        background: isToday ? C.accent : "transparent",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        fontSize: 15, fontWeight: 800,
-                        color: isToday ? "#fff" : isWeekend ? C.textMuted : C.text,
-                      }}>{day.getDate()}</div>
-                    </div>
-                    {totalHrs > 0 && (
-                      <div style={{ background: C.green + "20", border: `1px solid ${C.green}44`, borderRadius: 8, padding: "2px 8px", fontSize: 11, fontWeight: 800, color: C.green }}>{totalHrs}h</div>
-                    )}
-                  </div>
-
-                  {/* Entry chips */}
-                  <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 5 }}>
-                    {dayRows.map(r => (
-                      <div key={r.id} style={{
-                        background: C.surface, borderRadius: 8,
-                        padding: "6px 8px",
-                        borderLeft: `3px solid ${statusColor(r.status)}`,
-                        border: `1px solid ${C.border}22`,
-                        borderLeftWidth: 3, borderLeftStyle: "solid", borderLeftColor: statusColor(r.status),
-                        display: "flex", justifyContent: "space-between", alignItems: "center",
-                        opacity: r.status === "draft" ? 0.7 : 1,
-                      }}>
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: C.accent, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.project_code}</div>
-                          {!viewOnly && <div style={{ fontSize: 10, color: C.textMuted, marginTop: 1 }}>{r.employee_name}</div>}
-                          <div style={{ fontSize: 10, color: C.textMuted, marginTop: 1 }}>
-                            {r.hours}h · <span style={{ color: statusColor(r.status), fontWeight: 600 }}>{r.status === "draft" ? "saved" : r.status}</span>
-                          </div>
-                        </div>
-                        <div style={{ display: "flex", gap: 3, flexShrink: 0, marginLeft: 4 }}>
-                          {(r.status === "pending" || r.status === "draft") && (
-                            <button onClick={() => handleDelete(r.id)} title="Remove"
-                              style={{ background: "none", border: "none", cursor: "pointer", color: C.textMuted, fontSize: 13, padding: "1px 3px", borderRadius: 4, lineHeight: 1, transition: "color .15s" }}
-                              onMouseEnter={e => e.currentTarget.style.color = C.red}
-                              onMouseLeave={e => e.currentTarget.style.color = C.textMuted}>🗑</button>
-                          )}
-                          {!viewOnly && r.status === "pending" && r.employee_id !== currentUser.employee_id && (<>
-                            <button onClick={() => handleApprove(r.id)} title="Approve"
-                              style={{ background: C.green + "18", border: `1px solid ${C.green}44`, cursor: "pointer", color: C.green, fontSize: 11, padding: "2px 5px", borderRadius: 5, fontWeight: 700, lineHeight: 1 }}>✓</button>
-                            <button onClick={() => handleReject(r.id)} title="Reject"
-                              style={{ background: C.red + "18", border: `1px solid ${C.red}44`, cursor: "pointer", color: C.red, fontSize: 11, padding: "2px 5px", borderRadius: 5, fontWeight: 700, lineHeight: 1 }}>✕</button>
-                          </>)}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Inline add form */}
-                  {isAdding ? (
-                    <div style={{ background: C.surface, borderRadius: 10, padding: 10, border: `1px solid ${C.accent}44`, display: "flex", flexDirection: "column", gap: 7 }}>
-                      <select value={addRow.projectId || ""} onChange={e => setAddRow(r => ({ ...r, projectId: e.target.value }))}
-                        style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "5px 8px", fontSize: 11, width: "100%", outline: "none" }}>
-                        <option value="">Select project…</option>
-                        {myProjs.map(p => <option key={p.id} value={p.id}>{p.code} – {p.name}</option>)}
-                      </select>
-                      <input type="number" value={addRow.hours || ""} onChange={e => setAddRow(r => ({ ...r, hours: e.target.value }))}
-                        placeholder="Hours (e.g. 4)" min="0.5" max="24" step="0.5"
-                        style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "5px 8px", fontSize: 11, width: "100%", outline: "none", boxSizing: "border-box" }} />
-                      <div style={{ display: "flex", gap: 5 }}>
-                        <button onClick={handleAdd} disabled={saving}
-                          style={{ flex: 1, background: C.accent, border: "none", borderRadius: 8, color: "#fff", fontSize: 11, fontWeight: 700, padding: "5px 0", cursor: "pointer" }}>
-                          {saving ? "…" : "Save"}
-                        </button>
-                        <button onClick={() => setAddRow(null)}
-                          style={{ flex: 1, background: "transparent", border: `1px solid ${C.border}`, borderRadius: 8, color: C.textMuted, fontSize: 11, padding: "5px 0", cursor: "pointer" }}>Cancel</button>
-                      </div>
-                    </div>
-                  ) : viewOnly ? (
-                    <button onClick={() => setAddRow({ dayIso: iso, projectId: "", hours: "" })}
-                      style={{ background: "transparent", border: `1px dashed ${C.border}`, borderRadius: 8, color: C.textMuted, fontSize: 18, padding: "5px 0", cursor: "pointer", lineHeight: 1, transition: "all .15s", marginTop: "auto" }}
-                      title="Log hours"
-                      onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; e.currentTarget.style.background = C.accent + "0a"; }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.textMuted; e.currentTarget.style.background = "transparent"; }}>
-                      ＋
-                    </button>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Month view ─────────────────────────────────────────
-  function MonthView() {
-    const { y, m } = monthOf;
-    const firstDay = new Date(y, m, 1);
-    const lastDay = new Date(y, m + 1, 0);
-    let startPad = (firstDay.getDay() + 6) % 7;
-    const grid = [];
-    for (let i = 0; i < startPad; i++) grid.push(null);
-    for (let d = 1; d <= lastDay.getDate(); d++) grid.push(new Date(y, m, d));
-    while (grid.length % 7 !== 0) grid.push(null);
-    const todayIso = isoDate(new Date());
-
-    // Monthly summary
-    const monthRows = rows.filter(r => {
-      const d = new Date(String(r.work_date).slice(0, 10) + "T00:00:00");
-      return d.getFullYear() === y && d.getMonth() === m;
-    });
-    const totalMonthHrs = monthRows.reduce((s, r) => s + (+r.hours || 0), 0);
-    const approvedHrs = monthRows.filter(r => r.status === "approved").reduce((s, r) => s + (+r.hours || 0), 0);
-
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        {/* Month Nav */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: "4px 6px" }}>
-            <button onClick={() => setMonthOf(({ y, m }) => m === 0 ? { y: y - 1, m: 11 } : { y, m: m - 1 })}
-              style={{ background: "transparent", border: "none", borderRadius: 8, padding: "5px 12px", color: C.textMuted, cursor: "pointer", fontSize: 17, lineHeight: 1 }}>‹</button>
-            <span style={{ fontSize: 15, fontWeight: 800, color: C.text, minWidth: 150, textAlign: "center" }}>{MONTH_NAMES[m]} {y}</span>
-            <button onClick={() => setMonthOf(({ y, m }) => m === 11 ? { y: y + 1, m: 0 } : { y, m: m + 1 })}
-              style={{ background: "transparent", border: "none", borderRadius: 8, padding: "5px 12px", color: C.textMuted, cursor: "pointer", fontSize: 17, lineHeight: 1 }}>›</button>
-          </div>
-          <button onClick={() => { const n = new Date(); setMonthOf({ y: n.getFullYear(), m: n.getMonth() }); }}
-            style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: "7px 14px", color: C.textMuted, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Today</button>
-
-          {/* Month summary chips */}
-          <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-            <div style={{ background: C.accent + "18", border: `1px solid ${C.accent}33`, borderRadius: 10, padding: "6px 14px", fontSize: 12, fontWeight: 700, color: C.accent }}>{totalMonthHrs}h logged</div>
-            <div style={{ background: C.green + "18", border: `1px solid ${C.green}33`, borderRadius: 10, padding: "6px 14px", fontSize: 12, fontWeight: 700, color: C.green }}>{approvedHrs}h approved</div>
-          </div>
-        </div>
-
-        {/* Calendar grid */}
-        <div style={{ overflowX: "auto" }}>
-          {/* Day headers */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4, marginBottom: 6, minWidth: 420 }}>
-            {DAY_NAMES.map((d, i) => (
-              <div key={d} style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: i >= 5 ? C.textMuted + "88" : C.textMuted, padding: "4px 0", textTransform: "uppercase", letterSpacing: .6 }}>{d}</div>
-            ))}
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 5, minWidth: 420 }}>
-            {grid.map((day, idx) => {
-              if (!day) return <div key={idx} />;
-              const iso = isoDate(day);
-              const isToday = iso === todayIso;
-              const isWeekend = [0, 6].includes(day.getDay());
-              const dayRows = rows.filter(r => r.work_date?.slice(0, 10) === iso);
-              const totalHrs = dayRows.reduce((s, r) => s + (+r.hours || 0), 0);
-              const hasApproved = dayRows.some(r => r.status === "approved");
-              const hasPending = dayRows.some(r => r.status === "pending");
-              const dotColor = hasApproved ? C.green : hasPending ? C.amber : null;
-
-              return (
-                <div key={iso}
-                  onClick={() => dayRows.length && setDayPanel({ iso, dayRows })}
-                  style={{
-                    background: isToday ? `linear-gradient(135deg, ${C.accent}18, ${C.accent}08)` : isWeekend ? C.bg + "66" : C.card,
-                    border: `1px solid ${isToday ? C.accent + "55" : C.border}`,
-                    borderRadius: 10, padding: "8px 6px", minHeight: 68,
-                    cursor: dayRows.length ? "pointer" : "default",
-                    display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
-                    transition: "box-shadow .15s, transform .15s",
-                  }}
-                  onMouseEnter={e => { if (dayRows.length) { e.currentTarget.style.boxShadow = `0 4px 16px rgba(0,0,0,0.3)`; e.currentTarget.style.transform = "translateY(-1px)"; } }}
-                  onMouseLeave={e => { e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.transform = "none"; }}>
-                  <div style={{
-                    width: 26, height: 26, borderRadius: "50%",
-                    background: isToday ? C.accent : "transparent",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 12, fontWeight: isToday ? 800 : 500,
-                    color: isToday ? "#fff" : isWeekend ? C.textMuted : C.text,
-                  }}>{day.getDate()}</div>
-                  {totalHrs > 0 && <div style={{ fontSize: 10, fontWeight: 800, color: C.green }}>{totalHrs}h</div>}
-                  {dotColor && <div style={{ width: 5, height: 5, borderRadius: "50%", background: dotColor }} />}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Legend */}
-        <div style={{ display: "flex", gap: 16, fontSize: 11, color: C.textMuted, flexWrap: "wrap" }}>
-          <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: C.green, display: "inline-block" }} />Approved</span>
-          <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: C.amber, display: "inline-block" }} />Pending</span>
-          <span style={{ color: C.textMuted }}>Click a day to see entries</span>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Summary KPIs for the selected week ─────────────────
   const wStart = isoDate(weekDays[0]);
   const wEnd = isoDate(weekDays[6]);
-  const weekRowsAll = rows.filter(r => r.work_date?.slice(0, 10) >= wStart && r.work_date?.slice(0, 10) <= wEnd);
-  const weekTotalHrs = weekRowsAll.reduce((s, r) => s + (+r.hours || 0), 0);
-  const weekApproved = weekRowsAll.filter(r => r.status === "approved").reduce((s, r) => s + (+r.hours || 0), 0);
-  const weekPending = weekRowsAll.filter(r => r.status === "pending").length;
-  const weekDraft = weekRowsAll.filter(r => r.status === "draft").length;
+  const byDay = {};
+  rows.forEach(r => { const d = tsDay(r); (byDay[d] = byDay[d] || []).push(r); });
+  const sumH = list => list.reduce((s, r) => s + (+r.hours || 0), 0);
+  const dayTotals = {};
+  Object.keys(byDay).forEach(d => { dayTotals[d] = sumH(byDay[d].filter(isMine)); });
+
+  const inRange = (a, b) => r => tsDay(r) >= a && tsDay(r) <= b;
+  const weekRows = rows.filter(inRange(wStart, wEnd));
+  const weekMine = weekRows.filter(isMine);
+  const weekStats = rs => ({
+    total: sumH(rs), approved: sumH(rs.filter(r => r.status === "approved")),
+    pending: rs.filter(r => r.status === "pending").length, draft: rs.filter(r => r.status === "draft").length,
+    rejected: rs.filter(r => r.status === "rejected").length, draftH: sumH(rs.filter(r => r.status === "draft")),
+  });
+  const ws = weekStats(viewOnly ? weekMine : weekRows);
+
+  // ── derived: month ──
+  const { y, m } = monthOf;
+  const mStart = isoDate(new Date(y, m, 1));
+  const mEnd = isoDate(new Date(y, m + 1, 0));
+  const monthRows = rows.filter(inRange(mStart, mEnd));
+  const ms = weekStats(viewOnly ? monthRows.filter(isMine) : monthRows);
+  const monthDaysLogged = new Set((viewOnly ? monthRows.filter(isMine) : monthRows).map(tsDay)).size;
+
+  const isWeek = calView === "week";
+  const st = isWeek ? ws : ms;
+  const target = isWeek ? 5 * TS_DAY_TARGET : tsWorkdays(y, m) * TS_DAY_TARGET;
+  const pct = viewOnly
+    ? (target ? Math.min(100, Math.round((st.total / target) * 100)) : 0)
+    : (st.total ? Math.round((st.approved / st.total) * 100) : 0);
+  const periodRows = isWeek ? (viewOnly ? weekMine : weekRows) : (viewOnly ? monthRows.filter(isMine) : monthRows);
+
+  // project breakdown
+  const projAgg = Object.values(periodRows.reduce((acc, r) => {
+    const k = r.project_id;
+    acc[k] = acc[k] || { id: k, code: r.project_code, name: r.project_name, hours: 0 };
+    acc[k].hours += +r.hours || 0; return acc;
+  }, {})).sort((a, b) => b.hours - a.hours);
+
+  // recent projects for quick-pick
+  const recentIds = [];
+  [...rows].filter(isMine).sort((a, b) => tsDay(b).localeCompare(tsDay(a))).forEach(r => { if (!recentIds.includes(r.project_id)) recentIds.push(r.project_id); });
+
+  // project list for modal (include the edited entry's project even if closed / unassigned)
+  const modalProjects = entry && entry.projectId && !myProjs.some(p => p.id === +entry.projectId)
+    ? [...myProjs, ...projects.filter(p => p.id === +entry.projectId)] : myProjs;
+
+  // ── actions ──
+  const openAdd = date => setEntry({ date: date || (todayIso >= wStart && todayIso <= wEnd ? todayIso : wStart) });
+  const openEdit = r => setEntry({ id: r.id, date: tsDay(r), projectId: r.project_id, hours: r.hours, task: r.task, status: r.status });
+  const onEntryClick = r => canEdit(r) ? openEdit(r) : setDayPanel(tsDay(r));
+
+  async function handleSubmitWeek() {
+    if (!ws.draft) return;
+    if (!await dialog.confirm(`Submit ${ws.draft} draft entr${ws.draft === 1 ? "y" : "ies"} (${tsH(ws.draftH)}) for ${weekDays[0].toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${weekDays[6].toLocaleDateString("en-US", { month: "short", day: "numeric" })} to your manager?`, { title: "Submit week", dtype: "info" })) return;
+    setBusy(true);
+    try { await api.submitWeekTimesheets(wStart, wEnd); await load(true); } catch (e) { errAlert(e); } finally { setBusy(false); }
+  }
+
+  async function handleCopyLastWeek() {
+    const pS = isoDate(addDays(weekOf, -7)), pE = isoDate(addDays(weekOf, -1));
+    const prev = rows.filter(isMine).filter(inRange(pS, pE));
+    if (!prev.length) { dialog.alert("There are no entries in the previous week to copy.", { title: "Nothing to copy" }); return; }
+    const existing = new Set(weekMine.map(r => `${tsDay(r)}|${r.project_id}`));
+    const toCreate = prev.map(r => ({ r, date: isoDate(addDays(new Date(tsDay(r) + "T12:00:00"), 7)) }))
+      .filter(x => !existing.has(`${x.date}|${x.r.project_id}`));
+    if (!toCreate.length) { dialog.alert("This week already has the same entries as last week.", { title: "Nothing to copy" }); return; }
+    if (!await dialog.confirm(`Copy ${toCreate.length} entr${toCreate.length === 1 ? "y" : "ies"} (${tsH(sumH(toCreate.map(x => x.r)))}) from last week as drafts?`, { title: "Copy last week", dtype: "info" })) return;
+    setBusy(true);
+    try {
+      for (const { r, date } of toCreate) await api.createTimesheet({ employeeId: currentUser.employee_id, projectId: r.project_id, date, hours: +r.hours, task: r.task || "" });
+    } catch (e) { errAlert(e); }
+    await load(true); setBusy(false);
+  }
+
+  // manager list
+  const listRows = weekRows.filter(r => {
+    if (filterEmp && r.employee_name !== filterEmp) return false;
+    if (filterStatus !== "all" && r.status !== filterStatus) return false;
+    if (search && !`${r.employee_name} ${r.project_code} ${r.project_name} ${r.task}`.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  }).sort((a, b) => tsDay(a).localeCompare(tsDay(b)) || String(a.employee_name).localeCompare(String(b.employee_name)));
+  const approvable = listRows.filter(r => r.status === "pending" && !isMine(r));
+
+  async function bulkApprove() {
+    if (!approvable.length) return;
+    if (!await dialog.confirm(`Approve ${approvable.length} pending entr${approvable.length === 1 ? "y" : "ies"} (${tsH(sumH(approvable))})?`, { title: "Approve all", dtype: "info" })) return;
+    setBusy(true);
+    try { for (const r of approvable) await api.approveTimesheet(r.id); } catch (e) { errAlert(e); }
+    await load(true); setBusy(false);
+  }
+
+  function handleDownloadCSV(list) {
+    if (!list.length) { dialog.alert("No data to download."); return; }
+    const esc = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const csv = ["ID,Employee,Project Code,Project,Date,Hours,Task,Status",
+      ...list.map(r => [r.id, esc(r.employee_name), esc(r.project_code), esc(r.project_name), tsDay(r), r.hours, esc(r.task), r.status].join(","))].join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a"); a.href = url; a.download = `timesheets_${wStart}.csv`;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  }
+
+  // ── navigation ──
+  const goPrev = () => isWeek ? setWeekOf(d => addDays(d, -7)) : setMonthOf(({ y, m }) => m === 0 ? { y: y - 1, m: 11 } : { y, m: m - 1 });
+  const goNext = () => isWeek ? setWeekOf(d => addDays(d, 7)) : setMonthOf(({ y, m }) => m === 11 ? { y: y + 1, m: 0 } : { y, m: m + 1 });
+  const goToday = () => { const n = new Date(); setWeekOf(weekStart(n)); setMonthOf({ y: n.getFullYear(), m: n.getMonth() }); };
+  const isCurrent = isWeek ? wStart === isoDate(weekStart(new Date())) : (y === new Date().getFullYear() && m === new Date().getMonth());
+  const periodLabel = isWeek
+    ? (() => {
+      const [a, b] = [weekDays[0], weekDays[6]];
+      const mo = d => MONTH_NAMES[d.getMonth()];
+      if (a.getFullYear() !== b.getFullYear()) return `${mo(a)} ${a.getDate()}, ${a.getFullYear()} – ${mo(b)} ${b.getDate()}, ${b.getFullYear()}`;
+      if (a.getMonth() !== b.getMonth()) return `${mo(a)} ${a.getDate()} – ${mo(b)} ${b.getDate()}, ${b.getFullYear()}`;
+      return `${mo(a)} ${a.getDate()} – ${b.getDate()}, ${b.getFullYear()}`;
+    })()
+    : new Date(y, m, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
+  // ── week status banner (employee) ──
+  const banner = !viewOnly || !isWeek ? null
+    : ws.rejected ? { tone: C.red, icon: "⚠️", text: `${ws.rejected} entr${ws.rejected === 1 ? "y was" : "ies were"} rejected this week. Review and log corrected hours.` }
+      : ws.draft ? { tone: C.accent, icon: "📝", text: `${ws.draft} draft entr${ws.draft === 1 ? "y" : "ies"} (${tsH(ws.draftH)}) not yet submitted.`, action: true }
+        : ws.pending ? { tone: C.amber, icon: "⏳", text: "This week is submitted and awaiting manager approval." }
+          : ws.total > 0 && ws.approved === ws.total ? { tone: C.green, icon: "✅", text: "All hours for this week are approved." }
+            : null;
+
+  const ring = (p, color, size = 96, stroke = 9) => {
+    const r = (size - stroke) / 2, c = 2 * Math.PI * r;
+    return (
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={C.border} strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round"
+          strokeDasharray={c} strokeDashoffset={c * (1 - p / 100)} transform={`rotate(-90 ${size / 2} ${size / 2})`} style={{ transition: "stroke-dashoffset .6s ease" }} />
+      </svg>
+    );
+  };
+
+  const Pill = ({ s }) => (
+    <span className="ts-pill" style={{ color: tsStatusColor(s), background: tsStatusColor(s) + "1a", borderColor: tsStatusColor(s) + "33" }}>
+      <i style={{ background: tsStatusColor(s) }} />{tsStatusLabel(s)}
+    </span>
+  );
+
+  // ── renderers (plain functions → no remounts) ──
+  const renderEntry = r => {
+    const pc = tsProjColor(r.project_id);
+    const editable = canEdit(r);
+    return (
+      <button key={r.id} className={`ts-entry${r.status === "draft" ? " draft" : ""}`} style={{ "--pc": pc }} onClick={() => onEntryClick(r)}
+        title={`${r.project_code} · ${tsH(r.hours)} · ${tsStatusLabel(r.status)}${r.task ? `\n${r.task}` : ""}`}>
+        <div className="ts-entry-top">
+          <span className="ts-entry-code">{r.project_code}</span>
+          <span className="ts-entry-h">{tsH(r.hours)}</span>
+        </div>
+        {!viewOnly && <div className="ts-entry-emp">{r.employee_name}</div>}
+        {r.task ? <div className="ts-entry-task">{r.task}</div> : <div className="ts-entry-task muted">{r.project_name}</div>}
+        <div className="ts-entry-foot">
+          <span className="ts-entry-st" style={{ color: tsStatusColor(r.status) }}><i style={{ background: tsStatusColor(r.status) }} />{tsStatusLabel(r.status)}</span>
+          {editable && <span className="ts-entry-edit" aria-hidden>✎</span>}
+        </div>
+      </button>
+    );
+  };
+
+  const renderWeek = () => (
+    <div className="ts-week">
+      {weekDays.map((day, i) => {
+        const iso = isoDate(day);
+        const list = (byDay[iso] || []);
+        const tot = sumH(viewOnly ? list.filter(isMine) : list);
+        const isToday = iso === todayIso;
+        const we = i >= 5;
+        const dp = Math.min(100, (tot / TS_DAY_TARGET) * 100);
+        const over = viewOnly && tot > TS_DAY_TARGET;
+        return (
+          <div key={iso} className={`ts-day${isToday ? " today" : ""}${we ? " we" : ""}`}>
+            <div className="ts-day-head">
+              <div className="ts-day-id">
+                <span className="ts-day-name">{DAY_NAMES[i]}</span>
+                <span className="ts-day-num">{day.getDate()}</span>
+              </div>
+              <div className="ts-day-tot" style={{ color: tot ? (over ? C.amber : C.text) : C.textMuted }}>{tot ? tsH(tot) : "—"}</div>
+              <div className="ts-day-bar"><div style={{ width: `${dp}%`, background: over ? C.amber : tot >= TS_DAY_TARGET ? C.green : C.accent }} /></div>
+            </div>
+            <div className="ts-day-body">
+              {list.map(renderEntry)}
+              {viewOnly && (
+                <button className={`ts-add${list.length ? "" : " empty"}`} onClick={() => openAdd(iso)} aria-label={`Log time on ${day.toDateString()}`}>
+                  <span>＋</span><em>{list.length ? "Add" : we ? "Log time" : "Log time"}</em>
+                </button>
+              )}
+              {!viewOnly && !list.length && <div className="ts-day-empty">No entries</div>}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  const renderMonth = () => {
+    const first = new Date(y, m, 1);
+    const last = new Date(y, m + 1, 0);
+    const grid = [];
+    for (let i = 0; i < (first.getDay() + 6) % 7; i++) grid.push(null);
+    for (let d = 1; d <= last.getDate(); d++) grid.push(new Date(y, m, d));
+    while (grid.length % 7) grid.push(null);
+    return (
+      <div>
+        <div className="ts-month-head">{DAY_NAMES.map((d, i) => <div key={d} className={i >= 5 ? "we" : ""}>{d}</div>)}</div>
+        <div className="ts-month">
+          {grid.map((day, idx) => {
+            if (!day) return <div key={idx} className="ts-mcell blank" />;
+            const iso = isoDate(day);
+            const list = byDay[iso] || [];
+            const tot = sumH(viewOnly ? list.filter(isMine) : list);
+            const isToday = iso === todayIso;
+            const we = [0, 6].includes(day.getDay());
+            const intensity = Math.min(1, tot / TS_DAY_TARGET);
+            const sts = ["rejected", "pending", "draft", "approved"].filter(s => list.some(r => r.status === s));
+            return (
+              <button key={iso} className={`ts-mcell${isToday ? " today" : ""}${we ? " we" : ""}`}
+                style={tot ? { background: `color-mix(in srgb, ${C.accent} ${Math.round(8 + intensity * 30)}%, ${C.card})` } : undefined}
+                onClick={() => (list.length || viewOnly) && setDayPanel(iso)} aria-label={`${day.toDateString()}: ${tot ? tsH(tot) : "no hours"}`}>
+                <span className="ts-mnum">{day.getDate()}</span>
+                {tot > 0 && <span className="ts-mh">{tsH(tot)}</span>}
+                {sts.length > 0 && <span className="ts-mdots">{sts.map(s => <i key={s} style={{ background: tsStatusColor(s) }} />)}</span>}
+              </button>
+            );
+          })}
+        </div>
+        <div className="ts-legend">
+          {["approved", "pending", "draft", "rejected"].map(s => <span key={s}><i style={{ background: tsStatusColor(s) }} />{tsStatusLabel(s)}</span>)}
+          <span className="ts-legend-scale">Less <b style={{ background: `color-mix(in srgb, ${C.accent} 10%, ${C.card})` }} /><b style={{ background: `color-mix(in srgb, ${C.accent} 22%, ${C.card})` }} /><b style={{ background: `color-mix(in srgb, ${C.accent} 38%, ${C.card})` }} /> More</span>
+        </div>
+      </div>
+    );
+  };
+
+  const panelRows = dayPanel ? (byDay[dayPanel] || []) : [];
 
   return (
     <>
       <style>{`
-        .ts-kpi-row { display: flex; gap: 12px; flex-wrap: wrap; }
-        .ts-kpi-card { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 14px; padding: 14px 18px; display: flex; align-items: center; gap: 12px; flex: 1 1 150px; transition: box-shadow .2s; }
-        .ts-kpi-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
-        .ts-list-row { display: grid; grid-template-columns: 1.5fr 1fr 1fr 0.7fr 1.5fr 0.8fr 1fr; align-items: center; gap: 0; padding: 11px 20px; border-bottom: 1px solid ${C.border}22; transition: background .15s; }
-        .ts-list-row:hover { background: ${C.accentGlow}; }
-        .ts-list-row:last-child { border-bottom: none; }
-        @media (max-width: 900px) {
-          .ts-list-row { grid-template-columns: 1fr 1fr 1fr 0.6fr auto auto auto; font-size: 12px; padding: 10px 14px; }
+        .ts { container-type: inline-size; container-name: ts; }
+        .ts-wrap { display: flex; flex-direction: column; gap: 18px; }
+        .ts-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 10px 16px; border-radius: 12px; font-size: 13px; font-weight: 700; cursor: pointer; border: 1px solid transparent; font-family: inherit; transition: transform .15s, opacity .15s, border-color .15s, background .15s; white-space: nowrap; }
+        .ts-btn:hover:not(:disabled) { transform: translateY(-1px); }
+        .ts-btn:disabled { opacity: .5; cursor: not-allowed; }
+        .ts-btn-primary { background: ${C.accent}; color: #fff; box-shadow: 0 8px 22px ${C.accent}40; }
+        .ts-btn-ghost { background: ${C.surface}; color: ${C.text}; border-color: ${C.border}; }
+        .ts-btn-ghost:hover:not(:disabled) { border-color: ${C.accent}77; }
+        .ts-btn-danger { background: ${C.red}14; color: ${C.red}; border-color: ${C.red}40; }
+        .ts-btn-success { background: ${C.green}18; color: ${C.green}; border-color: ${C.green}44; }
+        .ts-icon-btn { width: 36px; height: 36px; border-radius: 10px; border: 1px solid ${C.border}; background: ${C.surface}; color: ${C.textDim}; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; font-family: inherit; flex-shrink: 0; }
+        .ts-icon-btn:hover { color: ${C.text}; border-color: ${C.accent}77; }
+        .ts-wrap button:focus-visible, .tsm button:focus-visible { outline: 2px solid ${C.accent}; outline-offset: 2px; }
+
+        /* Header */
+        .ts-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+        .ts-title { margin: 0; font-size: clamp(22px, 2.4vw, 26px); font-weight: 800; color: ${C.text}; letter-spacing: -0.5px; }
+        .ts-subtitle { margin: 4px 0 0; color: ${C.textMuted}; font-size: 13px; }
+        .ts-head-acts { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .ts-seg { display: inline-flex; background: ${C.surface}; border: 1px solid ${C.border}; border-radius: 12px; padding: 3px; }
+        .ts-seg button { background: transparent; border: 1px solid transparent; color: ${C.textMuted}; border-radius: 9px; padding: 7px 14px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
+        .ts-seg button.on { background: ${C.card}; color: ${C.text}; border-color: ${C.border}; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
+
+        /* Toolbar */
+        .ts-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .ts-nav { display: inline-flex; align-items: center; gap: 4px; background: ${C.card}; border: 1px solid ${C.border}; border-radius: 14px; padding: 4px; }
+        .ts-nav button { width: 34px; height: 34px; border-radius: 10px; border: none; background: transparent; color: ${C.textDim}; font-size: 18px; cursor: pointer; font-family: inherit; }
+        .ts-nav button:hover { background: ${C.surface}; color: ${C.text}; }
+        .ts-nav span { min-width: 170px; text-align: center; font-size: 14px; font-weight: 800; color: ${C.text}; padding: 0 6px; }
+        .ts-spacer { flex: 1; }
+        .ts-sync { font-size: 12px; color: ${C.textMuted}; display: inline-flex; align-items: center; gap: 6px; }
+        .ts-sync i { width: 7px; height: 7px; border-radius: 50%; background: ${C.accent}; animation: tsPulse 1s infinite ease-in-out; }
+        @keyframes tsPulse { 50% { opacity: .3; } }
+
+        .ts-banner { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 14px; border: 1px solid; font-size: 13px; font-weight: 600; flex-wrap: wrap; }
+        .ts-banner span { flex: 1; min-width: 200px; }
+
+        /* Summary */
+        .ts-summary { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 16px; }
+        .ts-card { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 20px; padding: 18px; min-width: 0; }
+        .ts-prog { display: flex; align-items: center; gap: 20px; }
+        .ts-ring { position: relative; width: 96px; height: 96px; flex-shrink: 0; }
+        .ts-ring div { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .ts-ring b { font-size: 20px; font-weight: 800; color: ${C.text}; line-height: 1; }
+        .ts-ring small { font-size: 10px; color: ${C.textMuted}; font-weight: 700; margin-top: 4px; text-transform: uppercase; letter-spacing: .5px; }
+        .ts-stats { flex: 1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; min-width: 0; }
+        .ts-stat { background: ${C.surface}; border: 1px solid ${C.border}66; border-radius: 14px; padding: 12px; min-width: 0; }
+        .ts-stat-v { font-size: 20px; font-weight: 800; letter-spacing: -0.4px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+        .ts-stat-l { font-size: 11.5px; color: ${C.textMuted}; font-weight: 600; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ts-card-h { font-size: 13.5px; font-weight: 800; color: ${C.text}; display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .ts-card-h small { font-size: 11.5px; color: ${C.textMuted}; font-weight: 600; }
+        .ts-projbar { height: 10px; border-radius: 6px; overflow: hidden; display: flex; background: ${C.border}; margin-bottom: 12px; }
+        .ts-projbar div { height: 100%; }
+        .ts-projlist { display: flex; flex-direction: column; gap: 8px; }
+        .ts-projrow { display: flex; align-items: center; gap: 8px; font-size: 12.5px; min-width: 0; }
+        .ts-projrow i { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
+        .ts-projrow span { flex: 1; min-width: 0; color: ${C.text}; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ts-projrow b { color: ${C.textDim}; font-weight: 700; font-variant-numeric: tabular-nums; }
+        .ts-muted { color: ${C.textMuted}; font-size: 12.5px; }
+
+        /* Week */
+        .ts-cal { padding: 14px; }
+        .ts-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; }
+        .ts-day { background: ${C.surface}; border: 1px solid ${C.border}; border-radius: 16px; padding: 12px 10px; display: flex; flex-direction: column; gap: 10px; min-height: 230px; min-width: 0; }
+        .ts-day.we { background: ${C.bg}; }
+        .ts-day.today { border-color: ${C.accent}88; box-shadow: 0 0 0 3px ${C.accentGlow}; background: linear-gradient(180deg, ${C.accent}12, ${C.surface} 40%); }
+        .ts-day-head { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 6px 8px; }
+        .ts-day-id { display: flex; flex-direction: column; gap: 2px; }
+        .ts-day-name { font-size: 10.5px; font-weight: 800; color: ${C.textMuted}; letter-spacing: .8px; text-transform: uppercase; }
+        .ts-day-num { font-size: 20px; font-weight: 800; color: ${C.text}; line-height: 1; }
+        .ts-day.we .ts-day-num { color: ${C.textMuted}; }
+        .ts-day.today .ts-day-num { color: ${C.accent}; }
+        .ts-day-tot { font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
+        .ts-day-bar { grid-column: 1 / -1; height: 4px; border-radius: 4px; background: ${C.border}; overflow: hidden; }
+        .ts-day-bar div { height: 100%; border-radius: 4px; transition: width .5s ease; }
+        .ts-day-body { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; }
+        .ts-entry { text-align: left; font-family: inherit; cursor: pointer; width: 100%; background: ${C.card}; border: 1px solid ${C.border}; border-left: 3px solid var(--pc); border-radius: 10px; padding: 8px 9px; display: flex; flex-direction: column; gap: 3px; transition: transform .12s, border-color .12s, box-shadow .12s; min-width: 0; }
+        .ts-entry:hover { transform: translateY(-1px); box-shadow: 0 6px 18px -8px rgba(0,0,0,.6); border-color: color-mix(in srgb, var(--pc) 50%, ${C.border}); border-left-color: var(--pc); }
+        .ts-entry.draft { border-style: dashed; border-left-style: solid; }
+        .ts-entry-top { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+        .ts-entry-code { font-size: 11.5px; font-weight: 800; color: var(--pc); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ts-entry-h { font-size: 12.5px; font-weight: 800; color: ${C.text}; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+        .ts-entry-emp { font-size: 11px; color: ${C.textDim}; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ts-entry-task { font-size: 11px; color: ${C.textDim}; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+        .ts-entry-task.muted { color: ${C.textMuted}; }
+        .ts-entry-foot { display: flex; justify-content: space-between; align-items: center; }
+        .ts-entry-st { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 700; }
+        .ts-entry-st i, .ts-pill i, .ts-legend i, .ts-mdots i { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+        .ts-entry-edit { color: ${C.textMuted}; font-size: 12px; }
+        .ts-add { margin-top: auto; display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 8px; border-radius: 10px; border: 1px dashed ${C.border}; background: transparent; color: ${C.textMuted}; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 700; transition: all .15s; }
+        .ts-add span { font-size: 15px; line-height: 1; }
+        .ts-add em { font-style: normal; }
+        .ts-add.empty { flex: 1; min-height: 70px; flex-direction: column; }
+        .ts-add:hover { border-color: ${C.accent}; color: ${C.accent}; background: ${C.accent}0d; }
+        .ts-day-empty { margin-top: auto; text-align: center; font-size: 11.5px; color: ${C.textMuted}; padding: 10px 0; }
+
+        /* Month */
+        .ts-month-head, .ts-month { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+        .ts-month-head div { text-align: center; font-size: 11px; font-weight: 800; color: ${C.textMuted}; letter-spacing: .6px; text-transform: uppercase; padding: 4px 0 8px; }
+        .ts-month-head div.we { opacity: .6; }
+        .ts-mcell { position: relative; min-height: 84px; border-radius: 12px; border: 1px solid ${C.border}; background: ${C.surface}; padding: 8px; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; cursor: pointer; font-family: inherit; text-align: left; transition: transform .12s, border-color .12s; min-width: 0; }
+        .ts-mcell:hover:not(.blank) { transform: translateY(-1px); border-color: ${C.accent}77; }
+        .ts-mcell.blank { background: transparent; border-color: transparent; cursor: default; }
+        .ts-mcell.we { opacity: .85; }
+        .ts-mcell.today { border-color: ${C.accent}; box-shadow: 0 0 0 2px ${C.accentGlow}; }
+        .ts-mnum { font-size: 12.5px; font-weight: 800; color: ${C.text}; }
+        .ts-mcell.today .ts-mnum { background: ${C.accent}; color: #fff; border-radius: 999px; padding: 1px 7px; }
+        .ts-mh { font-size: 14px; font-weight: 800; color: ${C.text}; margin-top: auto; font-variant-numeric: tabular-nums; }
+        .ts-mdots { display: flex; gap: 3px; position: absolute; top: 10px; right: 8px; }
+        .ts-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 14px; font-size: 11.5px; color: ${C.textMuted}; align-items: center; }
+        .ts-legend span { display: inline-flex; align-items: center; gap: 6px; }
+        .ts-legend-scale { margin-left: auto; }
+        .ts-legend-scale b { width: 14px; height: 14px; border-radius: 4px; border: 1px solid ${C.border}; display: inline-block; }
+
+        /* Pills */
+        .ts-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; border: 1px solid; white-space: nowrap; }
+
+        /* Manager list */
+        .ts-list-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 16px 18px; border-bottom: 1px solid ${C.border}; }
+        .ts-filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        .ts-select, .ts-search { background: ${C.surface}; border: 1px solid ${C.border}; border-radius: 10px; color: ${C.text}; padding: 8px 12px; font-size: 13px; outline: none; font-family: inherit; }
+        .ts-search { min-width: 180px; }
+        .ts-select:focus, .ts-search:focus { border-color: ${C.accent}; }
+        .ts-lrow { display: grid; grid-template-columns: 1.4fr 0.9fr 0.8fr 0.5fr 1.6fr 0.8fr 1fr; gap: 10px; align-items: center; padding: 11px 18px; border-bottom: 1px solid ${C.border}44; font-size: 13px; }
+        .ts-lrow:last-child { border-bottom: none; }
+        .ts-lrow:not(.head):hover { background: ${C.accentGlow}; }
+        .ts-lrow.head { background: ${C.surface}; font-size: 11px; font-weight: 800; color: ${C.textMuted}; letter-spacing: .5px; text-transform: uppercase; padding: 9px 18px; }
+        .ts-lemp { display: flex; align-items: center; gap: 8px; min-width: 0; font-weight: 700; color: ${C.text}; }
+        .ts-lemp span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ts-avi { width: 28px; height: 28px; border-radius: 50%; background: ${C.accent}22; color: ${C.accent}; font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .ts-code { font-size: 12px; font-weight: 800; padding: 2px 8px; border-radius: 6px; border: 1px solid; width: fit-content; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ts-ltask { color: ${C.textDim}; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ts-lacts { display: flex; gap: 6px; }
+        .ts-lacts button { border-radius: 8px; font-size: 12px; font-weight: 700; padding: 5px 10px; cursor: pointer; border: 1px solid; font-family: inherit; }
+        .ts-empty { padding: 44px 20px; text-align: center; color: ${C.textMuted}; font-size: 13.5px; }
+        .ts-empty div { font-size: 30px; margin-bottom: 8px; }
+
+        /* Day panel + entry modal */
+        .tsm-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.66); backdrop-filter: blur(3px); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .tsm { width: 100%; max-width: 560px; max-height: min(92vh, 860px); display: flex; flex-direction: column; background: ${C.card}; border: 1px solid ${C.border}; border-radius: 22px; box-shadow: 0 30px 80px rgba(0,0,0,.6); overflow: hidden; animation: tsmIn .18s ease-out; }
+        @keyframes tsmIn { from { transform: translateY(12px); opacity: 0; } }
+        .tsm-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 20px 22px 14px; border-bottom: 1px solid ${C.border}; }
+        .tsm-title { font-size: 18px; font-weight: 800; color: ${C.text}; }
+        .tsm-sub { font-size: 12.5px; color: ${C.textMuted}; margin-top: 3px; }
+        .tsm-body { padding: 18px 22px; overflow-y: auto; display: flex; flex-direction: column; gap: 18px; }
+        .tsm-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 14px 22px; border-top: 1px solid ${C.border}; background: ${C.surface}; flex-wrap: wrap; }
+        .tsm-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+        .tsm-lbl { font-size: 12.5px; font-weight: 800; color: ${C.textDim}; }
+        .tsm-mini { font-size: 11.5px; color: ${C.textMuted}; font-weight: 600; }
+        .tsm-input { width: 100%; box-sizing: border-box; background: ${C.surface}; border: 1px solid ${C.border}; border-radius: 12px; color: ${C.text}; padding: 10px 12px; font-size: 14px; font-family: inherit; outline: none; resize: vertical; }
+        .tsm-input:focus { border-color: ${C.accent}; box-shadow: 0 0 0 3px ${C.accentGlow}; }
+        .tsm-input.err { border-color: ${C.red}; }
+        .tsm-err { font-size: 12px; color: ${C.red}; font-weight: 600; }
+        .tsm-warn { font-size: 12px; color: ${C.amber}; font-weight: 600; }
+        .tsm-chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+        .tsm-chip { --c: ${C.accent}; display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border-radius: 999px; border: 1px solid ${C.border}; background: ${C.surface}; color: ${C.text}; font-size: 12.5px; font-weight: 700; cursor: pointer; font-family: inherit; }
+        .tsm-chip:hover { border-color: ${C.accent}88; }
+        .tsm-chip.on { background: ${C.accent}; border-color: ${C.accent}; color: #fff; }
+        .tsm-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
+        .tsm-chip.on .tsm-dot { background: #fff; }
+        .tsm-link { background: none; border: none; color: ${C.accent}; font-size: 12px; font-weight: 700; cursor: pointer; padding: 2px 4px; font-family: inherit; }
+        .tsm-proj { border: 1px solid ${C.border}; border-radius: 14px; background: ${C.surface}; overflow: hidden; }
+        .tsm-proj.err { border-color: ${C.red}; }
+        .tsm-search { border: none; border-bottom: 1px solid ${C.border}; border-radius: 0; background: transparent; }
+        .tsm-search:focus { box-shadow: none; }
+        .tsm-proj-list { max-height: 196px; overflow-y: auto; padding: 4px; }
+        .tsm-proj-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: none; border: 1px solid transparent; border-radius: 10px; padding: 8px; cursor: pointer; font-family: inherit; color: ${C.text}; }
+        .tsm-proj-item:hover { background: ${C.card}; }
+        .tsm-proj-item.on { background: ${C.accent}18; border-color: ${C.accent}55; }
+        .tsm-proj-badge { width: 40px; height: 30px; border-radius: 8px; border: 1px solid; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; flex-shrink: 0; overflow: hidden; }
+        .tsm-proj-name { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+        .tsm-proj-name b { font-size: 13px; }
+        .tsm-proj-name span { font-size: 11.5px; color: ${C.textMuted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .tsm-check { color: ${C.accent}; font-weight: 800; }
+        .tsm-none { padding: 16px; text-align: center; font-size: 12.5px; color: ${C.textMuted}; }
+        .tsm-hours-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .tsm-stepper { display: flex; align-items: center; gap: 6px; }
+        .tsm-stepper input { width: 84px; text-align: center; font-size: 16px; font-weight: 800; }
+        .tsm-stepper button { width: 38px; height: 42px; border-radius: 12px; border: 1px solid ${C.border}; background: ${C.surface}; color: ${C.text}; font-size: 18px; font-weight: 700; cursor: pointer; font-family: inherit; }
+        .tsm-stepper button:hover { border-color: ${C.accent}88; }
+        .tsm-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+        .tsm-day { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 0; border-radius: 12px; border: 1px solid ${C.border}; background: ${C.surface}; color: ${C.textDim}; cursor: pointer; font-family: inherit; }
+        .tsm-day span { font-size: 10.5px; font-weight: 800; }
+        .tsm-day b { font-size: 15px; color: ${C.text}; }
+        .tsm-day.we { opacity: .75; }
+        .tsm-day.on { background: ${C.accent}; border-color: ${C.accent}; color: #fff; opacity: 1; }
+        .tsm-day.on b { color: #fff; }
+        .tsm-prow { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: ${C.surface}; border: 1px solid ${C.border}; border-left: 3px solid var(--pc); border-radius: 12px; }
+
+        /* ── Responsive (container) ── */
+        @container ts (max-width: 1100px) {
+          .ts-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .ts-entry-task { -webkit-line-clamp: 1; }
         }
+        @container ts (max-width: 900px) {
+          .ts-summary { grid-template-columns: 1fr; }
+          .ts-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+          /* week → agenda list */
+          .ts-week { grid-template-columns: 1fr; gap: 8px; }
+          .ts-day { min-height: 0; display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 12px; padding: 12px; }
+          .ts-day-head { grid-template-columns: 1fr; align-content: start; gap: 6px; }
+          .ts-day-id { flex-direction: row; align-items: baseline; gap: 6px; }
+          .ts-day-body { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; align-content: start; }
+          .ts-add, .ts-add.empty { margin-top: 0; min-height: 0; flex-direction: row; padding: 10px; }
+          .ts-entry-task { -webkit-line-clamp: 2; }
+          .ts-day-empty { margin: 0; text-align: left; padding: 6px 0; }
+          .ts-lrow { grid-template-columns: 1.3fr 0.9fr 0.8fr 0.5fr 0.9fr 1fr; }
+          .ts-lrow > :nth-child(5) { display: none; }
+        }
+        @container ts (max-width: 640px) {
+          .ts-wrap { gap: 14px; }
+          .ts-header { align-items: stretch; }
+          .ts-head-acts { width: 100%; }
+          .ts-head-acts .ts-seg { flex: 1; }
+          .ts-head-acts .ts-seg button { flex: 1; }
+          .ts-toolbar { gap: 8px; }
+          .ts-nav { flex: 1 1 100%; justify-content: space-between; }
+          .ts-nav span { min-width: 0; font-size: 13px; }
+          .ts-toolbar .ts-btn { flex: 1; }
+          .ts-spacer { display: none; }
+          .ts-card { padding: 14px; border-radius: 18px; }
+          .ts-prog { flex-direction: column; align-items: stretch; gap: 14px; }
+          .ts-ring { align-self: center; }
+          .ts-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+          .ts-stat-v { font-size: 18px; }
+          .ts-cal { padding: 10px; }
+          .ts-day { grid-template-columns: 1fr; gap: 10px; }
+          .ts-day-head { grid-template-columns: 1fr auto; }
+          .ts-day-body { grid-template-columns: 1fr; }
+          .ts-month-head, .ts-month { gap: 4px; }
+          .ts-mcell { min-height: 56px; padding: 6px; border-radius: 10px; }
+          .ts-mh { font-size: 11.5px; }
+          .ts-mdots { top: 7px; right: 5px; }
+          .ts-mdots i { width: 5px; height: 5px; }
+          .ts-legend-scale { margin-left: 0; }
+          .ts-list-head { padding: 14px; }
+          .ts-filters, .ts-filters > * { width: 100%; }
+          .ts-search { min-width: 0; box-sizing: border-box; }
+          .ts-lrow.head { display: none; }
+          .ts-lrow { grid-template-columns: 1fr auto; grid-template-areas: "emp hrs" "proj st" "date act"; padding: 14px; gap: 8px; }
+          .ts-lrow > :nth-child(1) { grid-area: emp; }
+          .ts-lrow > :nth-child(2) { grid-area: proj; }
+          .ts-lrow > :nth-child(3) { grid-area: date; }
+          .ts-lrow > :nth-child(4) { grid-area: hrs; text-align: right; }
+          .ts-lrow > :nth-child(6) { grid-area: st; justify-self: end; }
+          .ts-lrow > :nth-child(7) { grid-area: act; justify-self: end; }
+        }
+        /* Modals live outside the container → use a viewport media query */
         @media (max-width: 640px) {
-          .ts-kpi-card { flex: 1 1 130px; padding: 12px 14px; }
+          .tsm-backdrop { align-items: flex-end; padding: 0; }
+          .tsm { max-width: none; border-radius: 22px 22px 0 0; max-height: 94vh; animation: tsmUp .22s ease-out; }
+          @keyframes tsmUp { from { transform: translateY(40px); opacity: 0; } }
+          .tsm-head, .tsm-body, .tsm-foot { padding-left: 16px; padding-right: 16px; }
+          .tsm-foot > div { flex: 1; }
+          .tsm-foot > div .ts-btn { flex: 1; }
+          .tsm-kbd { display: none; }
+          .tsm-days { gap: 4px; }
+          .tsm-stepper input { width: 70px; }
         }
       `}</style>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div className="ts">
+        <div className="ts-wrap">
 
-        {/* ── Header ── */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: -0.5 }}>
-              {viewOnly ? "My Timesheets" : "Timesheets"}
-            </h2>
-            <p style={{ margin: "5px 0 0", color: C.textMuted, fontSize: 13 }}>
-              {viewOnly ? "Log hours by clicking ＋ on any day" : "Review and approve team timesheet entries"}
-            </p>
+          {/* Header */}
+          <div className="ts-header">
+            <div>
+              <h2 className="ts-title">{viewOnly ? "My Timesheets" : "Timesheets"}</h2>
+              <p className="ts-subtitle">{viewOnly ? "Track your hours, then submit the week for approval" : "Review and approve team timesheet entries"}</p>
+            </div>
+            <div className="ts-head-acts">
+              <div className="ts-seg" role="tablist" aria-label="Calendar view">
+                {[["week", "Week"], ["month", "Month"]].map(([v, l]) => (
+                  <button key={v} role="tab" aria-selected={calView === v} className={calView === v ? "on" : ""} onClick={() => setCalView(v)}>{l}</button>
+                ))}
+              </div>
+              {viewOnly && <button className="ts-btn ts-btn-primary" onClick={() => openAdd()}>＋ Log time</button>}
+            </div>
           </div>
-          {/* View toggle */}
-          <div style={{ display: "flex", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 3, gap: 2 }}>
-            {[["week", "📅", "Week"], ["month", "🗓", "Month"]].map(([v, icon, label]) => (
-              <button key={v} onClick={() => setCalView(v)} style={{
-                background: calView === v ? C.card : "transparent",
-                color: calView === v ? C.text : C.textMuted,
-                border: calView === v ? `1px solid ${C.border}` : "1px solid transparent",
-                borderRadius: 10, padding: "7px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer",
-                display: "flex", alignItems: "center", gap: 6, transition: "all .18s",
-              }}>{icon} {label}</button>
-            ))}
-          </div>
-        </div>
 
-        {/* ── KPI Summary Row (week view) ── */}
-        {calView === "week" && (
-          <div className="ts-kpi-row">
-            {[
-              { label: "Total Hours", value: `${weekTotalHrs}h`, color: C.accent, icon: "⏱" },
-              { label: "Approved Hrs", value: `${weekApproved}h`, color: C.green, icon: "✅" },
-              { label: "Pending Entries", value: weekPending, color: C.amber, icon: "⏳" },
-              { label: "Draft Entries", value: weekDraft, color: C.textMuted, icon: "📝" },
-            ].map(s => (
-              <div key={s.label} className="ts-kpi-card">
-                <div style={{ width: 38, height: 38, borderRadius: 10, background: s.color + "22", border: `1px solid ${s.color}33`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, flexShrink: 0 }}>{s.icon}</div>
-                <div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: s.color, lineHeight: 1 }}>{s.value}</div>
-                  <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 600, marginTop: 3, letterSpacing: .3 }}>{s.label}</div>
+          {/* Toolbar */}
+          <div className="ts-toolbar">
+            <div className="ts-nav">
+              <button onClick={goPrev} aria-label={isWeek ? "Previous week" : "Previous month"}>‹</button>
+              <span>{periodLabel}</span>
+              <button onClick={goNext} aria-label={isWeek ? "Next week" : "Next month"}>›</button>
+            </div>
+            {!isCurrent && <button className="ts-btn ts-btn-ghost" onClick={goToday}>Today</button>}
+            {refreshing && <span className="ts-sync"><i />Syncing…</span>}
+            <div className="ts-spacer" />
+            {viewOnly && isWeek && <button className="ts-btn ts-btn-ghost" onClick={handleCopyLastWeek} disabled={busy}>⧉ Copy last week</button>}
+            {viewOnly && isWeek && ws.draft > 0 && (
+              <button className="ts-btn ts-btn-primary" onClick={handleSubmitWeek} disabled={busy}>📤 {busy ? "Working…" : `Submit week (${ws.draft})`}</button>
+            )}
+          </div>
+
+          {banner && (
+            <div className="ts-banner" style={{ color: banner.tone, background: banner.tone + "12", borderColor: banner.tone + "40" }} role="status">
+              <b style={{ fontSize: 16 }}>{banner.icon}</b><span>{banner.text}</span>
+            </div>
+          )}
+
+          {/* Summary */}
+          <div className="ts-summary">
+            <div className="ts-card">
+              <div className="ts-prog">
+                <div className="ts-ring">
+                  {ring(pct, pct >= 100 ? C.green : C.accent)}
+                  <div><b>{pct}%</b><small>{viewOnly ? `of ${target}h` : "approved"}</small></div>
+                </div>
+                <div className="ts-stats">
+                  {[
+                    { l: isWeek ? "Logged this week" : "Logged this month", v: tsH(st.total), c: C.accent },
+                    { l: "Approved", v: tsH(st.approved), c: C.green },
+                    { l: "Awaiting approval", v: st.pending, c: C.amber },
+                    isWeek ? { l: "Drafts", v: st.draft, c: C.textDim } : { l: "Days logged", v: monthDaysLogged, c: C.purple },
+                  ].map(s => (
+                    <div key={s.l} className="ts-stat">
+                      <div className="ts-stat-v" style={{ color: s.c }}>{s.v}</div>
+                      <div className="ts-stat-l">{s.l}</div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-
-        {/* ── Calendar Card ── */}
-        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "20px 18px" }}>
-          {calView === "week" ? <WeekView /> : <MonthView />}
-        </div>
-
-        {/* ── Day Detail Modal ── */}
-        {dayPanel && (
-          <Modal title={`${new Date(dayPanel.iso + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}`} onClose={() => setDayPanel(null)}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {dayPanel.dayRows.map(r => (
-                <div key={r.id} style={{ background: C.surface, borderRadius: 12, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, borderLeft: `3px solid ${r.status === "approved" ? C.green : r.status === "rejected" ? C.red : C.amber}` }}>
-                  <div>
-                    {!viewOnly && <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 2 }}>{r.employee_name}</div>}
-                    <div style={{ fontSize: 14, fontWeight: 700, color: C.accent }}>{r.project_code} · <span style={{ color: C.green }}>{r.hours}h</span></div>
-                    {r.task && <div style={{ fontSize: 11, color: C.textMuted, marginTop: 3 }}>{r.task}</div>}
+            </div>
+            <div className="ts-card">
+              <div className="ts-card-h">By project <small>{projAgg.length} project{projAgg.length !== 1 ? "s" : ""}</small></div>
+              {projAgg.length === 0 ? <div className="ts-muted">No hours logged {isWeek ? "this week" : "this month"} yet.</div> : (
+                <>
+                  <div className="ts-projbar">{projAgg.map(p => <div key={p.id} title={`${p.code}: ${tsH(p.hours)}`} style={{ width: `${(p.hours / st.total) * 100}%`, background: tsProjColor(p.id) }} />)}</div>
+                  <div className="ts-projlist">
+                    {projAgg.slice(0, 4).map(p => (
+                      <div key={p.id} className="ts-projrow"><i style={{ background: tsProjColor(p.id) }} /><span title={p.name}>{p.code}{p.name ? ` · ${p.name}` : ""}</span><b>{tsH(p.hours)}</b></div>
+                    ))}
+                    {projAgg.length > 4 && <div className="ts-muted">+{projAgg.length - 4} more</div>}
                   </div>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <StatusBadge status={r.status} />
-                    {!viewOnly && r.status === "pending" && r.employee_id !== currentUser.employee_id && (<>
-                      <Btn small variant="success" onClick={async () => { await handleApprove(r.id); setDayPanel(null); }}>✓ Approve</Btn>
-                      <Btn small variant="danger" onClick={async () => { await handleReject(r.id); setDayPanel(null); }}>✕ Reject</Btn>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Calendar */}
+          <div className="ts-card ts-cal">{isWeek ? renderWeek() : renderMonth()}</div>
+
+          {/* Manager / admin list */}
+          {!viewOnly && (
+            <div className="ts-card" style={{ padding: 0, overflow: "hidden" }}>
+              <div className="ts-list-head">
+                <div>
+                  <div style={{ fontSize: 14.5, fontWeight: 800, color: C.text }}>Weekly requests</div>
+                  <div className="ts-muted">{listRows.length} entr{listRows.length === 1 ? "y" : "ies"} · {tsH(sumH(listRows))} · {periodLabel}</div>
+                </div>
+                <div className="ts-filters">
+                  <input className="ts-search" placeholder="Search employee, project, task…" value={search} onChange={e => setSearch(e.target.value)} aria-label="Search entries" />
+                  <select className="ts-select" value={filterEmp} onChange={e => setFilterEmp(e.target.value)} aria-label="Filter by employee">
+                    <option value="">All employees</option>
+                    {Array.from(new Set(weekRows.map(r => r.employee_name))).sort().map(n => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                  <select className="ts-select" value={filterStatus} onChange={e => setFilterStatus(e.target.value)} aria-label="Filter by status">
+                    <option value="all">All statuses</option>
+                    <option value="pending">Submitted</option>
+                    <option value="approved">Approved</option>
+                    <option value="rejected">Rejected</option>
+                    <option value="draft">Draft</option>
+                  </select>
+                  {approvable.length > 0 && <button className="ts-btn ts-btn-success" onClick={bulkApprove} disabled={busy}>✓ Approve all ({approvable.length})</button>}
+                  <button className="ts-btn ts-btn-ghost" onClick={() => handleDownloadCSV(listRows)}>📥 CSV</button>
+                </div>
+              </div>
+              <div className="ts-lrow head">{["Employee", "Project", "Date", "Hours", "Task", "Status", "Action"].map(h => <div key={h}>{h}</div>)}</div>
+              {listRows.length === 0 ? (
+                <div className="ts-empty"><div>📭</div>No entries match for this week</div>
+              ) : listRows.map(r => (
+                <div key={r.id} className="ts-lrow">
+                  <div className="ts-lemp"><span className="ts-avi">{mkAvi(r.employee_name || "")}</span><span>{r.employee_name}</span></div>
+                  <div><span className="ts-code" style={{ color: tsProjColor(r.project_id), background: tsProjColor(r.project_id) + "14", borderColor: tsProjColor(r.project_id) + "40" }} title={r.project_name}>{r.project_code}</span></div>
+                  <div style={{ color: C.textDim, fontSize: 12.5 }}>{new Date(tsDay(r) + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</div>
+                  <div style={{ fontWeight: 800, color: C.text }}>{tsH(r.hours)}</div>
+                  <div className="ts-ltask" title={r.task}>{r.task || "—"}</div>
+                  <div><Pill s={r.status} /></div>
+                  <div className="ts-lacts">
+                    {r.status === "pending" && !isMine(r) && (<>
+                      <button onClick={() => handleApprove(r.id)} style={{ background: C.green + "18", borderColor: C.green + "44", color: C.green }}>✓ Approve</button>
+                      <button onClick={() => handleReject(r.id)} aria-label="Reject" style={{ background: C.red + "18", borderColor: C.red + "44", color: C.red }}>✕</button>
                     </>)}
                   </div>
                 </div>
               ))}
             </div>
-          </Modal>
-        )}
+          )}
+        </div>
+      </div>
 
-        {/* ── Admin Weekly List View ── */}
-        {!viewOnly && (
-          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, overflow: "hidden" }}>
-            {/* List header */}
-            <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ width: 34, height: 34, borderRadius: 9, background: C.accent + "22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>📋</div>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Weekly Timesheet Requests</div>
-                  <div style={{ fontSize: 12, color: C.textMuted }}>List view for the selected week</div>
-                </div>
+      {/* Entry modal */}
+      {entry && (
+        <TsEntryModal
+          key={entry.id || entry.date}
+          init={entry}
+          projects={modalProjects}
+          recentIds={recentIds}
+          dayTotals={dayTotals}
+          onClose={() => setEntry(null)}
+          onSubmit={saveEntry}
+          onDelete={deleteEntry}
+        />
+      )}
+
+      {/* Day panel */}
+      {dayPanel && (
+        <div className="tsm-backdrop" onClick={() => setDayPanel(null)}>
+          <div className="tsm" role="dialog" aria-modal="true" onClick={e => e.stopPropagation()} onKeyDown={e => e.key === "Escape" && setDayPanel(null)}>
+            <div className="tsm-head">
+              <div>
+                <div className="tsm-title">{new Date(dayPanel + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</div>
+                <div className="tsm-sub">{panelRows.length} entr{panelRows.length === 1 ? "y" : "ies"} · {tsH(sumH(panelRows))}</div>
               </div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <select value={filterEmp} onChange={e => setFilterEmp(e.target.value)}
-                  style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, color: filterEmp ? C.text : C.textMuted, padding: "8px 12px", fontSize: 13, outline: "none", cursor: "pointer" }}>
-                  <option value="">All Employees</option>
-                  {Array.from(new Set(rows.map(r => r.employee_name))).map(name => (
-                    <option key={name} value={name}>{name}</option>
-                  ))}
-                </select>
-                <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-                  style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, color: filterStatus !== "all" ? C.text : C.textMuted, padding: "8px 12px", fontSize: 13, outline: "none", cursor: "pointer" }}>
-                  <option value="all">All Statuses</option>
-                  <option value="pending">Pending</option>
-                  <option value="approved">Approved</option>
-                  <option value="rejected">Rejected</option>
-                </select>
-                <button onClick={() => {
-                  const listFiltered = weekRowsAll.filter(r => {
-                    if (filterEmp && r.employee_name !== filterEmp) return false;
-                    if (filterStatus !== "all" && r.status !== filterStatus) return false;
-                    return true;
-                  });
-                  handleDownloadCSV(listFiltered);
-                }} style={{ background: C.accent + "18", border: `1px solid ${C.accent}44`, borderRadius: 10, color: C.accent, padding: "8px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-                  📥 CSV
-                </button>
-              </div>
+              <button className="ts-icon-btn" onClick={() => setDayPanel(null)} aria-label="Close">✕</button>
             </div>
-
-            {/* Column headers */}
-            <div className="ts-list-row" style={{ background: C.surface, padding: "9px 20px", borderBottom: `1px solid ${C.border}` }}>
-              {["Employee", "Project", "Date", "Hours", "Task", "Status", "Action"].map(h => (
-                <div key={h} style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>{h}</div>
+            <div className="tsm-body" style={{ gap: 10 }}>
+              {panelRows.length === 0 && <div className="ts-empty" style={{ padding: "24px 0" }}><div>🗓</div>Nothing logged on this day</div>}
+              {panelRows.map(r => (
+                <div key={r.id} className="tsm-prow" style={{ "--pc": tsProjColor(r.project_id) }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {!viewOnly && <div style={{ fontSize: 12, fontWeight: 700, color: C.textDim }}>{r.employee_name}</div>}
+                    <div style={{ fontSize: 14, fontWeight: 800, color: C.text }}>{r.project_code} <span style={{ color: C.textMuted, fontWeight: 600, fontSize: 12.5 }}>{r.project_name}</span></div>
+                    {r.task && <div style={{ fontSize: 12.5, color: C.textDim, marginTop: 3, overflowWrap: "anywhere" }}>{r.task}</div>}
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8, flexWrap: "wrap" }}>
+                      <b style={{ color: C.text, fontSize: 14 }}>{tsH(r.hours)}</b><Pill s={r.status} />
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
+                    {canEdit(r) && <button className="ts-btn ts-btn-ghost" style={{ padding: "7px 12px" }} onClick={() => { setDayPanel(null); openEdit(r); }}>✎ Edit</button>}
+                    {!viewOnly && r.status === "pending" && !isMine(r) && (<>
+                      <button className="ts-btn ts-btn-success" style={{ padding: "7px 12px" }} onClick={() => handleApprove(r.id)}>✓ Approve</button>
+                      <button className="ts-btn ts-btn-danger" style={{ padding: "7px 12px" }} onClick={() => handleReject(r.id)}>✕ Reject</button>
+                    </>)}
+                  </div>
+                </div>
               ))}
             </div>
-
-            {/* Rows */}
-            {(() => {
-              const listFiltered = weekRowsAll.filter(r => {
-                if (filterEmp && r.employee_name !== filterEmp) return false;
-                if (filterStatus !== "all" && r.status !== filterStatus) return false;
-                return true;
-              });
-
-              if (listFiltered.length === 0) return (
-                <div style={{ padding: "48px 20px", textAlign: "center", color: C.textMuted }}>
-                  <div style={{ fontSize: 32, marginBottom: 10 }}>📭</div>
-                  <div style={{ fontSize: 14, fontWeight: 600 }}>No timesheet entries found for this week</div>
-                </div>
-              );
-
-              return listFiltered.map(r => (
-                <div key={r.id} className="ts-list-row">
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ width: 28, height: 28, borderRadius: "50%", background: C.accent + "22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: C.accent, flexShrink: 0 }}>
-                      {mkAvi(r.employee_name || "")}
-                    </div>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{r.employee_name}</span>
-                  </div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: C.accent, background: C.accent + "14", border: `1px solid ${C.accent}33`, borderRadius: 6, padding: "2px 8px", width: "fit-content" }}>{r.project_code}</div>
-                  <div style={{ fontSize: 12, color: C.textDim }}>{r.work_date ? fmtD(r.work_date) : "—"}</div>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: C.text }}>{r.hours}h</div>
-                  <div style={{ fontSize: 12, color: C.textDim, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.task || "—"}</div>
-                  <div><StatusBadge status={r.status} /></div>
-                  <div>
-                    {r.status === "pending" && r.employee_id !== currentUser.employee_id && (
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <button onClick={() => handleApprove(r.id)}
-                          style={{ background: C.green + "18", border: `1px solid ${C.green}44`, borderRadius: 8, color: C.green, fontSize: 12, fontWeight: 700, padding: "4px 10px", cursor: "pointer" }}>✓ Approve</button>
-                        <button onClick={() => handleReject(r.id)}
-                          style={{ background: C.red + "18", border: `1px solid ${C.red}44`, borderRadius: 8, color: C.red, fontSize: 12, fontWeight: 700, padding: "4px 10px", cursor: "pointer" }}>✕</button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ));
-            })()}
+            {viewOnly && (
+              <div className="tsm-foot">
+                <span className="tsm-mini">{tsH(dayTotals[dayPanel] || 0)} of {TS_DAY_TARGET}h</span>
+                <button className="ts-btn ts-btn-primary" onClick={() => { const d = dayPanel; setDayPanel(null); openAdd(d); }}>＋ Log time</button>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </>
   );
 }
@@ -4131,47 +4525,222 @@ function AmendRow({ emp, initialBal, idx, onSaved }) {
 // Leave types that consume from the shared balance bucket
 const BALANCE_TYPES = new Set(["Sick", "Annual"]);
 
+// ── Leave helpers (module-level so modal inputs keep focus) ──
+const LV_TYPES = [
+  { value: "Annual", label: "Annual / Vacation", icon: "🌴", color: "#3B82F6", hint: "Uses balance" },
+  { value: "Sick", label: "Sick leave", icon: "🤒", color: "#EF4444", hint: "Uses balance" },
+  { value: "Unpaid", label: "Unpaid", icon: "⏸", color: "#94A3B8", hint: "No balance needed" },
+  { value: "Reserve", label: "Reserve / Floating", icon: "🗓️", color: "#06B6D4", hint: "Floating holiday" },
+  { value: "Maternity", label: "Maternity", icon: "🤰", color: "#EC4899", hint: "Statutory" },
+  { value: "Paternity", label: "Paternity", icon: "👶", color: "#8B5CF6", hint: "Statutory" },
+];
+const lvType = t => LV_TYPES.find(x => x.value === t) || { value: t, label: t, icon: "📋", color: "#94A3B8" };
+const lvISO = d => String(d || "").slice(0, 10);
+const lvDate = s => { const [y, m, d] = lvISO(s).split("-").map(Number); return new Date(y, (m || 1) - 1, d || 1); };
+const lvDays = (s, e, half) => {
+  if (!s || !e) return 0;
+  if (half && lvISO(s) === lvISO(e)) return 0.5;
+  const n = Math.round((lvDate(e) - lvDate(s)) / 86400000) + 1;
+  return n > 0 ? n : 0;
+};
+const lvWeekendDays = (s, e) => {
+  if (!s || !e) return 0;
+  let n = 0; const end = lvDate(e);
+  for (let d = lvDate(s); d <= end; d.setDate(d.getDate() + 1)) if ([0, 6].includes(d.getDay())) n++;
+  return n;
+};
+const lvFmt = (s, opts = { day: "numeric", month: "short" }) => lvDate(s).toLocaleDateString("en-GB", opts);
+const lvRange = (s, e) => lvISO(s) === lvISO(e) ? lvFmt(s, { weekday: "short", day: "numeric", month: "short", year: "numeric" })
+  : `${lvFmt(s)} – ${lvFmt(e, { day: "numeric", month: "short", year: "numeric" })}`;
+const lvToday = () => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`; };
+const lvAddDays = (iso, n) => { const d = lvDate(iso); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+const lvStatusColor = s => s === "approved" ? C.green : s === "rejected" ? C.red : C.amber;
+
+function LvRequestModal({ init, isEdit, admin, employees, balance, showBalance, otherLeaves, onEmployeeChange, onClose, onSubmit }) {
+  const [f, setF] = useState(init);
+  const [busy, setBusy] = useState(false);
+  const [tried, setTried] = useState(false);
+  const set = (k, v) => setF(p => ({ ...p, [k]: v }));
+
+  useEffect(() => {
+    const onKey = e => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const days = lvDays(f.startDate, f.endDate, f.isHalfDay);
+  const weekend = f.isHalfDay ? 0 : lvWeekendDays(f.startDate, f.endDate);
+  const usesBal = BALANCE_TYPES.has(f.type) && showBalance;
+  // pending edits already reserved their days → add them back for the check
+  const reserved = isEdit && BALANCE_TYPES.has(init.type) ? lvDays(init.startDate, init.endDate, init.isHalfDay) : 0;
+  const available = balance ? (parseFloat(balance.balance) || 0) + reserved : null;
+  const after = available !== null ? available - days : null;
+  const insufficient = usesBal && available !== null && days > available;
+  const overlaps = (otherLeaves || []).filter(l => (admin ? String(l.employee_id) === String(f.employeeId) : true)
+    && ["pending", "approved"].includes(l.status) && l.id !== init.id
+    && f.startDate && f.endDate && lvISO(l.start_date) <= f.endDate && lvISO(l.end_date) >= f.startDate);
+
+  const errs = {
+    employee: admin && !isEdit && !f.employeeId ? "Choose an employee" : null,
+    dates: !f.startDate || !f.endDate ? "Pick your dates" : f.endDate < f.startDate ? "End date is before start date" : null,
+    balance: insufficient ? `Only ${available} day${available !== 1 ? "s" : ""} available — reduce the dates or choose Unpaid.` : null,
+    overlap: overlaps.length ? `Overlaps an existing ${overlaps[0].status} request (${lvRange(overlaps[0].start_date, overlaps[0].end_date)}).` : null,
+  };
+  const valid = !errs.employee && !errs.dates && !errs.balance && !errs.overlap;
+
+  const today = lvToday();
+  const presets = [
+    { l: "Today", s: today, e: today },
+    { l: "Tomorrow", s: lvAddDays(today, 1), e: lvAddDays(today, 1) },
+    (() => { const d = lvDate(today); const toMon = (8 - d.getDay()) % 7 || 7; const s = lvAddDays(today, toMon); return { l: "Next week", s, e: lvAddDays(s, 4) }; })(),
+  ];
+
+  async function submit() {
+    setTried(true);
+    if (!valid || busy) return;
+    setBusy(true);
+    const ok = await onSubmit({ ...f, reason: (f.reason || "").trim() });
+    setBusy(false);
+    if (ok) onClose();
+  }
+
+  return (
+    <div className="lvm-backdrop" onClick={onClose}>
+      <div className="lvm" role="dialog" aria-modal="true" aria-label={isEdit ? "Edit leave request" : "Request leave"} onClick={e => e.stopPropagation()}>
+        <div className="lvm-head">
+          <div>
+            <div className="lvm-title">{isEdit ? "Edit request" : "Request time off"}</div>
+            <div className="lvm-sub">{isEdit ? "Changes keep the request pending for re-review" : "Your manager will be notified"}</div>
+          </div>
+          <button className="lv-icon-btn" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+
+        <div className="lvm-body">
+          {admin && !isEdit && (
+            <div className="lvm-field">
+              <label className="lvm-lbl" htmlFor="lvm-emp">Employee</label>
+              <select id="lvm-emp" className={`lvm-input${tried && errs.employee ? " err" : ""}`} value={f.employeeId}
+                onChange={e => { set("employeeId", e.target.value); onEmployeeChange(e.target.value); }}>
+                <option value="">Select employee…</option>
+                {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+              </select>
+              {tried && errs.employee && <div className="lvm-err">{errs.employee}</div>}
+            </div>
+          )}
+
+          <div className="lvm-field">
+            <label className="lvm-lbl">Leave type</label>
+            <div className="lvm-types" role="radiogroup" aria-label="Leave type">
+              {LV_TYPES.map(t => {
+                const on = f.type === t.value;
+                return (
+                  <button key={t.value} role="radio" aria-checked={on} className={`lvm-type${on ? " on" : ""}`} style={{ "--t": t.color }} onClick={() => set("type", t.value)}>
+                    <span className="lvm-type-ico">{t.icon}</span>
+                    <span className="lvm-type-txt"><b>{t.label}</b><small>{BALANCE_TYPES.has(t.value) && !showBalance ? "—" : t.hint}</small></span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="lvm-field">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <label className="lvm-lbl">Dates</label>
+              <div className="lvm-presets">
+                {presets.map(p => <button key={p.l} className="lvm-chip" onClick={() => setF(x => ({ ...x, startDate: p.s, endDate: p.e, isHalfDay: false }))}>{p.l}</button>)}
+              </div>
+            </div>
+            <div className="lvm-dates">
+              <div>
+                <label className="lvm-mini" htmlFor="lvm-start">From</label>
+                <input id="lvm-start" type="date" className={`lvm-input${tried && errs.dates && !f.startDate ? " err" : ""}`} value={f.startDate}
+                  onChange={e => { const v = e.target.value; setF(x => ({ ...x, startDate: v, endDate: x.isHalfDay || !x.endDate || x.endDate < v ? v : x.endDate })); }} />
+              </div>
+              <div>
+                <label className="lvm-mini" htmlFor="lvm-end">To</label>
+                <input id="lvm-end" type="date" min={f.startDate || undefined} className={`lvm-input${tried && errs.dates && f.startDate ? " err" : ""}`} value={f.endDate}
+                  disabled={f.isHalfDay} onChange={e => set("endDate", e.target.value)} />
+              </div>
+            </div>
+            <label className={`lvm-toggle${!f.startDate ? " disabled" : ""}`}>
+              <input type="checkbox" checked={f.isHalfDay} disabled={!f.startDate}
+                onChange={e => setF(x => ({ ...x, isHalfDay: e.target.checked, endDate: e.target.checked ? x.startDate : x.endDate }))} />
+              <span className="lvm-switch" aria-hidden />
+              Half day <span className="lvm-mini">(0.5 day, single date)</span>
+            </label>
+            {tried && errs.dates && <div className="lvm-err">{errs.dates}</div>}
+          </div>
+
+          {/* Summary / balance impact */}
+          {days > 0 && (
+            <div className={`lvm-summary${errs.balance || errs.overlap ? " bad" : ""}`}>
+              <div className="lvm-sum-row">
+                <div>
+                  <div className="lvm-sum-big">{days} <small>day{days !== 1 ? "s" : ""}</small></div>
+                  <div className="lvm-mini">{lvRange(f.startDate, f.endDate)}{weekend > 0 ? ` · includes ${weekend} weekend day${weekend !== 1 ? "s" : ""}` : ""}</div>
+                </div>
+                {usesBal && available !== null && (
+                  <div style={{ textAlign: "right" }}>
+                    <div className="lvm-mini">Balance after</div>
+                    <div className="lvm-sum-big" style={{ color: insufficient ? C.red : after < 2 ? C.amber : C.green }}>{insufficient ? "—" : after}<small> / {available}</small></div>
+                  </div>
+                )}
+              </div>
+              {usesBal && available !== null && available > 0 && (
+                <div className="lvm-bar">
+                  <div style={{ width: `${Math.min(100, (Math.max(after, 0) / available) * 100)}%`, background: C.green }} />
+                  <div style={{ width: `${Math.min(100, (Math.min(days, available) / available) * 100)}%`, background: insufficient ? C.red : C.amber }} />
+                </div>
+              )}
+              {weekend > 0 && !errs.balance && <div className="lvm-note">ℹ Leave is counted in calendar days, so weekends inside the range are included.</div>}
+              {errs.balance && <div className="lvm-err">⚠ {errs.balance}</div>}
+              {errs.overlap && <div className="lvm-err">⚠ {errs.overlap}</div>}
+            </div>
+          )}
+
+          <div className="lvm-field">
+            <label className="lvm-lbl" htmlFor="lvm-reason">Reason <span className="lvm-mini">optional</span></label>
+            <textarea id="lvm-reason" className="lvm-input" rows={3} maxLength={300} value={f.reason} onChange={e => set("reason", e.target.value)} placeholder="e.g. Family function, doctor's appointment…" />
+            <div className="lvm-mini" style={{ textAlign: "right" }}>{(f.reason || "").length}/300</div>
+          </div>
+        </div>
+
+        <div className="lvm-foot">
+          <button className="lv-btn lv-btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="lv-btn lv-btn-primary" onClick={submit} disabled={busy || (tried && !valid)}>
+            {busy ? "Saving…" : isEdit ? "Save changes" : days > 0 ? `Request ${days} day${days !== 1 ? "s" : ""}` : "Submit request"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Leaves({ currentUser, viewOnly }) {
   const [rows, setRows] = useState([]); const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true); const [err, setErr] = useState("");
-  const [modal, setModal] = useState(false);
-  const [form, setForm] = useState({ employeeId: "", type: "Annual", startDate: "", endDate: "", reason: "", isHalfDay: false });
-  const [saving, setSaving] = useState(false);
-  const [balance, setBalance] = useState(null);   // { balance, total_credited, total_used, last_credited_month }
+  const [balance, setBalance] = useState(null);
+  const [formBalance, setFormBalance] = useState(null);
   const [crediting, setCrediting] = useState(false);
-  const [leaveSettings, setLeaveSettings] = useState({});   // { holiday_link: "..." }
-  const [allBalances, setAllBalances] = useState({});       // { "emp_id": { balance, ... } } for admin/manager
+  const [leaveSettings, setLeaveSettings] = useState({});
+  const [allBalances, setAllBalances] = useState({});
   const [settingsModal, setSettingsModal] = useState(false);
   const [settingsForm, setSettingsForm] = useState({ holiday_link: "" });
   const [settingsSaving, setSettingsSaving] = useState(false);
-  // { employeeId, employeeName, balance, total_credited, total_used }
-  const [editBalanceTarget, setEditBalanceTarget] = useState(null);
-  const [editBalanceSaving, setEditBalanceSaving] = useState(false);
-  const [editLeave, setEditLeave] = useState(null);   // leave row being edited
-  const [editForm, setEditForm] = useState({ type: "Annual", startDate: "", endDate: "", reason: "", isHalfDay: false });
-  const [editSaving, setEditSaving] = useState(false);
-  // Pagination
+  const [amendOpen, setAmendOpen] = useState(false);
+  const [reqModal, setReqModal] = useState(null); // { init, isEdit }
+  const [view, setView] = useState("list");      // list | calendar
+  const [statusTab, setStatusTab] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("");
+  const [search, setSearch] = useState("");
+  const [calMonth, setCalMonth] = useState(() => { const n = new Date(); return { y: n.getFullYear(), m: n.getMonth() }; });
   const [lvPage, setLvPage] = useState(1);
   const [lvPerPage, setLvPerPage] = useState(10);
+  const [actingId, setActingId] = useState(null);
 
-  // Compute days selected in the form
-  const selectedDays = (() => {
-    if (!form.startDate || !form.endDate) return 0;
-    if (form.isHalfDay && form.startDate === form.endDate) return 0.5;
-    const s = new Date(form.startDate), e = new Date(form.endDate);
-    const d = Math.round((e - s) / 86400000) + 1;
-    return d > 0 ? d : 0;
-  })();
-  const willDeduct = BALANCE_TYPES.has(form.type) && selectedDays > 0;
-  const balAfter = balance ? Math.max((parseFloat(balance.balance) || 0) - selectedDays, 0) : 0;
-  const insufficient = willDeduct && balance && selectedDays > parseFloat(balance.balance);
-  const isIntern = (() => {
-    const me = employees.find(e => e.id === currentUser.employee_id);
-    return me ? /intern|intras/i.test(me.group_name || "") : false;
-  })();
-
-  const load = useCallback(async () => {
-    setLoading(true); setErr("");
+  const load = async (silent) => {
+    if (!silent) setLoading(true);
+    setErr("");
     try {
       const params = {}; if (viewOnly) params.employee_id = currentUser.employee_id;
       const [lv, em, bal, settings, allBal] = await Promise.all([
@@ -4181,51 +4750,45 @@ function Leaves({ currentUser, viewOnly }) {
         api.getLeaveSettings().catch(() => ({})),
         (!viewOnly ? api.getAllLeaveBalances().catch(() => ({})) : Promise.resolve({})),
       ]);
-      setRows(lv); setEmployees(em); setBalance(bal);
+      setRows(lv || []); setEmployees(em || []); setBalance(bal);
       setLeaveSettings(settings || {});
       setSettingsForm({ holiday_link: settings?.holiday_link || "" });
       setAllBalances(allBal || {});
     } catch (e) { setErr(e.message); } finally { setLoading(false); }
-  });
+  };
   useEffect(() => { load(); }, []);
+  useEffect(() => { setLvPage(1); }, [statusTab, typeFilter, search]);
 
-  // Refresh balance for a specific employee in the modal (admin view)
+  const errAlert = e => dialog.alert(e.message, { title: "Error", dtype: "error" });
+  const isAdmin = currentUser.role === "admin";
+  const isIntern = (() => {
+    const me = employees.find(e => e.id === currentUser.employee_id);
+    return me ? /intern|intras/i.test(me.group_name || "") : false;
+  })();
+
   async function loadBalanceFor(empId) {
-    if (!empId) { setBalance(null); return; }
-    try { setBalance(await api.getLeaveBalance(empId)); } catch { setBalance(null); }
+    if (!empId) { setFormBalance(null); return; }
+    try { setFormBalance(await api.getLeaveBalance(empId)); } catch { setFormBalance(null); }
   }
 
-  async function handleCreate() {
-    if (!form.startDate || !form.endDate) return;
-    if (insufficient) { dialog.alert("Insufficient leave balance.", { title: "Not enough balance", dtype: "warning" }); return; }
-    setSaving(true);
+  async function submitRequest(f, isEdit, id) {
     try {
-      const empId = viewOnly ? currentUser.employee_id : +form.employeeId;
-      await api.createLeave({ employeeId: empId, ...form });
-      setModal(false); setForm({ employeeId: "", type: "Annual", startDate: "", endDate: "", reason: "", isHalfDay: false });
-      await load();
-    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setSaving(false); }
+      if (isEdit) await api.updateLeave(id, { type: f.type, startDate: f.startDate, endDate: f.endDate, reason: f.reason, isHalfDay: f.isHalfDay });
+      else await api.createLeave({ employeeId: viewOnly ? currentUser.employee_id : +f.employeeId, type: f.type, startDate: f.startDate, endDate: f.endDate, reason: f.reason, isHalfDay: f.isHalfDay });
+      await load(true);
+      return true;
+    } catch (e) { errAlert(e); return false; }
   }
-
-  function openEditLeave(l) {
-    setEditLeave(l);
-    setEditForm({
-      type: l.leave_type,
-      startDate: String(l.start_date).slice(0, 10),
-      endDate: String(l.end_date).slice(0, 10),
-      reason: l.reason || "",
-      isHalfDay: !!l.is_half_day,
-    });
+  async function withdraw(l) {
+    const refund = BALANCE_TYPES.has(l.leave_type) ? ` ${lvDays(l.start_date, l.end_date, l.is_half_day)} day(s) will be returned to your balance.` : "";
+    if (!await dialog.confirm(`Withdraw your ${l.leave_type} leave request for ${lvRange(l.start_date, l.end_date)}?${refund}`, { title: "Withdraw request", dtype: "warning" })) return;
+    setActingId(l.id);
+    try { await api.deleteLeave(l.id); await load(true); } catch (e) { errAlert(e); } finally { setActingId(null); }
   }
-
-  async function handleUpdateLeave() {
-    if (!editForm.startDate || !editForm.endDate) return;
-    setEditSaving(true);
-    try {
-      await api.updateLeave(editLeave.id, editForm);
-      setEditLeave(null);
-      await load();
-    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setEditSaving(false); }
+  async function act(l, kind) {
+    if (kind === "reject" && !await dialog.confirm(`Reject ${l.employee_name}'s ${l.leave_type} leave (${lvRange(l.start_date, l.end_date)})?`, { title: "Reject leave", dtype: "warning" })) return;
+    setActingId(l.id);
+    try { await (kind === "approve" ? api.approveLeave(l.id) : api.rejectLeave(l.id)); await load(true); } catch (e) { errAlert(e); } finally { setActingId(null); }
   }
 
   async function handleCreditMonthly() {
@@ -4234,15 +4797,9 @@ function Leaves({ currentUser, viewOnly }) {
     try {
       const res = await api.creditMonthlyLeaves();
       dialog.alert(`✅ Credited ${res.credited} employee(s) for ${res.month}. ${res.credited === 0 ? "All already credited this month." : ""}`, { title: "Monthly Credit Done" });
-      await load();
-    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setCrediting(false); }
+      await load(true);
+    } catch (e) { errAlert(e); } finally { setCrediting(false); }
   }
-
-  const summary = { total: rows.length, pending: rows.filter(l => l.status === "pending").length, approved: rows.filter(l => l.status === "approved").length };
-  const cols = [...(!viewOnly ? ["Employee"] : []), "Type", "From", "To", "Days", "Reason", "Status", ...(!viewOnly ? ["Balance", "Action"] : [])];
-  const balNum = balance ? parseFloat(balance.balance) || 0 : 0;
-  const balColor = balNum >= 4 ? C.green : balNum >= 2 ? C.amber : C.red;
-
   async function handleSaveSettings() {
     setSettingsSaving(true);
     try {
@@ -4250,413 +4807,570 @@ function Leaves({ currentUser, viewOnly }) {
       setLeaveSettings({ ...leaveSettings, ...settingsForm });
       setSettingsModal(false);
       dialog.alert("Holiday calendar link saved!", { title: "Settings Saved", dtype: "success" });
-    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setSettingsSaving(false); }
-  }
-
-  async function handleSaveBalance() {
-    if (!editBalanceTarget) return;
-    setEditBalanceSaving(true);
-    try {
-      const updated = await api.updateLeaveBalance(editBalanceTarget.employeeId, {
-        balance: parseFloat(editBalanceTarget.balance) || 0,
-        total_credited: parseFloat(editBalanceTarget.total_credited) || 0,
-        total_used: parseFloat(editBalanceTarget.total_used) || 0,
-      });
-      setAllBalances(prev => ({
-        ...prev,
-        [String(editBalanceTarget.employeeId)]: {
-          balance: parseFloat(updated.balance) || 0,
-          total_credited: parseFloat(updated.total_credited) || 0,
-          total_used: parseFloat(updated.total_used) || 0,
-        },
-      }));
-      setEditBalanceTarget(null);
-      dialog.alert("Leave balance updated!", { title: "Updated", dtype: "success" });
-    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setEditBalanceSaving(false); }
+    } catch (e) { errAlert(e); } finally { setSettingsSaving(false); }
   }
 
   if (loading) return <Spinner />;
-  if (err) return <ErrBox msg={err} onRetry={load} />;
+  if (err) return <ErrBox msg={err} onRetry={() => load()} />;
+
+  // ── derived ──
+  const today = lvToday();
+  const year = new Date().getFullYear();
+  const balNum = balance ? parseFloat(balance.balance) || 0 : 0;
+  const balCred = balance ? parseFloat(balance.total_credited) || 0 : 0;
+  const balUsed = balance ? parseFloat(balance.total_used) || 0 : 0;
+  const balColor = balNum >= 4 ? C.green : balNum >= 2 ? C.amber : C.red;
+  const showBal = viewOnly && balance !== null && !isIntern;
+  const count = s => rows.filter(l => l.status === s).length;
+  const daysOf = l => lvDays(l.start_date, l.end_date, l.is_half_day);
+
+  const thisYear = rows.filter(l => lvISO(l.start_date).slice(0, 4) === String(year) && l.status === "approved");
+  const byType = LV_TYPES.map(t => ({ ...t, days: thisYear.filter(l => l.leave_type === t.value).reduce((s, l) => s + daysOf(l), 0) })).filter(t => t.days > 0);
+  const takenYear = byType.reduce((s, t) => s + t.days, 0);
+
+  const upcoming = rows.filter(l => l.status !== "rejected" && lvISO(l.end_date) >= today)
+    .sort((a, b) => lvISO(a.start_date).localeCompare(lvISO(b.start_date)));
+  const nextLeave = viewOnly ? upcoming[0] : null;
+  const daysUntil = nextLeave ? Math.round((lvDate(nextLeave.start_date) - lvDate(today)) / 86400000) : null;
+
+  const outToday = !viewOnly ? rows.filter(l => l.status === "approved" && lvISO(l.start_date) <= today && lvISO(l.end_date) >= today) : [];
+  const weekEnd = lvAddDays(today, 6);
+  const outWeek = !viewOnly ? rows.filter(l => l.status === "approved" && lvISO(l.start_date) <= weekEnd && lvISO(l.end_date) >= today) : [];
+
+  const q = search.trim().toLowerCase();
+  const filtered = rows.filter(l => (statusTab === "all" || l.status === statusTab)
+    && (!typeFilter || l.leave_type === typeFilter)
+    && (!q || `${l.employee_name || ""} ${l.leave_type} ${l.reason || ""}`.toLowerCase().includes(q)))
+    .sort((a, b) => (a.status === "pending" ? 0 : 1) - (b.status === "pending" ? 0 : 1) || lvISO(b.start_date).localeCompare(lvISO(a.start_date)));
+  const paged = filtered.slice((lvPage - 1) * lvPerPage, lvPage * lvPerPage);
+
+  const openNew = () => {
+    setFormBalance(viewOnly ? balance : null);
+    setReqModal({ isEdit: false, init: { employeeId: "", type: "Annual", startDate: "", endDate: "", reason: "", isHalfDay: false } });
+  };
+  const openEdit = l => {
+    setFormBalance(viewOnly ? balance : (allBalances[String(l.employee_id)] || null));
+    setReqModal({ isEdit: true, id: l.id, init: { id: l.id, employeeId: String(l.employee_id), type: l.leave_type, startDate: lvISO(l.start_date), endDate: lvISO(l.end_date), reason: l.reason || "", isHalfDay: !!l.is_half_day } });
+  };
+
+  // ── calendar ──
+  const renderCalendar = () => {
+    const { y, m } = calMonth;
+    const first = new Date(y, m, 1), last = new Date(y, m + 1, 0);
+    const cells = [];
+    for (let i = 0; i < (first.getDay() + 6) % 7; i++) cells.push(null);
+    for (let d = 1; d <= last.getDate(); d++) cells.push(`${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
+    while (cells.length % 7) cells.push(null);
+    const active = rows.filter(l => l.status !== "rejected");
+    return (
+      <div className="lv-card">
+        <div className="lv-cal-top">
+          <div className="lv-nav">
+            <button onClick={() => setCalMonth(({ y, m }) => m === 0 ? { y: y - 1, m: 11 } : { y, m: m - 1 })} aria-label="Previous month">‹</button>
+            <span>{first.toLocaleDateString("en-US", { month: "long", year: "numeric" })}</span>
+            <button onClick={() => setCalMonth(({ y, m }) => m === 11 ? { y: y + 1, m: 0 } : { y, m: m + 1 })} aria-label="Next month">›</button>
+          </div>
+          <div className="lv-cal-legend">
+            {LV_TYPES.slice(0, 4).map(t => <span key={t.value}><i style={{ background: t.color }} />{t.label.split(" ")[0]}</span>)}
+            <span><i style={{ background: "transparent", border: `1.5px dashed ${C.amber}` }} />Pending</span>
+          </div>
+        </div>
+        <div className="lv-cal-head">{DAY_NAMES.map(d => <div key={d}>{d}</div>)}</div>
+        <div className="lv-cal">
+          {cells.map((iso, i) => {
+            if (!iso) return <div key={i} className="lv-cday blank" />;
+            const on = active.filter(l => lvISO(l.start_date) <= iso && lvISO(l.end_date) >= iso);
+            const dow = lvDate(iso).getDay();
+            return (
+              <div key={iso} className={`lv-cday${iso === today ? " today" : ""}${dow === 0 || dow === 6 ? " we" : ""}`}
+                title={on.map(l => `${viewOnly ? "" : (l.employee_name || "") + " · "}${l.leave_type} (${l.status})`).join("\n")}>
+                <span className="lv-cnum">{+iso.slice(8)}</span>
+                <div className="lv-cchips">
+                  {on.slice(0, viewOnly ? 2 : 3).map(l => {
+                    const t = lvType(l.leave_type);
+                    return (
+                      <span key={l.id} className={`lv-cchip${l.status === "pending" ? " pending" : ""}`} style={{ "--t": t.color }}>
+                        <span className="lv-cchip-ico">{t.icon}</span><span className="lv-cchip-txt">{viewOnly ? (l.is_half_day ? "½ day" : t.label.split(" ")[0]) : (l.employee_name || "").split(" ")[0]}</span>
+                      </span>
+                    );
+                  })}
+                  {on.length > (viewOnly ? 2 : 3) && <span className="lv-cmore">+{on.length - (viewOnly ? 2 : 3)}</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  // ── request card ──
+  const renderCard = l => {
+    const t = lvType(l.leave_type);
+    const d = daysOf(l);
+    const sc = lvStatusColor(l.status);
+    const isUpcoming = lvISO(l.start_date) > today;
+    const isOngoing = lvISO(l.start_date) <= today && lvISO(l.end_date) >= today;
+    const empBal = !viewOnly ? (allBalances[String(l.employee_id)] || null) : null;
+    const empBalNum = empBal ? parseFloat(empBal.balance) || 0 : null;
+    const mine = l.employee_id === currentUser.employee_id;
+    const canManage = !viewOnly && l.status === "pending" && (isAdmin || !mine);
+    const busy = actingId === l.id;
+    return (
+      <article key={l.id} className="lv-req" style={{ "--t": t.color, "--s": sc }}>
+        <div className="lv-req-date">
+          <span className="lv-req-mon">{lvFmt(l.start_date, { month: "short" })}</span>
+          <span className="lv-req-day">{lvDate(l.start_date).getDate()}</span>
+          <span className="lv-req-dow">{lvFmt(l.start_date, { weekday: "short" })}</span>
+        </div>
+        <div className="lv-req-main">
+          {!viewOnly && (
+            <div className="lv-req-emp">
+              <span className="lv-avi" style={{ background: (l.group_color || C.accent) + "26", color: l.group_color || C.accent }}>{l.avatar || mkAvi(l.employee_name)}</span>
+              <b>{l.employee_name}</b>
+              {empBalNum !== null && <span className="lv-tag" style={{ color: empBalNum >= 4 ? C.green : empBalNum >= 2 ? C.amber : C.red }}>Bal {empBalNum}d</span>}
+            </div>
+          )}
+          <div className="lv-req-title">
+            <span className="lv-type" style={{ color: t.color, background: t.color + "18", borderColor: t.color + "40" }}>{t.icon} {t.label}</span>
+            {l.is_half_day && <span className="lv-tag">🌗 Half day</span>}
+            {isOngoing && l.status === "approved" && <span className="lv-tag" style={{ color: C.green }}>● On leave now</span>}
+            {isUpcoming && l.status !== "rejected" && <span className="lv-tag">Upcoming</span>}
+          </div>
+          <div className="lv-req-range">{lvRange(l.start_date, l.end_date)} <span>· {d} day{d !== 1 ? "s" : ""}</span></div>
+          {l.reason && <div className="lv-req-reason">“{l.reason}”</div>}
+        </div>
+        <div className="lv-req-side">
+          <span className="lv-status" style={{ color: sc, background: sc + "18", borderColor: sc + "40" }}><i style={{ background: sc }} />{l.status[0].toUpperCase() + l.status.slice(1)}</span>
+          <div className="lv-req-acts">
+            {viewOnly && l.status === "pending" && (<>
+              <button className="lv-btn lv-btn-ghost sm" onClick={() => openEdit(l)} disabled={busy}>✎ Edit</button>
+              <button className="lv-btn lv-btn-danger sm" onClick={() => withdraw(l)} disabled={busy}>{busy ? "…" : "Withdraw"}</button>
+            </>)}
+            {canManage && (<>
+              <button className="lv-btn lv-btn-success sm" onClick={() => act(l, "approve")} disabled={busy}>{busy ? "…" : "✓ Approve"}</button>
+              <button className="lv-btn lv-btn-danger sm" onClick={() => act(l, "reject")} disabled={busy} aria-label="Reject">✕ Reject</button>
+            </>)}
+          </div>
+        </div>
+      </article>
+    );
+  };
+
+  const ring = (p, color, size = 112, stroke = 10) => {
+    const r = (size - stroke) / 2, c = 2 * Math.PI * r;
+    return (
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={C.border} strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round"
+          strokeDasharray={c} strokeDashoffset={c * (1 - Math.max(0, Math.min(1, p)))} transform={`rotate(-90 ${size / 2} ${size / 2})`} style={{ transition: "stroke-dashoffset .6s ease" }} />
+      </svg>
+    );
+  };
+
+  const tabs = [["all", "All", rows.length], ["pending", "Pending", count("pending")], ["approved", "Approved", count("approved")], ["rejected", "Rejected", count("rejected")]];
 
   return (
     <>
       <style>{`
-        .lv-kpi-row { display: flex; gap: 12px; flex-wrap: wrap; }
-        .lv-kpi-card { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 14px; padding: 14px 20px; display: flex; align-items: center; gap: 12px; flex: 1 1 160px; transition: box-shadow .2s; }
-        .lv-kpi-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
-        .lv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 14px; }
-        .lv-card { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; transition: transform .15s, box-shadow .15s; }
-        .lv-card:hover { transform: translateY(-1px); box-shadow: 0 6px 28px rgba(0,0,0,0.35); }
-        @media (max-width: 600px) {
-          .lv-kpi-row { gap: 8px; }
-          .lv-kpi-card { flex: 1 1 140px; padding: 12px 16px; }
-          .lv-grid { grid-template-columns: 1fr; }
+        .lv { container-type: inline-size; container-name: lv; }
+        .lv-wrap { display: flex; flex-direction: column; gap: 18px; }
+        .lv-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 10px 16px; border-radius: 12px; font-size: 13px; font-weight: 700; cursor: pointer; border: 1px solid transparent; font-family: inherit; transition: transform .15s, opacity .15s, border-color .15s; white-space: nowrap; text-decoration: none; }
+        .lv-btn.sm { padding: 7px 12px; font-size: 12px; border-radius: 10px; }
+        .lv-btn:hover:not(:disabled) { transform: translateY(-1px); }
+        .lv-btn:disabled { opacity: .5; cursor: not-allowed; }
+        .lv-btn-primary { background: ${C.accent}; color: #fff; box-shadow: 0 8px 22px ${C.accent}40; }
+        .lv-btn-ghost { background: ${C.surface}; color: ${C.text}; border-color: ${C.border}; }
+        .lv-btn-ghost:hover:not(:disabled) { border-color: ${C.accent}77; }
+        .lv-btn-danger { background: ${C.red}14; color: ${C.red}; border-color: ${C.red}40; }
+        .lv-btn-success { background: ${C.green}18; color: ${C.green}; border-color: ${C.green}44; }
+        .lv-icon-btn { width: 36px; height: 36px; border-radius: 10px; border: 1px solid ${C.border}; background: ${C.surface}; color: ${C.textDim}; cursor: pointer; font-size: 15px; font-family: inherit; flex-shrink: 0; }
+        .lv-wrap button:focus-visible, .lvm button:focus-visible, .lv-wrap a:focus-visible { outline: 2px solid ${C.accent}; outline-offset: 2px; }
+
+        .lv-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+        .lv-title { margin: 0; font-size: clamp(22px, 2.4vw, 26px); font-weight: 800; color: ${C.text}; letter-spacing: -0.5px; }
+        .lv-subtitle { margin: 4px 0 0; color: ${C.textMuted}; font-size: 13px; }
+        .lv-head-acts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+        .lv-card { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 20px; padding: 18px; min-width: 0; }
+        .lv-top { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+        .lv-bal { display: flex; align-items: center; gap: 20px; position: relative; overflow: hidden; }
+        .lv-bal::after { content: ""; position: absolute; right: -40px; top: -40px; width: 160px; height: 160px; border-radius: 50%; background: ${balColor}; opacity: .07; pointer-events: none; }
+        .lv-ring { position: relative; width: 112px; height: 112px; flex-shrink: 0; }
+        .lv-ring div { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .lv-ring b { font-size: 30px; font-weight: 800; line-height: 1; letter-spacing: -1px; }
+        .lv-ring small { font-size: 10.5px; color: ${C.textMuted}; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; margin-top: 4px; }
+        .lv-eyebrow { font-size: 11px; font-weight: 800; color: ${C.textMuted}; letter-spacing: .8px; text-transform: uppercase; }
+        .lv-big { font-size: 19px; font-weight: 800; color: ${C.text}; margin-top: 4px; }
+        .lv-mini { font-size: 12px; color: ${C.textMuted}; margin-top: 3px; }
+        .lv-bal-stats { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+        .lv-bal-stats div { background: ${C.surface}; border: 1px solid ${C.border}66; border-radius: 12px; padding: 8px 12px; min-width: 76px; }
+        .lv-bal-stats b { display: block; font-size: 16px; font-weight: 800; }
+        .lv-bal-stats span { font-size: 11px; color: ${C.textMuted}; font-weight: 600; }
+
+        .lv-next { display: flex; flex-direction: column; gap: 10px; }
+        .lv-next-main { display: flex; align-items: center; gap: 14px; }
+        .lv-next-ico { width: 52px; height: 52px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0; }
+        .lv-count { font-size: 12px; font-weight: 800; padding: 4px 10px; border-radius: 999px; width: fit-content; }
+        .lv-typebar { height: 10px; border-radius: 6px; overflow: hidden; display: flex; background: ${C.border}; margin: 12px 0 10px; }
+        .lv-typebar div { height: 100%; }
+        .lv-typelist { display: flex; flex-direction: column; gap: 7px; }
+        .lv-typelist div { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: ${C.text}; font-weight: 600; }
+        .lv-typelist i { width: 9px; height: 9px; border-radius: 3px; }
+        .lv-typelist b { margin-left: auto; color: ${C.textDim}; }
+        .lv-out { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+        .lv-out span { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: ${C.text}; background: ${C.surface}; border: 1px solid ${C.border}; border-radius: 999px; padding: 4px 10px 4px 4px; }
+        .lv-avi { width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; flex-shrink: 0; }
+
+        .lv-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .lv-tabs { display: inline-flex; background: ${C.surface}; border: 1px solid ${C.border}; border-radius: 12px; padding: 3px; overflow-x: auto; scrollbar-width: none; max-width: 100%; }
+        .lv-tabs button { background: transparent; border: 1px solid transparent; color: ${C.textMuted}; border-radius: 9px; padding: 7px 12px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+        .lv-tabs button.on { background: ${C.card}; color: ${C.text}; border-color: ${C.border}; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
+        .lv-tabs em { font-style: normal; font-size: 11px; background: ${C.border}; color: ${C.textDim}; border-radius: 999px; padding: 1px 7px; }
+        .lv-tabs button.on em { background: ${C.accent}; color: #fff; }
+        .lv-spacer { flex: 1; }
+        .lv-input { background: ${C.surface}; border: 1px solid ${C.border}; border-radius: 10px; color: ${C.text}; padding: 8px 12px; font-size: 13px; outline: none; font-family: inherit; }
+        .lv-input:focus { border-color: ${C.accent}; }
+
+        .lv-list { display: flex; flex-direction: column; gap: 10px; }
+        .lv-req { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 16px; align-items: center; background: ${C.card}; border: 1px solid ${C.border}; border-radius: 18px; padding: 14px 16px; position: relative; overflow: hidden; transition: border-color .15s, transform .15s; }
+        .lv-req::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--s); opacity: .8; }
+        .lv-req:hover { border-color: color-mix(in srgb, var(--t) 45%, ${C.border}); }
+        .lv-req-date { display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 14px; padding: 8px 0; background: color-mix(in srgb, var(--t) 14%, ${C.surface}); border: 1px solid color-mix(in srgb, var(--t) 30%, transparent); }
+        .lv-req-mon { font-size: 10.5px; font-weight: 800; color: var(--t); text-transform: uppercase; letter-spacing: .6px; }
+        .lv-req-day { font-size: 22px; font-weight: 800; color: ${C.text}; line-height: 1.1; }
+        .lv-req-dow { font-size: 10.5px; color: ${C.textMuted}; font-weight: 700; }
+        .lv-req-main { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+        .lv-req-emp { display: flex; align-items: center; gap: 8px; font-size: 13px; color: ${C.text}; min-width: 0; }
+        .lv-req-emp b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .lv-req-title { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        .lv-type { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 800; padding: 4px 10px; border-radius: 999px; border: 1px solid; }
+        .lv-tag { font-size: 11px; font-weight: 700; color: ${C.textDim}; background: ${C.surface}; border: 1px solid ${C.border}; padding: 3px 8px; border-radius: 999px; white-space: nowrap; }
+        .lv-req-range { font-size: 14px; font-weight: 700; color: ${C.text}; }
+        .lv-req-range span { color: ${C.textMuted}; font-weight: 600; }
+        .lv-req-reason { font-size: 12.5px; color: ${C.textDim}; font-style: italic; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .lv-req-side { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+        .lv-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 800; padding: 4px 10px; border-radius: 999px; border: 1px solid; white-space: nowrap; }
+        .lv-status i, .lv-cal-legend i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+        .lv-req-acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+        .lv-empty { text-align: center; padding: 48px 20px; color: ${C.textMuted}; font-size: 13.5px; }
+        .lv-empty div { font-size: 34px; margin-bottom: 8px; }
+
+        .lv-cal-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+        .lv-nav { display: inline-flex; align-items: center; gap: 4px; background: ${C.surface}; border: 1px solid ${C.border}; border-radius: 12px; padding: 3px; }
+        .lv-nav button { width: 32px; height: 32px; border: none; border-radius: 9px; background: transparent; color: ${C.textDim}; font-size: 18px; cursor: pointer; font-family: inherit; }
+        .lv-nav button:hover { background: ${C.card}; color: ${C.text}; }
+        .lv-nav span { min-width: 140px; text-align: center; font-weight: 800; color: ${C.text}; font-size: 14px; }
+        .lv-cal-legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 11.5px; color: ${C.textMuted}; }
+        .lv-cal-legend span { display: inline-flex; align-items: center; gap: 5px; }
+        .lv-cal-head, .lv-cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+        .lv-cal-head div { text-align: center; font-size: 11px; font-weight: 800; color: ${C.textMuted}; text-transform: uppercase; letter-spacing: .6px; padding-bottom: 6px; }
+        .lv-cday { min-height: 92px; border-radius: 12px; border: 1px solid ${C.border}; background: ${C.surface}; padding: 6px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+        .lv-cday.blank { background: transparent; border-color: transparent; }
+        .lv-cday.we { background: ${C.bg}; }
+        .lv-cday.today { border-color: ${C.accent}; box-shadow: 0 0 0 2px ${C.accentGlow}; }
+        .lv-cnum { font-size: 12px; font-weight: 800; color: ${C.text}; }
+        .lv-cday.today .lv-cnum { color: ${C.accent}; }
+        .lv-cchips { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+        .lv-cchip { display: flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 700; color: ${C.text}; background: color-mix(in srgb, var(--t) 24%, ${C.card}); border: 1px solid color-mix(in srgb, var(--t) 45%, transparent); border-radius: 6px; padding: 2px 5px; min-width: 0; }
+        .lv-cchip.pending { background: transparent; border-style: dashed; border-color: ${C.amber}; }
+        .lv-cchip-txt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .lv-cmore { font-size: 10.5px; color: ${C.textMuted}; font-weight: 700; padding-left: 2px; }
+
+        /* Request modal */
+        .lvm-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.66); backdrop-filter: blur(3px); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .lvm { width: 100%; max-width: 600px; max-height: min(92vh, 900px); display: flex; flex-direction: column; background: ${C.card}; border: 1px solid ${C.border}; border-radius: 22px; box-shadow: 0 30px 80px rgba(0,0,0,.6); overflow: hidden; animation: lvmIn .18s ease-out; }
+        @keyframes lvmIn { from { transform: translateY(12px); opacity: 0; } }
+        .lvm-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 20px 22px 14px; border-bottom: 1px solid ${C.border}; }
+        .lvm-title { font-size: 18px; font-weight: 800; color: ${C.text}; }
+        .lvm-sub { font-size: 12.5px; color: ${C.textMuted}; margin-top: 3px; }
+        .lvm-body { padding: 18px 22px; overflow-y: auto; display: flex; flex-direction: column; gap: 18px; }
+        .lvm-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 22px; border-top: 1px solid ${C.border}; background: ${C.surface}; }
+        .lvm-field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+        .lvm-lbl { font-size: 12.5px; font-weight: 800; color: ${C.textDim}; }
+        .lvm-mini { font-size: 11.5px; color: ${C.textMuted}; font-weight: 600; }
+        .lvm-input { width: 100%; box-sizing: border-box; background: ${C.surface}; border: 1px solid ${C.border}; border-radius: 12px; color: ${C.text}; padding: 10px 12px; font-size: 14px; font-family: inherit; outline: none; resize: vertical; color-scheme: ${C.bg === DARK.bg ? "dark" : "light"}; }
+        .lvm-input:focus { border-color: ${C.accent}; box-shadow: 0 0 0 3px ${C.accentGlow}; }
+        .lvm-input:disabled { opacity: .55; }
+        .lvm-input.err { border-color: ${C.red}; }
+        .lvm-err { font-size: 12px; color: ${C.red}; font-weight: 600; }
+        .lvm-note { font-size: 12px; color: ${C.textDim}; }
+        .lvm-types { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+        .lvm-type { --t: ${C.accent}; display: flex; align-items: center; gap: 10px; text-align: left; padding: 10px; border-radius: 14px; border: 1px solid ${C.border}; background: ${C.surface}; cursor: pointer; font-family: inherit; color: ${C.text}; min-width: 0; transition: border-color .15s, background .15s; }
+        .lvm-type:hover { border-color: color-mix(in srgb, var(--t) 50%, ${C.border}); }
+        .lvm-type.on { border-color: var(--t); background: color-mix(in srgb, var(--t) 14%, ${C.surface}); box-shadow: 0 0 0 1px var(--t) inset; }
+        .lvm-type-ico { width: 34px; height: 34px; border-radius: 10px; background: color-mix(in srgb, var(--t) 18%, transparent); display: flex; align-items: center; justify-content: center; font-size: 17px; flex-shrink: 0; }
+        .lvm-type-txt { display: flex; flex-direction: column; min-width: 0; }
+        .lvm-type-txt b { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .lvm-type-txt small { font-size: 11px; color: ${C.textMuted}; }
+        .lvm-presets { display: flex; gap: 6px; flex-wrap: wrap; }
+        .lvm-chip { padding: 5px 10px; border-radius: 999px; border: 1px solid ${C.border}; background: ${C.surface}; color: ${C.textDim}; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; }
+        .lvm-chip:hover { border-color: ${C.accent}; color: ${C.accent}; }
+        .lvm-dates { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .lvm-dates > div { display: flex; flex-direction: column; gap: 4px; }
+        .lvm-toggle { display: inline-flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 700; color: ${C.text}; cursor: pointer; width: fit-content; }
+        .lvm-toggle.disabled { opacity: .5; cursor: not-allowed; }
+        .lvm-toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+        .lvm-switch { width: 38px; height: 22px; border-radius: 999px; background: ${C.border}; position: relative; transition: background .2s; flex-shrink: 0; }
+        .lvm-switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .2s; }
+        .lvm-toggle input:checked + .lvm-switch { background: ${C.accent}; }
+        .lvm-toggle input:checked + .lvm-switch::after { transform: translateX(16px); }
+        .lvm-toggle input:focus-visible + .lvm-switch { outline: 2px solid ${C.accent}; outline-offset: 2px; }
+        .lvm-summary { border-radius: 16px; padding: 14px 16px; background: ${C.surface}; border: 1px solid ${C.border}; display: flex; flex-direction: column; gap: 10px; }
+        .lvm-summary.bad { border-color: ${C.red}66; background: ${C.red}0d; }
+        .lvm-sum-row { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; }
+        .lvm-sum-big { font-size: 24px; font-weight: 800; color: ${C.text}; line-height: 1.1; }
+        .lvm-sum-big small { font-size: 13px; color: ${C.textMuted}; font-weight: 600; }
+        .lvm-bar { display: flex; height: 8px; border-radius: 6px; overflow: hidden; background: ${C.border}; }
+
+        /* ── Responsive ── */
+        @container lv (max-width: 1100px) {
+          .lv-top { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+          .lv-top > :first-child { grid-column: 1 / -1; }
+        }
+        @container lv (max-width: 640px) {
+          .lv-wrap { gap: 14px; }
+          .lv-header { align-items: stretch; }
+          .lv-head-acts { width: 100%; }
+          .lv-head-acts > * { flex: 1; }
+          .lv-top { grid-template-columns: 1fr; gap: 12px; }
+          .lv-card { padding: 14px; border-radius: 18px; }
+          .lv-bal { flex-direction: column; text-align: center; gap: 12px; }
+          .lv-bal-stats { justify-content: center; }
+          .lv-toolbar > * { width: 100%; }
+          .lv-tabs { display: flex; }
+          .lv-tabs button { flex: 1; justify-content: center; padding: 7px 4px; font-size: 12px; gap: 4px; }
+          .lv-tabs em { padding: 1px 5px; font-size: 10px; }
+          .lv-spacer { display: none; }
+          .lv-req { grid-template-columns: 56px minmax(0, 1fr); gap: 12px; padding: 12px 12px 12px 14px; }
+          .lv-req-side { grid-column: 1 / -1; flex-direction: row; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+          .lv-req-day { font-size: 19px; }
+          .lv-cal-head, .lv-cal { gap: 3px; }
+          .lv-cday { min-height: 54px; padding: 4px; border-radius: 9px; }
+          .lv-cchip { padding: 2px; justify-content: center; }
+          .lv-cchip-txt { display: none; }
+          .lv-cal-head div { font-size: 10px; }
+          .lv-nav { width: 100%; justify-content: space-between; }
+        }
+        @media (max-width: 640px) {
+          .lvm-backdrop { align-items: flex-end; padding: 0; }
+          .lvm { max-width: none; border-radius: 22px 22px 0 0; max-height: 94vh; animation: lvmUp .22s ease-out; }
+          @keyframes lvmUp { from { transform: translateY(40px); opacity: 0; } }
+          .lvm-head, .lvm-body, .lvm-foot { padding-left: 16px; padding-right: 16px; }
+          .lvm-foot .lv-btn { flex: 1; }
+          .lvm-types { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
       `}</style>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      <div className="lv">
+        <div className="lv-wrap">
 
-        {/* ── Header ── */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: -0.5 }}>
-              {viewOnly ? "My Leave" : "Leave Management"}
-            </h2>
-            <p style={{ margin: "5px 0 0", color: C.textMuted, fontSize: 13 }}>
-              {viewOnly ? "Request and track your time-off" : "Track and manage all employee absences"}
-            </p>
-          </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-            {!viewOnly && currentUser.role === "admin" && (
-              <Btn variant="ghost" small onClick={handleCreditMonthly} disabled={crediting}>
-                {crediting ? "Crediting…" : "🗓 Credit Monthly"}
-              </Btn>
-            )}
-            {!viewOnly && currentUser.role === "admin" && (
-              <Btn variant="ghost" small onClick={() => setEditBalanceTarget("open")}>🧹 Amend Buckets</Btn>
-            )}
-            {!viewOnly && currentUser.role === "admin" && (
-              <Btn variant="ghost" small onClick={() => setSettingsModal(true)}>⚙ Holiday Link</Btn>
-            )}
-            {leaveSettings.holiday_link && (
-              <a href={leaveSettings.holiday_link} target="_blank" rel="noreferrer" style={{
-                fontSize: 13, fontWeight: 600, color: C.accent, textDecoration: "none",
-                display: "inline-flex", alignItems: "center", gap: 5,
-                border: `1px solid ${C.accent}44`, borderRadius: 8,
-                padding: "7px 14px", background: C.accentGlow,
-              }}>🗓 Holiday Calendar</a>
-            )}
-            <Btn onClick={() => setModal(true)}>+ Request Leave</Btn>
-          </div>
-        </div>
-
-        {/* ── KPI Cards ── */}
-        <div className="lv-kpi-row">
-          {[
-            { label: "Total Requests", value: summary.total, color: C.accent, icon: "🗓" },
-            { label: "Pending", value: summary.pending, color: C.amber, icon: "⏳" },
-            { label: "Approved", value: summary.approved, color: C.green, icon: "✅" },
-            { label: "Rejected", value: rows.filter(l => l.status === "rejected").length, color: C.red, icon: "❌" },
-          ].map(s => (
-            <div key={s.label} className="lv-kpi-card">
-              <div style={{ width: 38, height: 38, borderRadius: 10, background: s.color + "22", border: `1px solid ${s.color}33`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{s.icon}</div>
-              <div>
-                <div style={{ fontSize: 20, fontWeight: 800, color: s.color, lineHeight: 1 }}>{s.value}</div>
-                <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 600, marginTop: 3, letterSpacing: .3 }}>{s.label}</div>
-              </div>
+          {/* Header */}
+          <div className="lv-header">
+            <div>
+              <h2 className="lv-title">{viewOnly ? "My Leave" : "Leave Management"}</h2>
+              <p className="lv-subtitle">{viewOnly ? "Plan time off, track your balance and requests" : "Track and manage all employee absences"}</p>
             </div>
-          ))}
-        </div>
+            <div className="lv-head-acts">
+              {!viewOnly && isAdmin && <button className="lv-btn lv-btn-ghost sm" onClick={handleCreditMonthly} disabled={crediting}>{crediting ? "Crediting…" : "🗓 Credit monthly"}</button>}
+              {!viewOnly && isAdmin && <button className="lv-btn lv-btn-ghost sm" onClick={() => setAmendOpen(true)}>🧹 Amend buckets</button>}
+              {!viewOnly && isAdmin && <button className="lv-btn lv-btn-ghost sm" onClick={() => setSettingsModal(true)}>⚙ Holiday link</button>}
+              {leaveSettings.holiday_link && <a className="lv-btn lv-btn-ghost" href={leaveSettings.holiday_link} target="_blank" rel="noreferrer">🎉 Holidays</a>}
+              <button className="lv-btn lv-btn-primary" onClick={openNew}>＋ Request leave</button>
+            </div>
+          </div>
 
-        {/* ── Balance Card ── */}
-        {balance !== null && !isIntern && (
-          <div style={{
-            background: C.card, border: `1px solid ${balColor}44`, borderRadius: 16,
-            padding: "20px 24px", display: "flex", alignItems: "center", gap: 24,
-            flexWrap: "wrap", position: "relative", overflow: "hidden",
-          }}>
-            <div style={{
-              position: "absolute", top: -30, right: -30, width: 140, height: 140,
-              borderRadius: "50%", background: balColor + "14", pointerEvents: "none",
-            }} />
-            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-              <div style={{
-                width: 68, height: 68, borderRadius: "50%", flexShrink: 0,
-                background: balColor + "22", border: `3px solid ${balColor}66`,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 26, fontWeight: 900, color: balColor,
-              }}>{balNum}</div>
-              <div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 5 }}>
-                  Leave Balance (Sick & Vacation)
+          {/* Top summary */}
+          <div className="lv-top">
+            {viewOnly ? (
+              showBal ? (
+                <div className="lv-card lv-bal">
+                  <div className="lv-ring">
+                    {ring(balCred ? balNum / balCred : balNum > 0 ? 1 : 0, balColor)}
+                    <div><b style={{ color: balColor }}>{balNum}</b><small>days left</small></div>
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div className="lv-eyebrow">Leave balance · Annual & Sick</div>
+                    <div className="lv-big">{balNum === 0 ? "No days available right now" : `${balNum} day${balNum !== 1 ? "s" : ""} available`}</div>
+                    <div className="lv-mini">+2 days credited monthly{balance.last_credited_month ? ` · last credited ${balance.last_credited_month}` : ""}</div>
+                    <div className="lv-bal-stats">
+                      <div><b style={{ color: C.green }}>{balCred}</b><span>Earned</span></div>
+                      <div><b style={{ color: C.amber }}>{balUsed}</b><span>Used</span></div>
+                      <div><b style={{ color: C.amber }}>{count("pending")}</b><span>Pending</span></div>
+                    </div>
+                  </div>
                 </div>
-                <div style={{ fontSize: 17, fontWeight: 700, color: C.text }}>
-                  {balNum} day{balNum !== 1 ? "s" : ""} available
+              ) : (
+                <div className="lv-card">
+                  <div className="lv-eyebrow">Requests</div>
+                  <div className="lv-bal-stats">
+                    <div><b style={{ color: C.accent }}>{rows.length}</b><span>Total</span></div>
+                    <div><b style={{ color: C.amber }}>{count("pending")}</b><span>Pending</span></div>
+                    <div><b style={{ color: C.green }}>{count("approved")}</b><span>Approved</span></div>
+                    <div><b style={{ color: C.red }}>{count("rejected")}</b><span>Rejected</span></div>
+                  </div>
                 </div>
-                {balance.last_credited_month && (
-                  <div style={{ fontSize: 11, color: C.textMuted, marginTop: 3 }}>
-                    Last credited: <strong style={{ color: C.textDim }}>{balance.last_credited_month}</strong> · +2 leaves/month
+              )
+            ) : (
+              <div className="lv-card">
+                <div className="lv-eyebrow">Overview</div>
+                <div className="lv-bal-stats">
+                  <div><b style={{ color: C.amber }}>{count("pending")}</b><span>Awaiting review</span></div>
+                  <div><b style={{ color: C.green }}>{count("approved")}</b><span>Approved</span></div>
+                  <div><b style={{ color: C.red }}>{count("rejected")}</b><span>Rejected</span></div>
+                  <div><b style={{ color: C.accent }}>{rows.length}</b><span>Total</span></div>
+                </div>
+                {count("pending") > 0 && <button className="lv-btn lv-btn-ghost sm" style={{ marginTop: 12 }} onClick={() => { setStatusTab("pending"); setView("list"); }}>Review {count("pending")} pending →</button>}
+              </div>
+            )}
+
+            {viewOnly ? (
+              <div className="lv-card lv-next">
+                <div className="lv-eyebrow">Next time off</div>
+                {nextLeave ? (() => {
+                  const t = lvType(nextLeave.leave_type);
+                  const sc = lvStatusColor(nextLeave.status);
+                  return (
+                    <>
+                      <div className="lv-next-main">
+                        <div className="lv-next-ico" style={{ background: t.color + "1f", border: `1px solid ${t.color}40` }}>{t.icon}</div>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>{lvRange(nextLeave.start_date, nextLeave.end_date)}</div>
+                          <div className="lv-mini">{t.label} · {daysOf(nextLeave)} day{daysOf(nextLeave) !== 1 ? "s" : ""} · <span style={{ color: sc, fontWeight: 700 }}>{nextLeave.status}</span></div>
+                        </div>
+                      </div>
+                      <span className="lv-count" style={{ color: C.accent, background: C.accent + "18" }}>{daysUntil <= 0 ? (nextLeave.status === "approved" ? "You're on leave 🎉" : "Starts today · awaiting approval") : daysUntil === 1 ? "Starts tomorrow" : `In ${daysUntil} days`}</span>
+                    </>
+                  );
+                })() : (
+                  <>
+                    <div className="lv-next-main">
+                      <div className="lv-next-ico" style={{ background: C.surface, border: `1px solid ${C.border}` }}>🏖️</div>
+                      <div><div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Nothing planned yet</div><div className="lv-mini">Time to plan a break?</div></div>
+                    </div>
+                    <button className="lv-btn lv-btn-ghost sm" style={{ width: "fit-content" }} onClick={openNew}>Plan time off</button>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="lv-card">
+                <div className="lv-eyebrow">Who's out today</div>
+                <div className="lv-big">{outToday.length} {outToday.length === 1 ? "person" : "people"}</div>
+                <div className="lv-mini">{outWeek.length} approved leave{outWeek.length !== 1 ? "s" : ""} in the next 7 days</div>
+                {outToday.length > 0 && (
+                  <div className="lv-out">
+                    {outToday.slice(0, 6).map(l => <span key={l.id}><i className="lv-avi" style={{ background: (l.group_color || C.accent) + "26", color: l.group_color || C.accent, fontStyle: "normal" }}>{l.avatar || mkAvi(l.employee_name)}</i>{(l.employee_name || "").split(" ")[0]}</span>)}
+                    {outToday.length > 6 && <span>+{outToday.length - 6}</span>}
                   </div>
                 )}
               </div>
+            )}
+
+            <div className="lv-card">
+              <div className="lv-eyebrow" style={{ display: "flex", justifyContent: "space-between" }}><span>{viewOnly ? `Taken in ${year}` : `Team leave in ${year}`}</span><span style={{ color: C.text }}>{takenYear}d</span></div>
+              {byType.length === 0 ? <div className="lv-mini" style={{ marginTop: 12 }}>No approved leave this year yet.</div> : (
+                <>
+                  <div className="lv-typebar">{byType.map(t => <div key={t.value} title={`${t.label}: ${t.days}d`} style={{ width: `${(t.days / takenYear) * 100}%`, background: t.color }} />)}</div>
+                  <div className="lv-typelist">{byType.slice(0, 4).map(t => <div key={t.value}><i style={{ background: t.color }} />{t.label}<b>{t.days}d</b></div>)}</div>
+                </>
+              )}
             </div>
-            <div style={{ display: "flex", gap: 24, marginLeft: "auto" }}>
-              {[["Total Earned", balance.total_credited, C.green], ["Total Used", balance.total_used, C.amber]].map(([lbl, val, col]) => (
-                <div key={lbl} style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: col }}>{parseFloat(val) || 0}</div>
-                  <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 600, marginTop: 2 }}>{lbl}</div>
-                </div>
+          </div>
+
+          {/* Toolbar */}
+          <div className="lv-toolbar">
+            <div className="lv-tabs" role="tablist" aria-label="View">
+              {[["list", "☰ List"], ["calendar", "🗓 Calendar"]].map(([v, l]) => (
+                <button key={v} role="tab" aria-selected={view === v} className={view === v ? "on" : ""} onClick={() => setView(v)}>{l}</button>
               ))}
             </div>
+            {view === "list" && (
+              <div className="lv-tabs" role="tablist" aria-label="Filter by status">
+                {tabs.map(([k, l, n]) => <button key={k} role="tab" aria-selected={statusTab === k} className={statusTab === k ? "on" : ""} onClick={() => setStatusTab(k)}>{l}<em>{n}</em></button>)}
+              </div>
+            )}
+            <div className="lv-spacer" />
+            {view === "list" && (<>
+              <select className="lv-input" value={typeFilter} onChange={e => setTypeFilter(e.target.value)} aria-label="Filter by leave type">
+                <option value="">All types</option>
+                {LV_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+              <input className="lv-input" placeholder={viewOnly ? "Search reason…" : "Search employee, reason…"} value={search} onChange={e => setSearch(e.target.value)} aria-label="Search leave requests" />
+            </>)}
           </div>
-        )}
 
-        {/* ── Leave Cards ── */}
-        {rows.length === 0 ? (
-          <div style={{
-            background: C.card, border: `1px solid ${C.border}`, borderRadius: 14,
-            padding: 48, textAlign: "center", color: C.textMuted, fontSize: 13,
-          }}>
-            No leave records yet.{viewOnly && " Click \u201c+ Request Leave\u201d to submit your first request."}
-          </div>
-        ) : (
-          <>
-          <div className="lv-grid">
-            {rows.slice((lvPage - 1) * lvPerPage, lvPage * lvPerPage).map(l => {
-              const s = new Date(l.start_date), e = new Date(l.end_date);
-              const days = l.is_half_day ? 0.5 : Math.round((e - s) / 86400000) + 1;
-              const usesBalance = BALANCE_TYPES.has(l.leave_type);
-              const typeColor = l.leave_type === "Sick" ? C.red : l.leave_type === "Annual" ? C.accent : l.leave_type === "Reserve" ? "#06B6D4" : C.textMuted;
-              const statusBorderColor = l.status === "approved" ? C.green : l.status === "rejected" ? C.red : C.amber;
-              const typeIcon = { Annual: "🌴", Sick: "🤒", Unpaid: "⏸", Maternity: "🤰", Paternity: "👶", Reserve: "🗓️" }[l.leave_type] || "📋";
-              const empBal = !viewOnly ? (allBalances[String(l.employee_id)] || null) : null;
-              const empBalNum = empBal ? parseFloat(empBal.balance) || 0 : null;
-              const empBalColor = empBalNum === null ? C.textMuted : empBalNum >= 4 ? C.green : empBalNum >= 2 ? C.amber : C.red;
-
-              return (
-                <div key={l.id} className="lv-card" style={{ borderLeft: `4px solid ${statusBorderColor}88` }}>
-                  {/* Top row */}
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      {!viewOnly && <Avatar initials={l.avatar} color={l.group_color} size={34} />}
-                      <div>
-                        {!viewOnly && <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 4 }}>{l.employee_name}</div>}
-                        <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                          <span style={{ fontSize: 17 }}>{typeIcon}</span>
-                          <Badge color={typeColor}>{l.leave_type}</Badge>
-                          {l.is_half_day && <span style={{ fontSize: 10, color: C.amber, background: C.amber + "18", padding: "1px 6px", borderRadius: 10, border: `1px solid ${C.amber}44` }}>🌗 Half Day</span>}
-                          {usesBalance && <span style={{ fontSize: 10, color: C.textMuted, background: C.surface, padding: "1px 6px", borderRadius: 10, border: `1px solid ${C.border}` }}>−bucket</span>}
-                        </div>
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5 }}>
-                      <StatusBadge status={l.status} />
-                      <span style={{
-                        fontSize: 12, fontWeight: 700, color: C.accent,
-                        background: C.accent + "18", padding: "2px 10px",
-                        borderRadius: 20, border: `1px solid ${C.accent}33`,
-                      }}>{days}d</span>
-                    </div>
-                  </div>
-
-                  {/* Date range */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
-                    <span style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "4px 10px", color: C.textDim }}>
-                      📅 {fmtD(l.start_date)}
-                    </span>
-                    <span style={{ color: C.border, fontSize: 16 }}>→</span>
-                    <span style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "4px 10px", color: C.textDim }}>
-                      {fmtD(l.end_date)}
-                    </span>
-                  </div>
-
-                  {/* Reason */}
-                  {l.reason && (
-                    <div style={{
-                      fontSize: 12, color: C.textMuted, background: C.surface,
-                      borderRadius: 8, padding: "8px 12px",
-                      borderLeft: `3px solid ${C.border}`,
-                    }}>"{l.reason}"</div>
-                  )}
-
-                  {/* Employee: edit button on pending */}
-                  {viewOnly && l.status === "pending" && (
-                    <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                      <Btn small variant="ghost" onClick={() => openEditLeave(l)}>✏ Edit</Btn>
-                    </div>
-                  )}
-
-                  {/* Admin balance + actions */}
-                  {!viewOnly && (
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-                      {empBalNum !== null && (
-                        <span style={{ fontSize: 12, color: empBalColor, fontWeight: 600, background: empBalColor + "18", padding: "3px 10px", borderRadius: 20, border: `1px solid ${empBalColor}33` }}>
-                          Balance: {empBalNum}d
-                        </span>
-                      )}
-                      {l.status === "pending" && (
-                        <div style={{ display: "flex", gap: 6, marginLeft: "auto" }}>
-                          <Btn small variant="success" onClick={async () => { try { await api.approveLeave(l.id); await load(); } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } }}>✓ Approve</Btn>
-                          <Btn small variant="danger" onClick={async () => { try { await api.rejectLeave(l.id); await load(); } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } }}>✕ Reject</Btn>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          <PaginationControls page={lvPage} setPage={setLvPage} perPage={lvPerPage} setPerPage={setLvPerPage} total={rows.length} />
-          </>
-        )}
-
-        {/* ── Admin: Amend Leave Buckets Modal ── */}
-        {editBalanceTarget === "open" && (() => (
-          <Modal title="🧹 Amend Bucket of Leave" onClose={() => setEditBalanceTarget(null)} maxWidth={860}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <div style={{ fontSize: 13, color: C.textMuted }}>
-                Edit leave balances for all employees. Click Save on each row to apply.
-              </div>
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead style={{ background: C.surface }}><tr>
-                    {["Employee", "Available Balance", "Total Credited", "Total Used", "Action"].map(h => <Th key={h}>{h}</Th>)}
-                  </tr></thead>
-                  <tbody>
-                    {employees.filter(e => e.id).map((emp, idx) => {
-                      const key = String(emp.id);
-                      const bal = allBalances[key] || { balance: 0, total_credited: 0, total_used: 0 };
-                      return (
-                        <AmendRow key={emp.id} emp={emp} initialBal={bal} idx={idx}
-                          onSaved={(updated) => setAllBalances(prev => ({ ...prev, [key]: updated }))} />
-                      );
-                    })}
-                    {employees.length === 0 && <tr><td colSpan={5} style={{ padding: 40, textAlign: "center", color: C.textMuted }}>No employees found.</td></tr>}
-                  </tbody>
-                </table>
-              </div>
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                <Btn variant="ghost" onClick={() => setEditBalanceTarget(null)}>Close</Btn>
-              </div>
+          {/* Content */}
+          {view === "calendar" ? renderCalendar() : filtered.length === 0 ? (
+            <div className="lv-card lv-empty">
+              <div>{rows.length ? "🔍" : "🏝️"}</div>
+              {rows.length ? "No requests match these filters." : viewOnly ? "No leave requests yet. Plan your first break!" : "No leave records yet."}
+              {!rows.length && <div style={{ fontSize: 13, marginTop: 14 }}><button className="lv-btn lv-btn-primary" onClick={openNew}>＋ Request leave</button></div>}
             </div>
-          </Modal>
-        ))()}
-
-        {/* ── Admin: Holiday Calendar Settings Modal ── */}
-        {settingsModal && (
-          <Modal title="⚙ Holiday Calendar Settings" onClose={() => setSettingsModal(false)}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <div style={{ fontSize: 13, color: C.textMuted }}>
-                Set a link to your company holiday calendar shown to all employees.
-              </div>
-              <Inp label="Holiday Calendar URL" value={settingsForm.holiday_link} onChange={v => setSettingsForm(f => ({ ...f, holiday_link: v }))} placeholder="https://calendar.google.com/…" />
-              {settingsForm.holiday_link && (
-                <div style={{ fontSize: 12, color: C.textMuted }}>
-                  Preview: <a href={settingsForm.holiday_link} target="_blank" rel="noreferrer" style={{ color: C.accent }}>🗓 View →</a>
-                </div>
-              )}
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-                <Btn variant="ghost" onClick={() => setSettingsModal(false)}>Cancel</Btn>
-                <Btn onClick={handleSaveSettings} disabled={settingsSaving}>{settingsSaving ? "Saving…" : "Save Link"}</Btn>
-              </div>
-            </div>
-          </Modal>
-        )}
-
-        {/* ── Edit Leave Modal (employee, pending only) ── */}
-        {editLeave && (
-          <Modal title="✏ Edit Leave Request" onClose={() => setEditLeave(null)}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <div style={{ background: C.surface, borderRadius: 8, padding: "10px 14px", fontSize: 13, color: C.textDim }}>
-                Editing your <strong style={{ color: C.amber }}>pending</strong> leave — changes will reset to pending for re-review.
-              </div>
-              <Inp label="Leave Type" value={editForm.type} onChange={v => setEditForm(f => ({ ...f, type: v }))}
-                options={[
-                  { value: "Annual", label: "Annual / Vacation 🌴 (uses balance)" },
-                  { value: "Sick", label: "Sick Leave 🤒 (uses balance)" },
-                  { value: "Unpaid", label: "Unpaid" },
-                  { value: "Maternity", label: "Maternity" },
-                  { value: "Paternity", label: "Paternity" },
-                  { value: "Reserve", label: "Reserve / Floating 🗓️" },
-                ]} />
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <Inp label="Start Date" type="date" value={editForm.startDate} onChange={v => setEditForm(f => ({ ...f, startDate: v, endDate: f.isHalfDay ? v : f.endDate }))} required />
-                <Inp label="End Date" type="date" value={editForm.endDate} onChange={v => setEditForm(f => ({ ...f, endDate: v }))} required disabled={editForm.isHalfDay} />
-              </div>
-              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: C.text }}>
-                <input type="checkbox" checked={editForm.isHalfDay} disabled={!editForm.startDate}
-                  onChange={e => setEditForm(f => ({ ...f, isHalfDay: e.target.checked, endDate: e.target.checked ? f.startDate : f.endDate }))}
-                  style={{ cursor: "pointer", width: 16, height: 16 }} />
-                🌗 Half Day (0.5 day)
-              </label>
-              <Inp label="Reason" value={editForm.reason} onChange={v => setEditForm(f => ({ ...f, reason: v }))} placeholder="Optional reason…" />
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-                <Btn variant="ghost" onClick={() => setEditLeave(null)}>Cancel</Btn>
-                <Btn onClick={handleUpdateLeave} disabled={editSaving || !editForm.startDate || !editForm.endDate}>
-                  {editSaving ? "Saving…" : "Save Changes"}
-                </Btn>
-              </div>
-            </div>
-          </Modal>
-        )}
-
-        {/* ── Request Leave Modal ── */}
-        {modal && (
-          <Modal title="Request Leave" onClose={() => { setModal(false); setBalance(viewOnly ? balance : null); }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              {!viewOnly && (
-                <Inp label="Employee" value={form.employeeId}
-                  onChange={v => { setForm(f => ({ ...f, employeeId: v })); loadBalanceFor(v); }}
-                  required options={employees.map(e => ({ value: e.id, label: e.name }))} />
-              )}
-              {viewOnly && (
-                <div style={{ background: C.surface, borderRadius: 8, padding: "10px 14px", fontSize: 13, color: C.textDim }}>
-                  Requesting as: <span style={{ color: C.text, fontWeight: 700 }}>{currentUser.emp_name}</span>
-                </div>
-              )}
-              <Inp label="Leave Type" value={form.type} onChange={v => setForm(f => ({ ...f, type: v }))}
-                options={[
-                  { value: "Annual", label: "Annual / Vacation 🌴 (uses balance)" },
-                  { value: "Sick", label: "Sick Leave 🤒 (uses balance)" },
-                  { value: "Unpaid", label: "Unpaid" },
-                  { value: "Maternity", label: "Maternity" },
-                  { value: "Paternity", label: "Paternity" },
-                  { value: "Reserve", label: "Reserve / Floating 🗓️" },
-                ]} />
-              {BALANCE_TYPES.has(form.type) && balance !== null && !isIntern && (
-                <div style={{
-                  background: insufficient ? C.red + "18" : C.green + "12",
-                  border: `1px solid ${insufficient ? C.red : C.green}44`,
-                  borderRadius: 10, padding: "12px 16px",
-                  display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8,
-                }}>
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, letterSpacing: .5 }}>LEAVE BALANCE</div>
-                    <div style={{ fontSize: 22, fontWeight: 800, color: insufficient ? C.red : balColor }}>
-                      {balNum} <span style={{ fontSize: 13, fontWeight: 400, color: C.textMuted }}>available</span>
-                    </div>
-                  </div>
-                  {selectedDays > 0 && (
-                    <div style={{ textAlign: "right" }}>
-                      <div style={{ fontSize: 11, color: C.textMuted }}>After this request</div>
-                      <div style={{ fontSize: 18, fontWeight: 700, color: insufficient ? C.red : C.textDim }}>
-                        {insufficient ? "—" : balAfter} days left
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-              {insufficient && (
-                <div style={{ background: C.red + "14", border: `1px solid ${C.red}44`, borderRadius: 8, padding: "10px 14px", fontSize: 12, color: C.red }}>
-                  ⚠ Only <strong>{balNum}</strong> day(s) available, requested <strong>{selectedDays}</strong>. Please reduce duration or choose Unpaid.
-                </div>
-              )}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <Inp label="Start Date" type="date" value={form.startDate} onChange={v => setForm(f => ({ ...f, startDate: v, endDate: f.isHalfDay ? v : f.endDate }))} required />
-                <Inp label="End Date" type="date" value={form.endDate} onChange={v => setForm(f => ({ ...f, endDate: v }))} required disabled={form.isHalfDay} />
-              </div>
-              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: C.text }}>
-                <input type="checkbox" checked={form.isHalfDay} disabled={!form.startDate}
-                  onChange={e => setForm(f => ({ ...f, isHalfDay: e.target.checked, endDate: e.target.checked ? f.startDate : f.endDate }))}
-                  style={{ cursor: "pointer", width: 16, height: 16 }} />
-                🌗 Half Day (0.5 day)
-              </label>
-              {selectedDays > 0 && (
-                <div style={{ fontSize: 12, color: C.textDim, textAlign: "center" }}>
-                  📅 {selectedDays} day{selectedDays !== 1 ? "s" : ""} selected
-                  {willDeduct && <span style={{ color: C.amber }}> — will deduct from balance</span>}
-                </div>
-              )}
-              <Inp label="Reason" value={form.reason} onChange={v => setForm(f => ({ ...f, reason: v }))} placeholder="Brief description…" />
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-                <Btn variant="ghost" onClick={() => setModal(false)}>Cancel</Btn>
-                <Btn onClick={handleCreate} disabled={saving || insufficient}>{saving ? "Saving…" : "Submit Request"}</Btn>
-              </div>
-            </div>
-          </Modal>
-        )}
-
+          ) : (
+            <>
+              <div className="lv-list">{paged.map(renderCard)}</div>
+              {filtered.length > lvPerPage && <PaginationControls page={lvPage} setPage={setLvPage} perPage={lvPerPage} setPerPage={setLvPerPage} total={filtered.length} />}
+            </>
+          )}
+        </div>
       </div>
+
+      {/* Request / edit modal */}
+      {reqModal && (
+        <LvRequestModal
+          key={reqModal.id || "new"}
+          init={reqModal.init}
+          isEdit={reqModal.isEdit}
+          admin={!viewOnly}
+          employees={employees}
+          balance={formBalance}
+          showBalance={viewOnly ? !isIntern : true}
+          otherLeaves={rows}
+          onEmployeeChange={loadBalanceFor}
+          onClose={() => setReqModal(null)}
+          onSubmit={f => submitRequest(f, reqModal.isEdit, reqModal.id)}
+        />
+      )}
+
+      {/* Admin: Amend Leave Buckets */}
+      {amendOpen && (
+        <Modal title="🧹 Amend Bucket of Leave" onClose={() => setAmendOpen(false)} maxWidth={860}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ fontSize: 13, color: C.textMuted }}>Edit leave balances for all employees. Click Save on each row to apply.</div>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead style={{ background: C.surface }}><tr>
+                  {["Employee", "Available Balance", "Total Credited", "Total Used", "Action"].map(h => <Th key={h}>{h}</Th>)}
+                </tr></thead>
+                <tbody>
+                  {employees.filter(e => e.id).map((emp, idx) => {
+                    const key = String(emp.id);
+                    const bal = allBalances[key] || { balance: 0, total_credited: 0, total_used: 0 };
+                    return <AmendRow key={emp.id} emp={emp} initialBal={bal} idx={idx} onSaved={updated => setAllBalances(prev => ({ ...prev, [key]: updated }))} />;
+                  })}
+                  {employees.length === 0 && <tr><td colSpan={5} style={{ padding: 40, textAlign: "center", color: C.textMuted }}>No employees found.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end" }}><Btn variant="ghost" onClick={() => setAmendOpen(false)}>Close</Btn></div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Admin: Holiday Calendar Settings */}
+      {settingsModal && (
+        <Modal title="⚙ Holiday Calendar Settings" onClose={() => setSettingsModal(false)}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ fontSize: 13, color: C.textMuted }}>Set a link to your company holiday calendar shown to all employees.</div>
+            <Inp label="Holiday Calendar URL" value={settingsForm.holiday_link} onChange={v => setSettingsForm(f => ({ ...f, holiday_link: v }))} placeholder="https://calendar.google.com/…" />
+            {settingsForm.holiday_link && <div style={{ fontSize: 12, color: C.textMuted }}>Preview: <a href={settingsForm.holiday_link} target="_blank" rel="noreferrer" style={{ color: C.accent }}>🗓 View →</a></div>}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <Btn variant="ghost" onClick={() => setSettingsModal(false)}>Cancel</Btn>
+              <Btn onClick={handleSaveSettings} disabled={settingsSaving}>{settingsSaving ? "Saving…" : "Save Link"}</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
     </>
   );
 }
@@ -4903,252 +5617,685 @@ function Reports() {
 // ════════════════════════════════════════════════════════
 // MY PROFILE
 // ════════════════════════════════════════════════════════
+// ── My Profile helpers (module-level so inputs keep focus across renders) ──
+const PF_RULES = {
+  mobile: { re: /^\+?[\d\s-]{8,16}$/, msg: "Enter a valid phone number" },
+  emergencyContact: { re: /^\+?[\d\s-]{8,16}$/, msg: "Enter a valid phone number" },
+  panNumber: { re: /^[A-Z]{5}[0-9]{4}[A-Z]$/, msg: "Format: ABCDE1234F" },
+  bankIfsc: { re: /^[A-Z]{4}0[A-Z0-9]{6}$/, msg: "Format: HDFC0001234" },
+  bankAccountNo: { re: /^\d{6,20}$/, msg: "6–20 digits only" },
+};
+const pfToForm = p => ({
+  dob: (p.dob || "").slice(0, 10), mobile: p.mobile || "", emergencyContact: p.emergency_contact || "",
+  address: p.address || "", skillset: p.skillset || "", panNumber: p.pan_number || "",
+  bankName: p.bank_name || "", bankAccountNo: p.bank_account_no || "", bankIfsc: p.bank_ifsc || "",
+});
+const ymdLocal = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const pfSkills = s => (s || "").split(/[,;\n]/).map(x => x.trim()).filter(Boolean);
+const pfMaskTail = (v, n = 4) => { const s = String(v || ""); return s.length <= n ? "••••" : "•".repeat(Math.min(8, s.length - n)) + " " + s.slice(-n); };
+const pfParse = d => { if (!d) return null; const [y, m, day] = String(d).slice(0, 10).split("-").map(Number); return y ? new Date(y, m - 1, day) : null; };
+const pfDaysUntilNext = (date, today) => {
+  if (!date) return null;
+  let next = new Date(today.getFullYear(), date.getMonth(), date.getDate());
+  if (next < today) next = new Date(today.getFullYear() + 1, date.getMonth(), date.getDate());
+  return Math.round((next - today) / 86400000);
+};
+const pfPwScore = pw => {
+  const checks = [
+    { ok: pw.length >= 8, label: "At least 8 characters" },
+    { ok: /[A-Z]/.test(pw) && /[a-z]/.test(pw), label: "Upper & lower case letters" },
+    { ok: /\d/.test(pw), label: "At least one number" },
+    { ok: /[^A-Za-z0-9]/.test(pw), label: "At least one symbol" },
+  ];
+  return { checks, score: checks.filter(c => c.ok).length };
+};
+
+function PfField({ icon, label, value, mono, masked, revealed, onReveal, copyKey, copied, onCopy, href, full }) {
+  const has = value !== null && value !== undefined && value !== "";
+  const shown = !has ? null : masked && !revealed ? (masked === "tail" ? pfMaskTail(value) : "••••••••") : value;
+  return (
+    <div className={`pf-field${full ? " full" : ""}`}>
+      <div className="pf-field-ico">{icon}</div>
+      <div className="pf-field-body">
+        <div className="pf-field-lbl">{label}</div>
+        {has ? (
+          href && (!masked || revealed)
+            ? <a className="pf-field-val pf-anchor" href={href} style={mono ? { fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" } : undefined}>{shown}</a>
+            : <div className="pf-field-val" style={mono ? { fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", letterSpacing: .5 } : undefined}>{shown}</div>
+        ) : <div className="pf-field-val pf-missing">Not added</div>}
+      </div>
+      {has && (
+        <div className="pf-field-acts">
+          {masked && <button className="pf-icon-btn" onClick={onReveal} aria-label={revealed ? `Hide ${label}` : `Show ${label}`} title={revealed ? "Hide" : "Show"}>{revealed ? "🙈" : "👁"}</button>}
+          {copyKey && (!masked || revealed) && (
+            <button className="pf-icon-btn" onClick={() => onCopy(copyKey, value)} aria-label={`Copy ${label}`} title="Copy">
+              {copied === copyKey ? <span style={{ color: C.green, fontSize: 13, fontWeight: 800 }}>✓</span> : "⧉"}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PfInput({ label, name, value, onChange, error, type = "text", placeholder, upper, textarea, hint, full, max }) {
+  const common = {
+    id: `pf-${name}`, value: value || "", placeholder,
+    className: `pf-input${error ? " err" : ""}`,
+    onChange: e => onChange(name, upper ? e.target.value.toUpperCase() : e.target.value),
+    "aria-invalid": !!error,
+  };
+  return (
+    <div className={`pf-inp-wrap${full ? " full" : ""}`}>
+      <label htmlFor={`pf-${name}`} className="pf-inp-lbl">{label}</label>
+      {textarea ? <textarea rows={3} {...common} /> : <input type={type} max={max} {...common} />}
+      {error ? <div className="pf-inp-err">{error}</div> : hint ? <div className="pf-inp-hint">{hint}</div> : null}
+    </div>
+  );
+}
+
 function MyProfile({ currentUser }) {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const [form, setForm] = useState({});
-  const [pwForm, setPwForm] = useState({ oldPassword: "", newPassword: "" });
-  const [pwSaving, setPwSaving] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
+  const [editing, setEditing] = useState(null); // null | "personal" | "skills" | "bank"
+  const [touched, setTouched] = useState({});
+  const [reveal, setReveal] = useState({});
+  const [copied, setCopied] = useState(null);
+  const [skillDraft, setSkillDraft] = useState("");
   const [showPwModal, setShowPwModal] = useState(false);
-  const [showCtc, setShowCtc] = useState(false);
-  const [showPan, setShowPan] = useState(false);
-  const [showAccount, setShowAccount] = useState(false);
+  const [pwForm, setPwForm] = useState({ oldPassword: "", newPassword: "", confirm: "" });
+  const [pwShow, setPwShow] = useState(false);
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwErr, setPwErr] = useState("");
 
   useEffect(() => {
     api.getEmployee(currentUser.employee_id)
-      .then(p => { setProfile(p); setForm({ ...p, bankAccountNo: p.bank_account_no, bankIfsc: p.bank_ifsc, bankName: p.bank_name, emergencyContact: p.emergency_contact }); })
+      .then(p => { setProfile(p); setForm(pfToForm(p)); })
       .catch(e => setErr(e.message))
       .finally(() => setLoading(false));
   }, [currentUser.employee_id]);
 
-  async function handleSave() {
-    setSaving(true); setErr("");
-    try {
-      const payload = {
-        name: profile.name, email: profile.email, groupId: profile.group_id, joiningDate: profile.joining_date, ctcAnnual: profile.ctc_annual,
-        dob: form.dob, address: form.address, mobile: form.mobile, emergencyContact: form.emergencyContact, skillset: form.skillset,
-        bankAccountNo: form.bankAccountNo, bankIfsc: form.bankIfsc, bankName: form.bankName,
-        panNumber: form.panNumber, designation: profile.designation, location: profile.location, variablePay: profile.variable_pay_amount
-      };
-      await api.updateEmployee(currentUser.employee_id, payload);
-      dialog.alert("Profile updated successfully!", { title: "Success", dtype: "success" });
-      setIsEditing(false);
-    } catch (e) { setErr(e.message); } finally { setSaving(false); }
-  }
-
-  async function handleSavePw() {
-    if (!pwForm.oldPassword || !pwForm.newPassword) return setErr("Both password fields are required.");
-    setPwSaving(true);
-    try {
-      await api.updatePassword(pwForm);
-      dialog.alert("Password updated successfully!", { title: "Success", dtype: "success" });
-      setPwForm({ oldPassword: "", newPassword: "" });
-      setErr(null); setShowPwModal(false);
-    } catch (e) { setErr(e.message); }
-    setPwSaving(false);
-  }
-
   if (loading) return <Spinner />;
   if (err && !profile) return <ErrBox msg={err} />;
 
-  // ── small helper: one info row in view mode ───────────────
-  const InfoRow = ({ icon, label, value, masked, show, onToggle }) => (
-    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: `1px solid ${C.border}22` }}>
-      <div style={{
-        width: 34, height: 34, borderRadius: 9, flexShrink: 0,
-        background: C.surface, border: `1px solid ${C.border}`,
-        display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16,
-      }}>{icon}</div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, letterSpacing: 1, textTransform: "uppercase", marginBottom: 2 }}>{label}</div>
-        <div style={{ fontSize: 13, color: C.text, fontWeight: 500, wordBreak: "break-word" }}>
-          {masked ? (show ? (value || "—") : "••••••••") : (value || "—")}
-        </div>
-      </div>
-      {masked && value && (
-        <button onClick={onToggle} style={{ background: "none", border: "none", color: C.textMuted, cursor: "pointer", fontSize: 16, padding: 4, lineHeight: 1, flexShrink: 0 }}>
-          {show ? "🙈" : "👁"}
-        </button>
-      )}
-    </div>
-  );
+  // ── derived ──
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const original = pfToForm(profile);
+  const dirty = Object.keys(original).some(k => (form[k] || "") !== (original[k] || ""));
+  const validate = f => {
+    const e = {};
+    Object.entries(PF_RULES).forEach(([k, r]) => { if (f[k] && !r.re.test(String(f[k]).trim())) e[k] = r.msg; });
+    const dob = pfParse(f.dob);
+    if (dob && dob > today) e.dob = "Date of birth can't be in the future";
+    else if (dob && today.getFullYear() - dob.getFullYear() < 14) e.dob = "Please check the year";
+    return e;
+  };
+  const errors = validate(form);
+  const sectionFields = { personal: ["dob", "mobile", "emergencyContact", "address"], skills: ["skillset"], bank: ["panNumber", "bankName", "bankAccountNo", "bankIfsc"] };
+  const sectionHasErr = s => (sectionFields[s] || []).some(k => errors[k]);
+  const fieldErr = k => (touched[k] || touched.__submit) ? errors[k] : null;
 
-  // ── section header helper ─────────────────────────────────
-  const SectionHead = ({ icon, title, badge }) => (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
-      <div style={{ width: 32, height: 32, borderRadius: 9, background: C.accent + "22", border: `1px solid ${C.accent}33`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>{icon}</div>
-      <div>
-        <div style={{ fontSize: 13, fontWeight: 800, color: C.text }}>{title}</div>
-        {badge && <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 600, letterSpacing: .5 }}>{badge}</div>}
-      </div>
-    </div>
-  );
+  const joined = pfParse(profile.joining_date);
+  const dobD = pfParse(form.dob);
+  const tenureMonths = joined ? Math.max(0, (today.getFullYear() - joined.getFullYear()) * 12 + today.getMonth() - joined.getMonth() - (today.getDate() < joined.getDate() ? 1 : 0)) : null;
+  const tenureLabel = tenureMonths === null ? "—" : tenureMonths < 1 ? "New joiner" : `${Math.floor(tenureMonths / 12) ? Math.floor(tenureMonths / 12) + "y " : ""}${tenureMonths % 12}m`;
+  const bdayIn = pfDaysUntilNext(dobD, today);
+  const annivIn = joined && tenureMonths >= 1 ? pfDaysUntilNext(joined, today) : null;
+  const skills = pfSkills(form.skillset);
+
+  const checklist = [
+    { k: "dob", label: "Date of birth", sec: "personal" },
+    { k: "mobile", label: "Mobile number", sec: "personal" },
+    { k: "emergencyContact", label: "Emergency contact", sec: "personal" },
+    { k: "address", label: "Address", sec: "personal" },
+    { k: "skillset", label: "Skills", sec: "skills" },
+    { k: "panNumber", label: "PAN number", sec: "bank" },
+    { k: "bankName", label: "Bank name", sec: "bank" },
+    { k: "bankAccountNo", label: "Account number", sec: "bank" },
+    { k: "bankIfsc", label: "IFSC code", sec: "bank" },
+  ].map(c => ({ ...c, done: !!String(original[c.k] || "").trim() }));
+  const doneCount = checklist.filter(c => c.done).length;
+  const completePct = Math.round((doneCount / checklist.length) * 100);
+  const completeColor = completePct >= 90 ? C.green : completePct >= 50 ? C.amber : C.red;
 
   const roleLabel = currentUser.role === "manager" ? "Manager" : currentUser.role === "admin" ? "Admin" : currentUser.role === "intras" ? "Intern" : "Employee";
   const roleColor = currentUser.role === "admin" ? C.purple : currentUser.role === "manager" ? C.accent : C.green;
+  const groupColor = profile.group_color || C.purple;
+
+  // ── actions ──
+  const setF = (k, v) => { setForm(f => ({ ...f, [k]: v })); setTouched(t => ({ ...t, [k]: true })); };
+  const toggleReveal = k => setReveal(r => ({ ...r, [k]: !r[k] }));
+  const copy = async (key, text) => {
+    try { await navigator.clipboard.writeText(String(text)); }
+    catch { const t = document.createElement("textarea"); t.value = String(text); document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); }
+    setCopied(key); setTimeout(() => setCopied(c => (c === key ? null : c)), 1400);
+  };
+  const startEdit = sec => { setForm(pfToForm(profile)); setTouched({}); setErr(""); setSkillDraft(""); setEditing(sec); };
+  const cancelEdit = () => { setForm(pfToForm(profile)); setTouched({}); setErr(""); setSkillDraft(""); setEditing(null); };
+  const requestEdit = async sec => {
+    if (editing && editing !== sec && dirty) {
+      const ok = await dialog.confirm("You have unsaved changes. Discard them?", { title: "Unsaved changes" });
+      if (!ok) return;
+    }
+    startEdit(sec);
+  };
+
+  const addSkill = raw => {
+    const add = pfSkills(raw);
+    if (!add.length) return;
+    const existing = pfSkills(form.skillset);
+    const lower = existing.map(s => s.toLowerCase());
+    const merged = [...existing, ...add.filter(s => !lower.includes(s.toLowerCase()))];
+    setF("skillset", merged.join(", "));
+    setSkillDraft("");
+  };
+  const removeSkill = s => setF("skillset", pfSkills(form.skillset).filter(x => x !== s).join(", "));
+
+  async function handleSave() {
+    let f = form;
+    if (editing === "skills" && skillDraft.trim()) {
+      const existing = pfSkills(form.skillset);
+      f = { ...form, skillset: [...existing, ...pfSkills(skillDraft)].join(", ") };
+      setForm(f); setSkillDraft("");
+    }
+    setTouched(t => ({ ...t, __submit: true }));
+    if (Object.keys(validate(f)).length) return;
+    setSaving(true); setErr("");
+    try {
+      const clean = Object.fromEntries(Object.entries(f).map(([k, v]) => [k, typeof v === "string" ? v.trim() : v]));
+      // The API replaces every column, so send the full record (incl. admin-managed fields) to avoid wiping them.
+      const payload = {
+        name: profile.name, email: profile.email, groupId: profile.group_id, joiningDate: profile.joining_date,
+        ctcAnnual: profile.ctc_annual, variablePay: profile.variable_pay_amount, designation: profile.designation,
+        location: profile.location, hourlyRate: profile.hourly_rate, managerId: profile.manager_id,
+        customEmployeeId: profile.custom_employee_id,
+        dob: clean.dob, address: clean.address, mobile: clean.mobile, emergencyContact: clean.emergencyContact,
+        skillset: clean.skillset, panNumber: clean.panNumber, bankAccountNo: clean.bankAccountNo,
+        bankIfsc: clean.bankIfsc, bankName: clean.bankName,
+      };
+      await api.updateEmployee(currentUser.employee_id, payload);
+      const next = {
+        ...profile, dob: clean.dob || null, address: clean.address || null, mobile: clean.mobile || null,
+        emergency_contact: clean.emergencyContact || null, skillset: clean.skillset || null, pan_number: clean.panNumber || null,
+        bank_account_no: clean.bankAccountNo || null, bank_ifsc: clean.bankIfsc || null, bank_name: clean.bankName || null,
+      };
+      setProfile(next); setForm(pfToForm(next)); setEditing(null); setTouched({});
+      dialog.alert("Your profile has been updated.", { title: "Saved", dtype: "success" });
+    } catch (e) { setErr(e.message); } finally { setSaving(false); }
+  }
+
+  const pw = pfPwScore(pwForm.newPassword);
+  const pwMatch = pwForm.confirm.length > 0 && pwForm.confirm === pwForm.newPassword;
+  const pwReady = pwForm.oldPassword && pw.score >= 3 && pwMatch && pwForm.newPassword !== pwForm.oldPassword;
+  const pwColors = [C.red, C.red, C.amber, C.green, C.green];
+  const pwLabels = ["Too weak", "Weak", "Fair", "Strong", "Very strong"];
+  const closePw = () => { setShowPwModal(false); setPwForm({ oldPassword: "", newPassword: "", confirm: "" }); setPwErr(""); setPwShow(false); };
+  async function handleSavePw() {
+    if (!pwReady) return;
+    setPwSaving(true); setPwErr("");
+    try {
+      await api.updatePassword({ oldPassword: pwForm.oldPassword, newPassword: pwForm.newPassword });
+      closePw();
+      dialog.alert("Your password has been changed.", { title: "Password updated", dtype: "success" });
+    } catch (e) { setPwErr(e.message); }
+    setPwSaving(false);
+  }
+
+  const EditBtn = ({ sec }) => editing === sec ? null : (
+    <button className="pf-edit-btn" onClick={() => requestEdit(sec)} disabled={saving}>✏️ <span>Edit</span></button>
+  );
+  const EditFooter = ({ sec }) => editing !== sec ? null : (
+    <div className="pf-card-foot">
+      <span className="pf-foot-note">{dirty ? "● Unsaved changes" : "No changes yet"}</span>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button className="pf-btn pf-btn-ghost" onClick={cancelEdit} disabled={saving}>Cancel</button>
+        <button className="pf-btn pf-btn-primary" onClick={handleSave} disabled={saving || !dirty || (touched.__submit && sectionHasErr(sec))}>{saving ? "Saving…" : "Save changes"}</button>
+      </div>
+    </div>
+  );
+  const ring = (pct, color, size = 84, stroke = 8) => {
+    const r = (size - stroke) / 2, c = 2 * Math.PI * r;
+    return (
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={C.border} strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round"
+          strokeDasharray={c} strokeDashoffset={c * (1 - pct / 100)} transform={`rotate(-90 ${size / 2} ${size / 2})`} style={{ transition: "stroke-dashoffset .6s ease" }} />
+      </svg>
+    );
+  };
 
   return (
     <>
       <style>{`
-        .prof-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        .prof-bank-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        @media (max-width: 860px) { .prof-grid { grid-template-columns: 1fr; } }
-        @media (max-width: 560px) { .prof-bank-grid { grid-template-columns: 1fr; } }
+        .pf { container-type: inline-size; container-name: pf; }
+        .pf-wrap { display: flex; flex-direction: column; gap: 20px; }
+
+        /* Hero */
+        .pf-hero { position: relative; border-radius: 24px; border: 1px solid ${C.border}; background: ${C.card}; overflow: hidden; }
+        .pf-cover { height: 56px; background:
+            radial-gradient(420px 120px at 10% 0%, ${C.accent}66, transparent 70%),
+            radial-gradient(460px 140px at 90% 100%, ${C.purple}55, transparent 70%),
+            linear-gradient(120deg, ${C.surface}, ${C.card}); border-bottom: 1px solid ${C.border}; }
+        .pf-hero-body { display: flex; align-items: center; gap: 18px; padding: 0 24px 18px; flex-wrap: wrap; }
+        .pf-hero-body > .pf-avatar { margin-top: -28px; }
+        .pf-hero-acts { align-self: center; padding-top: 12px; }
+        .pf-avatar { width: 80px; height: 80px; border-radius: 22px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 800; color: #fff;
+          background: linear-gradient(135deg, ${C.accent}, ${C.purple}); border: 4px solid ${C.card}; box-shadow: 0 14px 36px ${C.accent}40; position: relative; box-sizing: border-box; }
+        .pf-status-dot { position: absolute; right: -2px; bottom: -2px; width: 18px; height: 18px; border-radius: 50%; background: ${C.green}; border: 3px solid ${C.card}; box-sizing: border-box; }
+        .pf-id { flex: 1; min-width: 240px; padding-top: 12px; }
+        .pf-name { font-size: clamp(20px, 2vw, 24px); font-weight: 800; color: ${C.text}; letter-spacing: -0.6px; line-height: 1.15; }
+        .pf-sub { font-size: 13.5px; color: ${C.textDim}; margin-top: 4px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .pf-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+        .pf-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700; padding: 5px 11px; border-radius: 999px; border: 1px solid ${C.border}; color: ${C.textDim}; background: ${C.surface}; white-space: nowrap; }
+        .pf-chip.solid { text-transform: uppercase; letter-spacing: .5px; }
+        .pf-hero-acts { display: flex; gap: 8px; flex-wrap: wrap; }
+        .pf-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 10px 16px; border-radius: 12px; font-size: 13px; font-weight: 700; cursor: pointer; border: 1px solid transparent; font-family: inherit; transition: transform .15s, opacity .15s, border-color .15s, background .15s; white-space: nowrap; text-decoration: none; }
+        .pf-btn:hover:not(:disabled) { transform: translateY(-1px); }
+        .pf-btn:disabled { opacity: .5; cursor: not-allowed; }
+        .pf-btn-primary { background: ${C.accent}; color: #fff; box-shadow: 0 8px 22px ${C.accent}40; }
+        .pf-btn-ghost { background: ${C.surface}; color: ${C.text}; border-color: ${C.border}; }
+        .pf-btn-ghost:hover:not(:disabled) { border-color: ${C.accent}77; }
+        .pf-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid ${C.border}; }
+        .pf-stat { padding: 16px 22px; display: flex; align-items: center; gap: 12px; min-width: 0; }
+        .pf-stat + .pf-stat { border-left: 1px solid ${C.border}; }
+        .pf-stat-ico { width: 38px; height: 38px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+        .pf-stat-val { font-size: 17px; font-weight: 800; color: ${C.text}; letter-spacing: -0.3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .pf-stat-lbl { font-size: 11.5px; color: ${C.textMuted}; font-weight: 600; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* Layout */
+        .pf-layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; align-items: start; }
+        .pf-main { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+        .pf-side { display: flex; flex-direction: column; gap: 20px; position: sticky; top: 16px; min-width: 0; }
+
+        .pf-card { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 20px; padding: 22px; min-width: 0; transition: border-color .2s, box-shadow .2s; }
+        .pf-card.editing { border-color: ${C.accent}88; box-shadow: 0 0 0 4px ${C.accentGlow}; }
+        .pf-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+        .pf-card-title { display: flex; align-items: center; gap: 12px; min-width: 0; }
+        .pf-card-ico { width: 38px; height: 38px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+        .pf-card-h { font-size: 15px; font-weight: 800; color: ${C.text}; }
+        .pf-card-sub { font-size: 12px; color: ${C.textMuted}; margin-top: 2px; display: flex; align-items: center; gap: 5px; }
+        .pf-edit-btn { display: inline-flex; align-items: center; gap: 6px; background: ${C.surface}; border: 1px solid ${C.border}; color: ${C.text}; border-radius: 10px; padding: 7px 12px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; transition: border-color .15s; flex-shrink: 0; }
+        .pf-edit-btn:hover:not(:disabled) { border-color: ${C.accent}88; }
+        .pf-lock { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; color: ${C.textMuted}; background: ${C.surface}; border: 1px solid ${C.border}; padding: 5px 10px; border-radius: 999px; flex-shrink: 0; }
+
+        .pf-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+        .pf-field { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; background: ${C.surface}; border: 1px solid ${C.border}66; min-width: 0; transition: border-color .15s; }
+        .pf-field:hover { border-color: ${C.border}; }
+        .pf-field.full { grid-column: 1 / -1; }
+        .pf-field-ico { width: 34px; height: 34px; border-radius: 10px; background: ${C.card}; border: 1px solid ${C.border}; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
+        .pf-field-body { flex: 1; min-width: 0; }
+        .pf-field-lbl { font-size: 10.5px; font-weight: 700; color: ${C.textMuted}; letter-spacing: .8px; text-transform: uppercase; }
+        .pf-field-val { font-size: 13.5px; font-weight: 600; color: ${C.text}; margin-top: 3px; overflow-wrap: break-word; word-break: break-word; }
+        .pf-anchor { text-decoration: none; display: block; }
+        .pf-anchor:hover { color: ${C.accent}; }
+        .pf-missing { color: ${C.textMuted}; font-weight: 500; font-style: italic; }
+        .pf-field-acts { display: flex; gap: 4px; flex-shrink: 0; opacity: .65; transition: opacity .15s; }
+        .pf-field:hover .pf-field-acts, .pf-field-acts:focus-within { opacity: 1; }
+        .pf-icon-btn { width: 30px; height: 30px; border-radius: 9px; border: 1px solid transparent; background: transparent; color: ${C.textDim}; cursor: pointer; font-size: 14px; display: inline-flex; align-items: center; justify-content: center; font-family: inherit; }
+        .pf-icon-btn:hover { background: ${C.card}; border-color: ${C.border}; color: ${C.text}; }
+
+        /* Form */
+        .pf-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 16px; }
+        .pf-inp-wrap { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+        .pf-inp-wrap.full { grid-column: 1 / -1; }
+        .pf-inp-lbl { font-size: 12px; font-weight: 700; color: ${C.textDim}; }
+        .pf-input { width: 100%; box-sizing: border-box; background: ${C.surface}; border: 1px solid ${C.border}; border-radius: 12px; color: ${C.text}; padding: 11px 13px; font-size: 14px; font-family: inherit; outline: none; transition: border-color .15s, box-shadow .15s; resize: vertical; color-scheme: ${C.bg === DARK.bg ? "dark" : "light"}; }
+        .pf-input:focus { border-color: ${C.accent}; box-shadow: 0 0 0 3px ${C.accentGlow}; }
+        .pf-input.err { border-color: ${C.red}; }
+        .pf-input.err:focus { box-shadow: 0 0 0 3px ${C.red}2a; }
+        .pf-inp-err { font-size: 11.5px; color: ${C.red}; font-weight: 600; }
+        .pf-inp-hint { font-size: 11.5px; color: ${C.textMuted}; }
+        .pf-card-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 18px; padding-top: 16px; border-top: 1px solid ${C.border}; }
+        .pf-foot-note { font-size: 12px; color: ${C.amber}; font-weight: 600; }
+
+        /* Skills */
+        .pf-skills { display: flex; flex-wrap: wrap; gap: 8px; }
+        .pf-skill { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 700; color: ${C.text}; background: ${C.accent}14; border: 1px solid ${C.accent}33; }
+        .pf-skill button { background: none; border: none; color: ${C.textMuted}; cursor: pointer; font-size: 14px; padding: 0 0 0 2px; line-height: 1; font-family: inherit; }
+        .pf-skill button:hover { color: ${C.red}; }
+        .pf-empty { display: flex; align-items: center; gap: 12px; padding: 16px; border: 1px dashed ${C.border}; border-radius: 14px; color: ${C.textMuted}; font-size: 13px; }
+
+        /* Sidebar */
+        .pf-complete { display: flex; align-items: center; gap: 16px; }
+        .pf-ring { position: relative; width: 84px; height: 84px; flex-shrink: 0; }
+        .pf-ring b { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 19px; font-weight: 800; color: ${C.text}; }
+        .pf-todo { display: flex; flex-direction: column; gap: 4px; margin-top: 16px; }
+        .pf-todo button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 9px 10px; border-radius: 10px; background: none; border: none; color: ${C.text}; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
+        .pf-todo button:hover { background: ${C.surface}; }
+        .pf-todo-dot { width: 18px; height: 18px; border-radius: 50%; border: 2px dashed ${C.textMuted}; flex-shrink: 0; }
+        .pf-todo-add { margin-left: auto; color: ${C.accent}; font-size: 12px; font-weight: 700; }
+        .pf-mile { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 14px; background: ${C.surface}; border: 1px solid ${C.border}66; }
+        .pf-mile + .pf-mile { margin-top: 10px; }
+        .pf-mile-ico { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 19px; flex-shrink: 0; }
+        .pf-mile-t { font-size: 13px; font-weight: 700; color: ${C.text}; }
+        .pf-mile-s { font-size: 12px; color: ${C.textMuted}; margin-top: 2px; }
+        .pf-mile-badge { margin-left: auto; font-size: 12px; font-weight: 800; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+        .pf-sec-row { display: flex; align-items: center; gap: 12px; }
+
+        .pf-alert { background: ${C.red}14; color: ${C.red}; padding: 12px 16px; border-radius: 14px; font-size: 13px; font-weight: 600; border: 1px solid ${C.red}40; }
+        .pf-btn:focus-visible, .pf-edit-btn:focus-visible, .pf-icon-btn:focus-visible, .pf-todo button:focus-visible { outline: 2px solid ${C.accent}; outline-offset: 2px; }
+
+        /* Mobile sticky save bar */
+        .pf-sticky { display: none; }
+
+        /* Password modal */
+        .pf-pw-meter { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 2px; }
+        .pf-pw-meter span { height: 5px; border-radius: 5px; background: ${C.border}; transition: background .2s; }
+        .pf-pw-checks { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; }
+        .pf-pw-checks div { font-size: 12px; display: flex; align-items: center; gap: 6px; }
+
+        /* ── Responsive (container-based) ── */
+        @container pf (max-width: 1100px) {
+          .pf-layout { grid-template-columns: 1fr; }
+          .pf-side { position: static; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+          .pf-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .pf-stat:nth-child(3) { border-left: none; }
+          .pf-stat:nth-child(n+3) { border-top: 1px solid ${C.border}; }
+        }
+        @container pf (max-width: 860px) {
+          .pf-side { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .pf-side > :first-child { grid-column: 1 / -1; }
+          .pf-hero-acts { width: 100%; }
+        }
+        @container pf (max-width: 640px) {
+          .pf-wrap, .pf-main, .pf-side { gap: 14px; }
+          .pf-cover { height: 48px; }
+          .pf-hero-body { flex-direction: column; align-items: center; text-align: center; padding: 0 16px 16px; gap: 10px; }
+          .pf-hero-body > .pf-avatar { margin-top: -32px; }
+          .pf-avatar { width: 72px; height: 72px; border-radius: 20px; font-size: 24px; }
+          .pf-id, .pf-hero-acts { padding-top: 0; }
+          .pf-id { min-width: 0; width: 100%; }
+          .pf-sub, .pf-chips { justify-content: center; }
+          .pf-hero-acts { justify-content: center; }
+          .pf-hero-acts .pf-btn { flex: 1; }
+          .pf-stat { padding: 14px; gap: 10px; }
+          .pf-stat-ico { width: 32px; height: 32px; font-size: 15px; border-radius: 10px; }
+          .pf-stat-val { font-size: 15px; }
+          .pf-side { grid-template-columns: 1fr; }
+          .pf-card { padding: 16px; border-radius: 18px; }
+          .pf-grid, .pf-form { grid-template-columns: 1fr; }
+          .pf-field-acts { opacity: 1; }
+          .pf-edit-btn span { display: none; }
+          .pf-card-foot { display: none; }
+          .pf-sticky { display: flex; position: sticky; bottom: 12px; z-index: 20; gap: 10px; align-items: center; padding: 10px; border-radius: 16px; background: ${C.card}f2; border: 1px solid ${C.border}; box-shadow: 0 12px 40px rgba(0,0,0,.45); backdrop-filter: blur(10px); }
+          .pf-sticky .pf-btn { flex: 1; }
+          .pf-pw-checks { grid-template-columns: 1fr; }
+        }
       `}</style>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+      <div className="pf">
+        <div className="pf-wrap">
 
-        {/* ── Hero Card ── */}
-        <div style={{
-          background: C.card, border: `1px solid ${C.border}`, borderRadius: 18,
-          padding: "24px 28px", display: "flex", alignItems: "center",
-          gap: 22, flexWrap: "wrap",
-        }}>
-          {/* Avatar */}
-          <div style={{
-            width: 76, height: 76, borderRadius: 20, flexShrink: 0,
-            background: `linear-gradient(135deg, ${C.accent}44, ${C.accent}22)`,
-            border: `2px solid ${C.accent}66`,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 28, fontWeight: 800, color: C.accent,
-          }}>
-            {currentUser.avatar || mkAvi(profile.name)}
-          </div>
-
-          {/* Identity */}
-          <div style={{ flex: 1, minWidth: 200 }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: -0.5 }}>{profile.name}</div>
-            <div style={{ fontSize: 13, color: C.textMuted, marginTop: 3 }}>
-              {profile.designation && <span>{profile.designation}</span>}
-              {profile.custom_employee_id && <span style={{ color: C.border, margin: "0 8px" }}>·</span>}
-              {profile.custom_employee_id && <span style={{ fontFamily: "monospace", fontSize: 12, color: C.textDim }}>{profile.custom_employee_id}</span>}
+          {/* ── Hero ── */}
+          <section className="pf-hero">
+            <div className="pf-cover" />
+            <div className="pf-hero-body">
+              <div className="pf-avatar">{currentUser.avatar || mkAvi(profile.name)}<span className="pf-status-dot" title="Active" /></div>
+              <div className="pf-id">
+                <div className="pf-name">{profile.name}</div>
+                <div className="pf-sub">
+                  <span>{profile.designation || roleLabel}</span>
+                  {profile.custom_employee_id && <><span style={{ color: C.textMuted }}>·</span><span style={{ fontFamily: "ui-monospace, Menlo, monospace", fontSize: 12.5 }}>{profile.custom_employee_id}</span></>}
+                </div>
+                <div className="pf-chips">
+                  <span className="pf-chip solid" style={{ color: roleColor, background: roleColor + "18", borderColor: roleColor + "44" }}>{roleLabel}</span>
+                  {profile.group_name && <span className="pf-chip solid" style={{ color: `color-mix(in srgb, ${groupColor} 45%, ${C.text})`, background: groupColor + "22", borderColor: groupColor + "55" }}>{profile.group_name}</span>}
+                  {profile.location && <span className="pf-chip">📍 {profile.location}</span>}
+                  {joined && <span className="pf-chip">🗓 Joined {fmtD(profile.joining_date)}</span>}
+                </div>
+              </div>
+              <div className="pf-hero-acts">
+                <button className="pf-btn pf-btn-ghost" onClick={() => setShowPwModal(true)}>🔐 Password</button>
+                <button className="pf-btn pf-btn-primary" onClick={() => requestEdit("personal")} disabled={editing === "personal"}>✏️ Edit Profile</button>
+              </div>
             </div>
-            <div style={{ display: "flex", gap: 7, marginTop: 10, flexWrap: "wrap", alignItems: "center" }}>
-              <Badge color={roleColor}>{roleLabel}</Badge>
-              {profile.group_name && <Badge color={profile.group_color || C.accent}>{profile.group_name}</Badge>}
-              {profile.location && <Badge color={C.textMuted}>📍 {profile.location}</Badge>}
-              {profile.joining_date && <Badge color={C.textMuted}>Joined {fmtD(profile.joining_date)}</Badge>}
+            <div className="pf-stats">
+              {[
+                { icon: "⏳", label: "Tenure", value: tenureLabel, color: C.accent },
+                { icon: "🧑‍💼", label: "Reports to", value: profile.manager_name || "—", color: C.purple },
+                { icon: "🛠", label: "Skills listed", value: skills.length, color: C.green },
+                { icon: "✅", label: "Profile complete", value: `${completePct}%`, color: completeColor },
+              ].map(s => (
+                <div key={s.label} className="pf-stat">
+                  <div className="pf-stat-ico" style={{ background: s.color + "18", border: `1px solid ${s.color}30` }}>{s.icon}</div>
+                  <div style={{ minWidth: 0 }}>
+                    <div className="pf-stat-val">{s.value}</div>
+                    <div className="pf-stat-lbl">{s.label}</div>
+                  </div>
+                </div>
+              ))}
             </div>
-          </div>
+          </section>
 
-          {/* Actions */}
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
-            {!isEditing ? (
-              <Btn onClick={() => setIsEditing(true)}>✏ Edit Profile</Btn>
-            ) : (
-              <>
-                <Btn variant="ghost" onClick={() => { setIsEditing(false); setForm({ ...profile, bankAccountNo: profile.bank_account_no, bankIfsc: profile.bank_ifsc, bankName: profile.bank_name, emergencyContact: profile.emergency_contact }); }}>Cancel</Btn>
-                <Btn onClick={handleSave} disabled={saving}>{saving ? "Saving…" : "Save Changes"}</Btn>
-              </>
-            )}
-            <Btn variant="ghost" onClick={() => setShowPwModal(true)}>🔐 Password</Btn>
+          {err && <div className="pf-alert" role="alert">⚠ {err}</div>}
+
+          <div className="pf-layout">
+            {/* ── Main column ── */}
+            <div className="pf-main">
+
+              {/* Work details */}
+              <section className="pf-card">
+                <div className="pf-card-head">
+                  <div className="pf-card-title">
+                    <div className="pf-card-ico" style={{ background: C.accent + "18", border: `1px solid ${C.accent}30` }}>🏢</div>
+                    <div><div className="pf-card-h">Work Details</div><div className="pf-card-sub">Managed by HR / admin</div></div>
+                  </div>
+                  <span className="pf-lock">🔒 Read-only</span>
+                </div>
+                <div className="pf-grid">
+                  <PfField icon="👤" label="Full name" value={profile.name} />
+                  <PfField icon="🪪" label="Employee ID" value={profile.custom_employee_id} mono copyKey="eid" copied={copied} onCopy={copy} />
+                  <PfField icon="✉️" label="Work email" full value={profile.email} href={`mailto:${profile.email}`} copyKey="email" copied={copied} onCopy={copy} />
+                  <PfField icon="💼" label="Designation" value={profile.designation} />
+                  <PfField icon="👥" label="Group / Team" value={profile.group_name} />
+                  <PfField icon="🧑‍💼" label="Reporting manager" value={profile.manager_name} />
+                  <PfField icon="📅" label="Joining date" value={joined ? fmtD(profile.joining_date) : null} />
+                  <PfField icon="📍" label="Location" value={profile.location} />
+                  <PfField icon="💰" label="Annual CTC" full value={profile.ctc_annual ? fmt$(profile.ctc_annual) : null} masked="full" revealed={reveal.ctc} onReveal={() => toggleReveal("ctc")} />
+                </div>
+              </section>
+
+              {/* Personal */}
+              <section className={`pf-card${editing === "personal" ? " editing" : ""}`}>
+                <div className="pf-card-head">
+                  <div className="pf-card-title">
+                    <div className="pf-card-ico" style={{ background: C.green + "18", border: `1px solid ${C.green}30` }}>🙂</div>
+                    <div><div className="pf-card-h">Personal Information</div><div className="pf-card-sub">{editing === "personal" ? "Editing — remember to save" : "Visible to HR and your manager"}</div></div>
+                  </div>
+                  <EditBtn sec="personal" />
+                </div>
+                {editing === "personal" ? (
+                  <div className="pf-form">
+                    <PfInput label="Date of birth" name="dob" type="date" max={ymdLocal(today)} value={form.dob} onChange={setF} error={fieldErr("dob")} />
+                    <PfInput label="Mobile" name="mobile" type="tel" value={form.mobile} onChange={setF} error={fieldErr("mobile")} placeholder="+91 98765 43210" />
+                    <PfInput label="Emergency contact" name="emergencyContact" type="tel" value={form.emergencyContact} onChange={setF} error={fieldErr("emergencyContact")} placeholder="+91 98765 43210" hint="Someone we can reach in an emergency" full />
+                    <PfInput label="Address" name="address" textarea value={form.address} onChange={setF} placeholder="House no, street, city, state, PIN" full />
+                  </div>
+                ) : (
+                  <div className="pf-grid">
+                    <PfField icon="🎂" label="Date of birth" value={dobD ? fmtD(form.dob) : null} />
+                    <PfField icon="📱" label="Mobile" value={form.mobile} href={`tel:${(form.mobile || "").replace(/\s/g, "")}`} copyKey="mobile" copied={copied} onCopy={copy} />
+                    <PfField icon="🆘" label="Emergency contact" value={form.emergencyContact} href={`tel:${(form.emergencyContact || "").replace(/\s/g, "")}`} full />
+                    <PfField icon="🏠" label="Address" value={form.address} full copyKey="address" copied={copied} onCopy={copy} />
+                  </div>
+                )}
+                <EditFooter sec="personal" />
+              </section>
+
+              {/* Skills */}
+              <section className={`pf-card${editing === "skills" ? " editing" : ""}`}>
+                <div className="pf-card-head">
+                  <div className="pf-card-title">
+                    <div className="pf-card-ico" style={{ background: C.purple + "18", border: `1px solid ${C.purple}30` }}>🛠</div>
+                    <div><div className="pf-card-h">Skills</div><div className="pf-card-sub">{skills.length ? `${skills.length} skill${skills.length !== 1 ? "s" : ""} · helps with project staffing` : "Helps with project staffing"}</div></div>
+                  </div>
+                  <EditBtn sec="skills" />
+                </div>
+                {editing === "skills" ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    <div className="pf-inp-wrap">
+                      <label htmlFor="pf-skill-new" className="pf-inp-lbl">Add a skill</label>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <input id="pf-skill-new" className="pf-input" value={skillDraft} placeholder="e.g. React, Python — press Enter"
+                          onChange={e => setSkillDraft(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addSkill(skillDraft); }
+                            else if (e.key === "Backspace" && !skillDraft && skills.length) removeSkill(skills[skills.length - 1]);
+                          }} />
+                        <button className="pf-btn pf-btn-ghost" onClick={() => addSkill(skillDraft)} disabled={!skillDraft.trim()}>Add</button>
+                      </div>
+                      <div className="pf-inp-hint">Separate multiple skills with commas. Backspace removes the last one.</div>
+                    </div>
+                    {skills.length > 0 && (
+                      <div className="pf-skills">
+                        {skills.map(s => <span key={s} className="pf-skill">{s}<button onClick={() => removeSkill(s)} aria-label={`Remove ${s}`}>×</button></span>)}
+                      </div>
+                    )}
+                  </div>
+                ) : skills.length ? (
+                  <div className="pf-skills">{skills.map(s => <span key={s} className="pf-skill">{s}</span>)}</div>
+                ) : (
+                  <div className="pf-empty"><span style={{ fontSize: 22 }}>✨</span>No skills added yet. Add a few so managers can find the right people for projects.</div>
+                )}
+                <EditFooter sec="skills" />
+              </section>
+
+              {/* Banking */}
+              <section className={`pf-card${editing === "bank" ? " editing" : ""}`}>
+                <div className="pf-card-head">
+                  <div className="pf-card-title">
+                    <div className="pf-card-ico" style={{ background: C.amber + "18", border: `1px solid ${C.amber}30` }}>🏦</div>
+                    <div><div className="pf-card-h">Banking & Tax</div><div className="pf-card-sub">🛡 Sensitive · masked by default · used for payroll</div></div>
+                  </div>
+                  <EditBtn sec="bank" />
+                </div>
+                {editing === "bank" ? (
+                  <div className="pf-form">
+                    <PfInput label="PAN number" name="panNumber" value={form.panNumber} onChange={setF} error={fieldErr("panNumber")} placeholder="ABCDE1234F" upper />
+                    <PfInput label="Bank name" name="bankName" value={form.bankName} onChange={setF} placeholder="e.g. HDFC Bank" />
+                    <PfInput label="Account number" name="bankAccountNo" value={form.bankAccountNo} onChange={(k, v) => setF(k, v.replace(/\s/g, ""))} error={fieldErr("bankAccountNo")} placeholder="1234567890" />
+                    <PfInput label="IFSC code" name="bankIfsc" value={form.bankIfsc} onChange={setF} error={fieldErr("bankIfsc")} placeholder="HDFC0001234" upper hint="11 characters, printed on your cheque book" />
+                  </div>
+                ) : (
+                  <div className="pf-grid">
+                    <PfField icon="🪪" label="PAN number" value={form.panNumber} mono masked="tail" revealed={reveal.pan} onReveal={() => toggleReveal("pan")} copyKey="pan" copied={copied} onCopy={copy} />
+                    <PfField icon="🏛" label="Bank name" value={form.bankName} />
+                    <PfField icon="🔢" label="Account number" value={form.bankAccountNo} mono masked="tail" revealed={reveal.acc} onReveal={() => toggleReveal("acc")} copyKey="acc" copied={copied} onCopy={copy} />
+                    <PfField icon="🔤" label="IFSC code" value={form.bankIfsc} mono copyKey="ifsc" copied={copied} onCopy={copy} />
+                  </div>
+                )}
+                <EditFooter sec="bank" />
+              </section>
+
+              {/* Mobile sticky save bar */}
+              {editing && (
+                <div className="pf-sticky">
+                  <button className="pf-btn pf-btn-ghost" onClick={cancelEdit} disabled={saving}>Cancel</button>
+                  <button className="pf-btn pf-btn-primary" onClick={handleSave} disabled={saving || !dirty || (touched.__submit && sectionHasErr(editing))}>{saving ? "Saving…" : "Save changes"}</button>
+                </div>
+              )}
+            </div>
+
+            {/* ── Sidebar ── */}
+            <aside className="pf-side">
+              <section className="pf-card">
+                <div className="pf-complete">
+                  <div className="pf-ring">{ring(completePct, completeColor)}<b>{completePct}%</b></div>
+                  <div style={{ minWidth: 0 }}>
+                    <div className="pf-card-h">Profile strength</div>
+                    <div className="pf-card-sub" style={{ display: "block" }}>
+                      {completePct === 100 ? "All set — your profile is complete 🎉" : `${checklist.length - doneCount} item${checklist.length - doneCount !== 1 ? "s" : ""} left to complete`}
+                    </div>
+                  </div>
+                </div>
+                {completePct < 100 && (
+                  <div className="pf-todo">
+                    {checklist.filter(c => !c.done).slice(0, 5).map(c => (
+                      <button key={c.k} onClick={() => requestEdit(c.sec)}>
+                        <span className="pf-todo-dot" />{c.label}<span className="pf-todo-add">Add</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <section className="pf-card">
+                <div className="pf-card-h" style={{ marginBottom: 14 }}>Milestones</div>
+                <div className="pf-mile">
+                  <div className="pf-mile-ico" style={{ background: "#EC4899" + "18", border: "1px solid #EC489930" }}>🎂</div>
+                  <div style={{ minWidth: 0 }}>
+                    <div className="pf-mile-t">Birthday</div>
+                    <div className="pf-mile-s">{dobD ? dobD.toLocaleDateString("en-GB", { day: "numeric", month: "long" }) : "Add your date of birth"}</div>
+                  </div>
+                  {bdayIn !== null && <span className="pf-mile-badge" style={{ color: "#EC4899", background: "#EC489918" }}>{bdayIn === 0 ? "Today 🎉" : `${bdayIn}d`}</span>}
+                </div>
+                <div className="pf-mile">
+                  <div className="pf-mile-ico" style={{ background: C.amber + "18", border: `1px solid ${C.amber}30` }}>🏆</div>
+                  <div style={{ minWidth: 0 }}>
+                    <div className="pf-mile-t">Work anniversary</div>
+                    <div className="pf-mile-s">{joined ? (tenureMonths >= 1 ? `Year ${Math.floor(tenureMonths / 12) + 1} · since ${joined.getFullYear()}` : "Welcome aboard!") : "Joining date not set"}</div>
+                  </div>
+                  {annivIn !== null && <span className="pf-mile-badge" style={{ color: C.amber, background: C.amber + "18" }}>{annivIn === 0 ? "Today 🎉" : `${annivIn}d`}</span>}
+                </div>
+              </section>
+
+              <section className="pf-card">
+                <div className="pf-sec-row">
+                  <div className="pf-mile-ico" style={{ background: C.green + "18", border: `1px solid ${C.green}30` }}>🔐</div>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div className="pf-card-h">Account security</div>
+                    <div className="pf-card-sub" style={{ display: "block" }}>Signed in as <b style={{ color: C.textDim }}>{currentUser.username || profile.email}</b></div>
+                  </div>
+                </div>
+                <button className="pf-btn pf-btn-ghost" style={{ width: "100%", marginTop: 14 }} onClick={() => setShowPwModal(true)}>Change password</button>
+              </section>
+            </aside>
           </div>
         </div>
-
-        {err && <div style={{ background: C.red + "18", color: C.red, padding: "10px 14px", borderRadius: 10, fontSize: 13, border: `1px solid ${C.red}44` }}>⚠ {err}</div>}
-
-        {/* ── Org + Personal ── */}
-        <div className="prof-grid">
-
-          {/* Org Details — read-only */}
-          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "22px 22px" }}>
-            <SectionHead icon="🏢" title="Organizational Details" badge="Read-only · managed by admin" />
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
-              <InfoRow icon="👤" label="Full Name" value={profile.name} />
-              <InfoRow icon="🪪" label="Employee ID" value={profile.custom_employee_id} />
-              <InfoRow icon="✉️" label="Email" value={profile.email} />
-              <InfoRow icon="👥" label="Group / Team" value={profile.group_name} />
-              <InfoRow icon="🧑‍💼" label="Manager" value={profile.manager_name} />
-              <InfoRow icon="💼" label="Designation" value={profile.designation} />
-              <InfoRow icon="📅" label="Joining Date" value={profile.joining_date ? fmtD(profile.joining_date) : null} />
-              <InfoRow icon="💰" label="Annual CTC"
-                value={profile.ctc_annual ? `₹${Number(profile.ctc_annual).toLocaleString("en-IN")}` : null}
-                masked show={showCtc} onToggle={() => setShowCtc(v => !v)}
-              />
-            </div>
-          </div>
-
-          {/* Personal Info — editable */}
-          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "22px 22px" }}>
-            <SectionHead icon="👤" title="Personal Information" badge={isEditing ? "Editing — click Save Changes to apply" : "Click Edit Profile to update"} />
-            {!isEditing ? (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
-                <InfoRow icon="🎂" label="Date of Birth" value={form.dob ? fmtD(form.dob) : null} />
-                <InfoRow icon="📱" label="Mobile" value={form.mobile} />
-                <InfoRow icon="🆘" label="Emergency Contact" value={form.emergencyContact} />
-                <div style={{ gridColumn: "1 / -1" }}>
-                  <InfoRow icon="🏠" label="Address" value={form.address} />
-                </div>
-                <div style={{ gridColumn: "1 / -1" }}>
-                  <InfoRow icon="🛠" label="Skillset" value={form.skillset} />
-                </div>
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <Inp label="Date of Birth" type="date" value={form.dob || ""} onChange={v => setForm(f => ({ ...f, dob: v }))} />
-                  <Inp label="Mobile" value={form.mobile || ""} onChange={v => setForm(f => ({ ...f, mobile: v }))} placeholder="+91 98765 43210" />
-                </div>
-                <Inp label="Emergency Contact" value={form.emergencyContact || ""} onChange={v => setForm(f => ({ ...f, emergencyContact: v }))} placeholder="+91 … (Emergency)" />
-                <Inp label="Address" value={form.address || ""} onChange={v => setForm(f => ({ ...f, address: v }))} placeholder="Full address…" />
-                <Inp label="Skillset" value={form.skillset || ""} onChange={v => setForm(f => ({ ...f, skillset: v }))} placeholder="e.g. React, Python, SQL" />
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ── Banking & Taxation ── */}
-        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "22px 22px" }}>
-          <SectionHead icon="🏦" title="Banking & Taxation" badge="Sensitive — data is masked by default" />
-          {!isEditing ? (
-            <div className="prof-bank-grid">
-              <div>
-                <InfoRow icon="🪪" label="PAN Number" value={form.panNumber || profile.pan_number} masked show={showPan} onToggle={() => setShowPan(v => !v)} />
-                <InfoRow icon="🔢" label="Account No" value={form.bankAccountNo} masked show={showAccount} onToggle={() => setShowAccount(v => !v)} />
-              </div>
-              <div>
-                <InfoRow icon="🏛" label="Bank Name" value={form.bankName} />
-                <InfoRow icon="🔤" label="IFSC Code" value={form.bankIfsc} />
-              </div>
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <div className="prof-bank-grid">
-                <div>
-                  <Inp label="PAN Number" value={form.panNumber || profile.pan_number || ""} onChange={v => setForm(f => ({ ...f, panNumber: v }))} placeholder="ABCDE1234F" type={showPan ? "text" : "password"} />
-                  <button onClick={() => setShowPan(s => !s)} style={{ marginTop: 4, background: "none", border: "none", cursor: "pointer", color: C.accent, fontSize: 11, fontWeight: 600, padding: 0 }}>{showPan ? "Hide" : "Show"}</button>
-                </div>
-                <Inp label="Bank Name" value={form.bankName || ""} onChange={v => setForm(f => ({ ...f, bankName: v }))} placeholder="e.g. HDFC Bank" />
-              </div>
-              <div className="prof-bank-grid">
-                <div>
-                  <Inp label="Account No" value={form.bankAccountNo || ""} onChange={v => setForm(f => ({ ...f, bankAccountNo: v }))} placeholder="1234567890" type={showAccount ? "text" : "password"} />
-                  <button onClick={() => setShowAccount(s => !s)} style={{ marginTop: 4, background: "none", border: "none", cursor: "pointer", color: C.accent, fontSize: 11, fontWeight: 600, padding: 0 }}>{showAccount ? "Hide" : "Show"}</button>
-                </div>
-                <Inp label="IFSC Code" value={form.bankIfsc || ""} onChange={v => setForm(f => ({ ...f, bankIfsc: v }))} placeholder="HDFC0001234" />
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* ── Change Password Modal ── */}
-        {showPwModal && (
-          <Modal title="Change Password" onClose={() => setShowPwModal(false)}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <Inp label="Current Password" type="password" value={pwForm.oldPassword} onChange={v => setPwForm(f => ({ ...f, oldPassword: v }))} placeholder="••••••••" />
-              <Inp label="New Password" type="password" value={pwForm.newPassword} onChange={v => setPwForm(f => ({ ...f, newPassword: v }))} placeholder="••••••••" />
-              <div style={{ fontSize: 12, color: C.textDim }}>Updates your login credentials immediately.</div>
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                <Btn onClick={handleSavePw} disabled={pwSaving}>{pwSaving ? "Updating…" : "Update Password"}</Btn>
-              </div>
-            </div>
-          </Modal>
-        )}
-
       </div>
+
+      {/* ── Change Password Modal ── */}
+      {showPwModal && (
+        <Modal title="Change password" onClose={closePw} maxWidth={460}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div className="pf-inp-wrap">
+              <label htmlFor="pf-pw-old" className="pf-inp-lbl">Current password</label>
+              <input id="pf-pw-old" className="pf-input" type={pwShow ? "text" : "password"} autoComplete="current-password" value={pwForm.oldPassword} onChange={e => setPwForm(f => ({ ...f, oldPassword: e.target.value }))} />
+            </div>
+            <div className="pf-inp-wrap">
+              <label htmlFor="pf-pw-new" className="pf-inp-lbl">New password</label>
+              <input id="pf-pw-new" className="pf-input" type={pwShow ? "text" : "password"} autoComplete="new-password" value={pwForm.newPassword} onChange={e => setPwForm(f => ({ ...f, newPassword: e.target.value }))} />
+              {pwForm.newPassword && (
+                <>
+                  <div className="pf-pw-meter">{[0, 1, 2, 3].map(i => <span key={i} style={i < pw.score ? { background: pwColors[pw.score] } : undefined} />)}</div>
+                  <div style={{ fontSize: 11.5, fontWeight: 700, color: pwColors[pw.score] }}>{pwLabels[pw.score]}</div>
+                </>
+              )}
+            </div>
+            <div className="pf-inp-wrap">
+              <label htmlFor="pf-pw-confirm" className="pf-inp-lbl">Confirm new password</label>
+              <input id="pf-pw-confirm" className={`pf-input${pwForm.confirm && !pwMatch ? " err" : ""}`} type={pwShow ? "text" : "password"} autoComplete="new-password" value={pwForm.confirm}
+                onChange={e => setPwForm(f => ({ ...f, confirm: e.target.value }))} onKeyDown={e => { if (e.key === "Enter") handleSavePw(); }} />
+              {pwForm.confirm && !pwMatch && <div className="pf-inp-err">Passwords don't match</div>}
+            </div>
+            <div className="pf-pw-checks">
+              {pw.checks.map(c => <div key={c.label} style={{ color: c.ok ? C.green : C.textMuted }}>{c.ok ? "✓" : "○"} {c.label}</div>)}
+              {pwForm.newPassword && pwForm.newPassword === pwForm.oldPassword && <div style={{ color: C.red }}>✕ Must differ from current</div>}
+            </div>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: C.textDim, cursor: "pointer" }}>
+              <input type="checkbox" checked={pwShow} onChange={e => setPwShow(e.target.checked)} /> Show passwords
+            </label>
+            {pwErr && <div className="pf-alert" role="alert">⚠ {pwErr}</div>}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 }}>
+              <button className="pf-btn pf-btn-ghost" onClick={closePw}>Cancel</button>
+              <button className="pf-btn pf-btn-primary" onClick={handleSavePw} disabled={!pwReady || pwSaving}>{pwSaving ? "Updating…" : "Update password"}</button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </>
   );
 }
@@ -5272,172 +6419,342 @@ function EmployeeDashboard({ currentUser, navFn }) {
 
   if (loading) return <Spinner />;
 
+  // ── Derived view data ──
+  const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const weekTarget = 45;
+  const weekDays = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekStart);
+    d.setDate(weekStart.getDate() + i);
+    const key = ymd(d);
+    const hours = weekTs.filter(t => tsDate(t) === key).reduce((s, t) => s + (+t.hours || 0), 0);
+    return { key, label: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][i], hours, isToday: key === ymd(now), isWeekend: i >= 5 };
+  });
+  const maxDay = Math.max(9, ...weekDays.map(d => d.hours));
+  const weekPct = Math.min(100, Math.round((weekHours / weekTarget) * 100));
+  const utilPct = monthBaseHours > 0 ? Math.round((utilizedHours / monthBaseHours) * 100) : 0;
+  const roleColor = currentUser.role === "manager" ? C.amber : C.green;
+  const roleLabel = currentUser.role === "manager" ? "Manager" : currentUser.role === "intras" ? "Intern" : "Employee";
+  const kpiTabs = { "Leave Balance": "leave", "Hours This Week": "timesheets", "Pending Timesheets": "timesheets", "Expense Claims": "expenses" };
+  const leaveCredited = bal ? parseFloat(bal.total_credited) || 0 : 0;
+  const leaveUsed = bal ? parseFloat(bal.total_used) || 0 : 0;
+
+  const Pill = ({ status }) => (
+    <span className="pd-pill" style={{ color: scol(status), background: scol(status) + "1a", borderColor: scol(status) + "33" }}>
+      <span style={{ width: 6, height: 6, borderRadius: "50%", background: scol(status) }} />
+      {slbl(status)}
+    </span>
+  );
+
+  const CardHead = ({ icon, title, action, meta }) => (
+    <div className="pd-card-head">
+      <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+        <span className="pd-card-ico">{icon}</span>
+        <span className="pd-card-title">{title}</span>
+      </div>
+      {action ? <button className="pd-link" onClick={action}>View all <span aria-hidden>→</span></button> : meta}
+    </div>
+  );
+
   return (
     <>
       <style>{`
-        .db-kpi { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 16px; padding: 20px 22px; display: flex; align-items: center; gap: 16px; transition: transform 0.15s, box-shadow 0.15s; }
-        .db-kpi:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
-        .db-section { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
-        .db-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-radius: 10px; background: ${C.surface}; border: 1px solid ${C.border}44; gap: 10px; transition: background 0.15s; }
-        .db-row:hover { background: ${C.bg}; }
-        .db-qa { flex: 1; min-width: 110px; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 18px 10px; border: 1px solid ${C.border}; border-radius: 14px; background: ${C.card}; cursor: pointer; transition: all 0.18s; outline: none; }
-        .db-qa:hover { border-color: ${C.accent}55; background: ${C.accentGlow}; transform: translateY(-2px); box-shadow: 0 6px 20px rgba(59,130,246,0.15); }
-        .db-kpi-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; }
-        .db-3col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
-        @media (max-width: 1100px) { .db-3col { grid-template-columns: 1fr 1fr !important; } }
-        @media (max-width: 900px) { .db-kpi-grid { grid-template-columns: 1fr 1fr !important; } }
-        @media (max-width: 700px) { .db-3col { grid-template-columns: 1fr !important; } }
-        @media (max-width: 480px) { .db-kpi-grid { grid-template-columns: 1fr !important; } }
+        .pd { container-type: inline-size; container-name: pd; }
+        .pd-wrap { display: flex; flex-direction: column; gap: 20px; }
+
+        /* Hero */
+        .pd-hero { position: relative; overflow: hidden; border-radius: 24px; border: 1px solid ${C.border};
+          background:
+            radial-gradient(600px 260px at 0% 0%, ${C.accent}1f, transparent 60%),
+            radial-gradient(520px 260px at 100% 100%, ${C.purple}1a, transparent 60%),
+            ${C.card};
+          padding: 28px; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 28px; align-items: center; }
+        .pd-hero-id { display: flex; align-items: center; gap: 18px; min-width: 0; }
+        .pd-avatar { width: 64px; height: 64px; border-radius: 20px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+          font-size: 22px; font-weight: 800; color: #fff; background: linear-gradient(135deg, ${C.accent}, ${C.purple}); box-shadow: 0 10px 30px ${C.accent}40; }
+        .pd-date { font-size: 12px; color: ${C.textMuted}; font-weight: 600; letter-spacing: .3px; }
+        .pd-greet { font-size: clamp(22px, 2.6vw, 30px); font-weight: 800; color: ${C.text}; letter-spacing: -0.6px; line-height: 1.15; margin-top: 4px; }
+        .pd-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; font-size: 12px; color: ${C.textDim}; }
+        .pd-chip { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; border: 1px solid; letter-spacing: .4px; text-transform: uppercase; }
+        .pd-dot-sep { width: 3px; height: 3px; border-radius: 50%; background: ${C.textMuted}; }
+        .pd-cta { display: flex; gap: 10px; margin-top: 22px; flex-wrap: wrap; }
+        .pd-btn { display: inline-flex; align-items: center; gap: 8px; padding: 11px 18px; border-radius: 12px; font-size: 13px; font-weight: 700; cursor: pointer; border: 1px solid transparent; transition: transform .15s, box-shadow .15s, background .15s; font-family: inherit; }
+        .pd-btn:hover { transform: translateY(-1px); }
+        .pd-btn-primary { background: ${C.accent}; color: #fff; box-shadow: 0 8px 24px ${C.accent}45; }
+        .pd-btn-ghost { background: ${C.surface}; color: ${C.text}; border-color: ${C.border}; }
+        .pd-btn-ghost:hover { border-color: ${C.accent}66; }
+
+        .pd-week { background: ${C.surface}cc; backdrop-filter: blur(8px); border: 1px solid ${C.border}; border-radius: 18px; padding: 18px 20px; }
+        .pd-week-top { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; }
+        .pd-eyebrow { font-size: 11px; font-weight: 700; color: ${C.textMuted}; letter-spacing: .8px; text-transform: uppercase; }
+        .pd-week-val { font-size: 26px; font-weight: 800; color: ${C.text}; letter-spacing: -0.5px; line-height: 1; margin-top: 6px; }
+        .pd-week-val small { font-size: 13px; color: ${C.textMuted}; font-weight: 600; margin-left: 4px; }
+        .pd-week-side { text-align: right; font-size: 12px; color: ${C.textDim}; }
+        .pd-week-side b { display: block; font-size: 18px; color: ${C.purple}; font-weight: 800; }
+        .pd-bars { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; height: 92px; margin-top: 16px; align-items: end; }
+        .pd-bar { display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; }
+        .pd-bar-track { width: 100%; max-width: 28px; flex: 1; border-radius: 8px; background: ${C.border}66; display: flex; align-items: flex-end; overflow: hidden; }
+        .pd-bar-fill { width: 100%; border-radius: 8px; background: linear-gradient(180deg, ${C.accent}, ${C.accent}99); transition: height .6s ease; }
+        .pd-bar-lbl { font-size: 10px; font-weight: 600; color: ${C.textMuted}; }
+        .pd-bar.today .pd-bar-lbl { color: ${C.accent}; font-weight: 800; }
+        .pd-bar.today .pd-bar-track { box-shadow: 0 0 0 1.5px ${C.accent}88; }
+        .pd-progress { height: 6px; background: ${C.border}; border-radius: 6px; overflow: hidden; margin-top: 14px; }
+        .pd-progress > div { height: 100%; border-radius: 6px; transition: width .6s ease; }
+
+        /* KPIs */
+        .pd-kpis { display: grid; grid-template-columns: repeat(${kpis.length}, minmax(0, 1fr)); gap: 14px; }
+        .pd-kpi { text-align: left; font-family: inherit; cursor: pointer; position: relative; overflow: hidden; background: ${C.card}; border: 1px solid ${C.border}; border-radius: 18px; padding: 18px; display: flex; flex-direction: column; gap: 14px; transition: transform .18s, border-color .18s, box-shadow .18s; }
+        .pd-kpi:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--k) 40%, transparent); box-shadow: 0 14px 34px -16px color-mix(in srgb, var(--k) 60%, transparent); }
+        .pd-kpi::after { content: ""; position: absolute; right: -30px; top: -30px; width: 110px; height: 110px; border-radius: 50%; background: var(--k); opacity: .07; pointer-events: none; }
+        .pd-kpi-top { display: flex; justify-content: space-between; align-items: center; }
+        .pd-kpi-ico { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 19px; }
+        .pd-kpi-arrow { color: ${C.textMuted}; font-size: 16px; transition: transform .18s, color .18s; }
+        .pd-kpi:hover .pd-kpi-arrow { transform: translate(2px, -2px); color: ${C.text}; }
+        .pd-kpi-val { font-size: 26px; font-weight: 800; letter-spacing: -0.6px; line-height: 1; }
+        .pd-kpi-lbl { font-size: 13px; font-weight: 700; color: ${C.text}; margin-top: 6px; }
+        .pd-kpi-sub { font-size: 12px; color: ${C.textMuted}; margin-top: 2px; }
+
+        /* Alert */
+        .pd-alert { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 18px; border-radius: 16px; background: ${C.amber}12; border: 1px solid ${C.amber}33; }
+        .pd-alert-tag { background: ${C.amber}22; border: 1px solid ${C.amber}40; border-radius: 999px; padding: 4px 12px; font-size: 12px; font-weight: 700; color: ${C.amber}; }
+
+        /* Main bento grid */
+        .pd-main { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "ts lv ut"; gap: 16px; }
+        .pd-card { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 20px; padding: 20px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+        .pd-card-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 2px; }
+        .pd-card-ico { width: 32px; height: 32px; border-radius: 10px; background: ${C.surface}; border: 1px solid ${C.border}; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
+        .pd-card-title { font-size: 14px; font-weight: 800; color: ${C.text}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .pd-link { background: none; border: none; color: ${C.accent}; font-size: 12px; font-weight: 700; cursor: pointer; padding: 6px 8px; border-radius: 8px; white-space: nowrap; font-family: inherit; }
+        .pd-link:hover { background: ${C.accentGlow}; }
+        .pd-list { display: flex; flex-direction: column; gap: 4px; }
+        .pd-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; transition: background .15s; min-width: 0; }
+        .pd-row:hover { background: ${C.surface}; }
+        .pd-row-ico { width: 36px; height: 36px; border-radius: 11px; background: ${C.surface}; border: 1px solid ${C.border}; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+        .pd-row-main { flex: 1; min-width: 0; }
+        .pd-row-title { font-size: 13px; font-weight: 700; color: ${C.text}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .pd-row-sub { font-size: 11.5px; color: ${C.textMuted}; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .pd-row-end { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+        .pd-hours { font-size: 13px; font-weight: 800; color: ${C.text}; font-variant-numeric: tabular-nums; }
+        .pd-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; border: 1px solid; white-space: nowrap; }
+        .pd-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; color: ${C.textMuted}; font-size: 13px; padding: 28px 12px; border: 1px dashed ${C.border}; border-radius: 14px; }
+        .pd-empty span { font-size: 28px; }
+
+        .pd-bal { border-radius: 16px; padding: 16px; background: linear-gradient(135deg, ${balColor}14, transparent 70%), ${C.surface}; border: 1px solid ${C.border}; }
+        .pd-bal-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+        .pd-bal-num { font-size: 28px; font-weight: 800; color: ${balColor}; letter-spacing: -0.5px; line-height: 1; }
+        .pd-bal-num small { font-size: 13px; color: ${C.textMuted}; font-weight: 600; margin-left: 4px; letter-spacing: 0; }
+        .pd-bal-foot { display: flex; justify-content: space-between; margin-top: 8px; font-size: 11px; color: ${C.textMuted}; }
+
+        .pd-util-body { display: flex; flex-direction: column; align-items: center; gap: 16px; flex: 1; justify-content: center; }
+        .pd-donut { position: relative; width: 100%; max-width: 230px; height: 220px; }
+        .pd-donut-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
+        .pd-donut-center b { font-size: 34px; font-weight: 800; color: ${C.text}; letter-spacing: -1px; line-height: 1; }
+        .pd-donut-center span { font-size: 11px; color: ${C.textMuted}; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; margin-top: 6px; }
+        .pd-legend { width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        .pd-legend > div { background: ${C.surface}; border: 1px solid ${C.border}; border-radius: 12px; padding: 10px 12px; min-width: 0; }
+        .pd-legend-lbl { display: flex; align-items: center; gap: 6px; font-size: 11px; color: ${C.textMuted}; font-weight: 600; white-space: nowrap; }
+        .pd-legend-val { font-size: 15px; font-weight: 800; color: ${C.text}; margin-top: 4px; font-variant-numeric: tabular-nums; }
+
+        /* Quick actions */
+        .pd-qa-grid { display: grid; grid-template-columns: repeat(${quickActions.length}, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+        .pd-qa { font-family: inherit; display: flex; align-items: center; gap: 12px; text-align: left; padding: 14px 16px; border-radius: 16px; border: 1px solid ${C.border}; background: ${C.card}; cursor: pointer; transition: transform .18s, border-color .18s, background .18s; min-width: 0; }
+        .pd-qa:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--a) 45%, transparent); background: linear-gradient(135deg, color-mix(in srgb, var(--a) 10%, transparent), transparent 70%), ${C.card}; }
+        .pd-qa:focus-visible, .pd-kpi:focus-visible, .pd-btn:focus-visible, .pd-link:focus-visible { outline: 2px solid ${C.accent}; outline-offset: 2px; }
+        .pd-qa-ico { width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+        .pd-qa-lbl { font-size: 13px; font-weight: 700; color: ${C.text}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .pd-qa-sub { font-size: 11.5px; color: ${C.textMuted}; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* ── Responsive (container-based, so it adapts to sidebar open/closed) ── */
+        @container pd (max-width: 1180px) {
+          .pd-main { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "ts lv" "ut ut"; }
+          .pd-util-body { flex-direction: row; justify-content: space-around; }
+          .pd-donut { max-width: 220px; }
+          .pd-legend { max-width: 420px; grid-template-columns: 1fr; }
+          .pd-qa { flex-direction: column; align-items: center; text-align: center; gap: 10px; padding: 16px 10px; }
+          .pd-qa > div:last-child { width: 100%; }
+        }
+        @container pd (max-width: 900px) {
+          .pd-hero { grid-template-columns: 1fr; gap: 22px; }
+          .pd-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @container pd (max-width: 640px) {
+          .pd-wrap { gap: 16px; }
+          .pd-hero { padding: 20px; border-radius: 20px; }
+          .pd-avatar { width: 52px; height: 52px; border-radius: 16px; font-size: 18px; }
+          .pd-hero-id { gap: 14px; }
+          .pd-cta .pd-btn { flex: 1; justify-content: center; }
+          .pd-week { padding: 16px; }
+          .pd-bars { height: 76px; gap: 6px; }
+          .pd-kpis { gap: 10px; }
+          .pd-kpi { padding: 14px; gap: 10px; border-radius: 16px; }
+          .pd-kpi-ico { width: 34px; height: 34px; font-size: 16px; border-radius: 10px; }
+          .pd-kpi-val { font-size: 22px; }
+          .pd-kpi-lbl { font-size: 12px; }
+          .pd-kpi-sub { font-size: 11px; }
+          .pd-main { grid-template-columns: 1fr; grid-template-areas: "ts" "lv" "ut"; }
+          .pd-card { padding: 16px; border-radius: 18px; }
+          .pd-row { padding: 9px 6px; }
+          .pd-util-body { flex-direction: column; }
+          .pd-legend { grid-template-columns: repeat(3, 1fr); max-width: none; }
+          .pd-qa-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+          .pd-qa { flex-direction: column; align-items: flex-start; text-align: left; gap: 10px; padding: 14px; }
+          .pd-qa-sub { white-space: normal; }
+          .pd-qa:last-child:nth-child(odd) { grid-column: 1 / -1; flex-direction: row; align-items: center; }
+          .pd-legend > div { padding: 8px 10px; }
+          .pd-legend-val { font-size: 14px; }
+        }
+        @container pd (max-width: 340px) {
+          .pd-legend { grid-template-columns: 1fr; }
+          .pd-row-sub { white-space: normal; }
+          .pd-kpi-arrow { display: none; }
+        }
       `}</style>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div className="pd">
+        <div className="pd-wrap">
 
-        {/* ── Greeting banner ── */}
-        <div style={{
-          background: `linear-gradient(135deg,${C.surface} 0%,${C.card} 60%,${C.surface} 100%)`,
-          border: `1px solid ${C.border}`, borderRadius: 20,
-          padding: "26px 32px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16,
-          position: "relative", overflow: "hidden",
-        }}>
-          <div style={{ position: "absolute", top: -50, right: 80, width: 180, height: 180, borderRadius: "50%", background: C.accent + "09", pointerEvents: "none" }} />
-          <div style={{ position: "absolute", bottom: -40, right: -10, width: 140, height: 140, borderRadius: "50%", background: C.purple + "07", pointerEvents: "none" }} />
-          <div style={{ position: "relative" }}>
-            <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>{fullDate}</div>
-            <div style={{ fontSize: 28, fontWeight: 900, color: C.text, letterSpacing: -0.5, lineHeight: 1.15 }}>{greet}, {firstName} 👋</div>
-            <div style={{ fontSize: 13, color: C.textMuted, marginTop: 8, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <span style={{ background: (currentUser.role === "manager" ? C.amber : C.green) + "22", color: currentUser.role === "manager" ? C.amber : C.green, border: `1px solid ${(currentUser.role === "manager" ? C.amber : C.green)}44`, fontSize: 11, fontWeight: 700, padding: "3px 12px", borderRadius: 20, textTransform: "uppercase", letterSpacing: .5 }}>
-                {currentUser.role === "manager" ? "Manager" : currentUser.role === "intras" ? "Intern" : "Employee"}
-              </span>
-              {currentUser.group_name && <span style={{ color: C.textDim, fontWeight: 500 }}>{currentUser.group_name}</span>}
-              {currentUser.emp_id && <span style={{ color: C.textMuted }}>ID: {currentUser.emp_id}</span>}
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: 10, position: "relative" }}>
-            <div style={{ background: C.accent + "18", border: `1px solid ${C.accent}30`, borderRadius: 16, padding: "14px 22px", textAlign: "center", minWidth: 86 }}>
-              <div style={{ fontSize: 26, fontWeight: 900, color: C.accent, lineHeight: 1 }}>{weekHours}h</div>
-              <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 700, letterSpacing: .5, marginTop: 5 }}>THIS WEEK</div>
-            </div>
-            {bal && !isInternGroup && (
-              <div style={{ background: balColor + "18", border: `1px solid ${balColor}30`, borderRadius: 16, padding: "14px 22px", textAlign: "center", minWidth: 86 }}>
-                <div style={{ fontSize: 26, fontWeight: 900, color: balColor, lineHeight: 1 }}>{balNum}d</div>
-                <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 700, letterSpacing: .5, marginTop: 5 }}>LEAVE LEFT</div>
-              </div>
-            )}
-            <div style={{ background: C.purple + "18", border: `1px solid ${C.purple}30`, borderRadius: 16, padding: "14px 22px", textAlign: "center", minWidth: 86 }}>
-              <div style={{ fontSize: 26, fontWeight: 900, color: C.purple, lineHeight: 1 }}>{totalMonthHours}h</div>
-              <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 700, letterSpacing: .5, marginTop: 5 }}>THIS MONTH</div>
-            </div>
-          </div>
-        </div>
-
-        {/* ── KPI cards ── */}
-        <div className="db-kpi-grid">
-          {kpis.map(k => (
-            <div key={k.label} className="db-kpi" style={{ borderTop: `3px solid ${k.color}55` }}>
-              <div style={{ width: 46, height: 46, borderRadius: 13, background: k.color + "1a", border: `1px solid ${k.color}28`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>{k.icon}</div>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 22, fontWeight: 900, color: k.color, letterSpacing: -0.5, lineHeight: 1.1 }}>{k.value}</div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginTop: 3 }}>{k.label}</div>
-                <div style={{ fontSize: 11, color: C.textMuted, marginTop: 1 }}>{k.sub}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* ── Manager team pending alert ── */}
-        {currentUser.role === "manager" && (teamPending.timesheets > 0 || teamPending.leaves > 0) && (
-          <div style={{ background: C.amber + "10", border: `1px solid ${C.amber}30`, borderRadius: 14, padding: "14px 22px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 20 }}>⏳</span>
-            <span style={{ fontSize: 13, fontWeight: 700, color: C.amber }}>Team Reviews Pending</span>
-            {teamPending.timesheets > 0 && <span style={{ background: C.amber + "20", border: `1px solid ${C.amber}40`, borderRadius: 8, padding: "4px 12px", fontSize: 12, fontWeight: 700, color: C.amber }}>{teamPending.timesheets} timesheet{teamPending.timesheets !== 1 ? "s" : ""}</span>}
-            {teamPending.leaves > 0 && <span style={{ background: C.amber + "20", border: `1px solid ${C.amber}40`, borderRadius: 8, padding: "4px 12px", fontSize: 12, fontWeight: 700, color: C.amber }}>{teamPending.leaves} leave request{teamPending.leaves !== 1 ? "s" : ""}</span>}
-          </div>
-        )}
-
-        {/* ── Three columns: Timesheets | Leaves | Utilization Pie ── */}
-        <div className="db-3col">
-
-          {/* Recent Timesheets */}
-          <div className="db-section">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 13, fontWeight: 800, color: C.text }}>⏱ Recent Timesheets</span>
-              <button onClick={() => navFn(portalPage, "timesheets")} style={{ background: "none", border: "none", color: C.accent, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>View all →</button>
-            </div>
-            {recentTs.length === 0 ? (
-              <div style={{ textAlign: "center", color: C.textMuted, fontSize: 13, padding: "28px 0" }}>No timesheets yet</div>
-            ) : recentTs.map(t => (
-              <div key={t.id} className="db-row">
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.project_name || "—"}</div>
-                  <div style={{ fontSize: 11, color: C.textMuted, marginTop: 1 }}>{fmtD2(tsDate(t))}{t.task ? ` · ${t.task.slice(0, 22)}` : ""}</div>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                  <span style={{ fontSize: 13, fontWeight: 800, color: C.accent }}>{t.hours}h</span>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: scol(t.status), background: scol(t.status) + "18", padding: "2px 7px", borderRadius: 7, border: `1px solid ${scol(t.status)}28` }}>{slbl(t.status)}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Leave status */}
-          <div className="db-section">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 13, fontWeight: 800, color: C.text }}>🌴 Leave</span>
-              <button onClick={() => navFn(portalPage, "leave")} style={{ background: "none", border: "none", color: C.accent, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>View all →</button>
-            </div>
-            {bal && !isInternGroup && (
-              <div style={{ background: C.surface, borderRadius: 12, padding: "12px 14px", border: `1px solid ${C.border}44` }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 7 }}>
-                  <span style={{ fontSize: 12, color: C.textMuted, fontWeight: 600 }}>Balance</span>
-                  <span style={{ fontSize: 15, fontWeight: 900, color: balColor }}>{balNum}d remaining</span>
-                </div>
-                <div style={{ height: 6, background: C.border, borderRadius: 6, overflow: "hidden" }}>
-                  <div style={{ height: "100%", borderRadius: 6, background: `linear-gradient(90deg,${balColor},${balColor}99)`, width: `${Math.min(100, (balNum / Math.max(parseFloat(bal.total_credited) || 1, balNum)) * 100)}%`, transition: "width 0.6s ease" }} />
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5 }}>
-                  <span style={{ fontSize: 10, color: C.textMuted }}>{parseFloat(bal.total_used) || 0}d used</span>
-                  <span style={{ fontSize: 10, color: C.textMuted }}>{parseFloat(bal.total_credited) || 0}d credited</span>
-                </div>
-              </div>
-            )}
-            {recentLeaves.length === 0 ? (
-              <div style={{ textAlign: "center", color: C.textMuted, fontSize: 13, padding: "16px 0" }}>No leave requests yet</div>
-            ) : recentLeaves.map(l => {
-              const days = Math.round((new Date(l.end_date) - new Date(l.start_date)) / 86400000) + 1;
-              const typeIcon = { Annual: "🌴", Sick: "🤒", Unpaid: "⏸", Maternity: "🤰", Paternity: "👶", Reserve: "🗓️" }[l.leave_type] || "📋";
-              return (
-                <div key={l.id} className="db-row">
-                  <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0, flex: 1 }}>
-                    <span style={{ fontSize: 17, flexShrink: 0 }}>{typeIcon}</span>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{l.leave_type}</div>
-                      <div style={{ fontSize: 11, color: C.textMuted }}>{fmtD2(l.start_date)} → {fmtD2(l.end_date)} · {days}d</div>
-                    </div>
+          {/* ── Hero ── */}
+          <section className="pd-hero">
+            <div style={{ minWidth: 0 }}>
+              <div className="pd-hero-id">
+                <div className="pd-avatar">{mkAvi(currentUser.emp_name || currentUser.username)}</div>
+                <div style={{ minWidth: 0 }}>
+                  <div className="pd-date">{fullDate}</div>
+                  <div className="pd-greet">{greet}, {firstName} 👋</div>
+                  <div className="pd-meta">
+                    <span className="pd-chip" style={{ color: roleColor, background: roleColor + "1a", borderColor: roleColor + "44" }}>{roleLabel}</span>
+                    {currentUser.group_name && <><span className="pd-dot-sep" /><span>{currentUser.group_name}</span></>}
+                    {currentUser.emp_id && <><span className="pd-dot-sep" /><span>ID {currentUser.emp_id}</span></>}
                   </div>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: scol(l.status), background: scol(l.status) + "18", padding: "2px 7px", borderRadius: 7, border: `1px solid ${scol(l.status)}28`, flexShrink: 0 }}>{slbl(l.status)}</span>
                 </div>
-              );
-            })}
-          </div>
-
-          {/* Monthly Utilization Pie Chart */}
-          <div className="db-section">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 13, fontWeight: 800, color: C.text }}>📊 {monthName} Utilization</span>
-              <span style={{ fontSize: 11, color: C.textMuted, fontWeight: 600 }}>{monthBaseHours}h base</span>
-            </div>
-            {utilizationData.length === 0 ? (
-              <div style={{ textAlign: "center", color: C.textMuted, fontSize: 13, padding: "40px 0", display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 32 }}>📭</span>
-                No hours logged this month
               </div>
-            ) : (
-              <>
-                <div style={{ display: "flex", justifyContent: "center", alignItems: "center", width: "100%", padding: "10px 0" }}>
-                  <ResponsiveContainer width="100%" height={260}>
+              <div className="pd-cta">
+                <button className="pd-btn pd-btn-primary" onClick={() => navFn(portalPage, "timesheets")}>⏱ Log Time</button>
+                <button className="pd-btn pd-btn-ghost" onClick={() => navFn(portalPage, "leave")}>🌴 Request Leave</button>
+              </div>
+            </div>
+
+            <div className="pd-week">
+              <div className="pd-week-top">
+                <div>
+                  <div className="pd-eyebrow">This week</div>
+                  <div className="pd-week-val">{weekHours}h<small>/ {weekTarget}h</small></div>
+                </div>
+                <div className="pd-week-side">
+                  <b>{totalMonthHours}h</b>
+                  approved this month
+                </div>
+              </div>
+              <div className="pd-bars" role="img" aria-label={`Hours logged per day this week: ${weekDays.map(d => `${d.label} ${d.hours}h`).join(", ")}`}>
+                {weekDays.map(d => (
+                  <div key={d.key} className={`pd-bar${d.isToday ? " today" : ""}`} title={`${d.label}: ${d.hours}h`}>
+                    <div className="pd-bar-track" style={d.isWeekend ? { opacity: .55 } : undefined}>
+                      <div className="pd-bar-fill" style={{ height: `${(d.hours / maxDay) * 100}%` }} />
+                    </div>
+                    <span className="pd-bar-lbl">{d.label}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="pd-progress"><div style={{ width: `${weekPct}%`, background: `linear-gradient(90deg, ${C.accent}, ${C.purple})` }} /></div>
+            </div>
+          </section>
+
+          {/* ── KPI cards ── */}
+          <section className="pd-kpis">
+            {kpis.map(k => (
+              <button key={k.label} className="pd-kpi" style={{ "--k": k.color }} onClick={() => navFn(portalPage, kpiTabs[k.label])}>
+                <div className="pd-kpi-top">
+                  <div className="pd-kpi-ico" style={{ background: k.color + "1a", border: `1px solid ${k.color}30` }}>{k.icon}</div>
+                  <span className="pd-kpi-arrow" aria-hidden>↗</span>
+                </div>
+                <div>
+                  <div className="pd-kpi-val" style={{ color: k.color }}>{k.value}</div>
+                  <div className="pd-kpi-lbl">{k.label}</div>
+                  <div className="pd-kpi-sub">{k.sub}</div>
+                </div>
+              </button>
+            ))}
+          </section>
+
+          {/* ── Manager team pending alert ── */}
+          {currentUser.role === "manager" && (teamPending.timesheets > 0 || teamPending.leaves > 0) && (
+            <div className="pd-alert">
+              <span style={{ fontSize: 18 }}>⏳</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: C.amber, marginRight: 4 }}>Team reviews pending</span>
+              {teamPending.timesheets > 0 && <span className="pd-alert-tag">{teamPending.timesheets} timesheet{teamPending.timesheets !== 1 ? "s" : ""}</span>}
+              {teamPending.leaves > 0 && <span className="pd-alert-tag">{teamPending.leaves} leave request{teamPending.leaves !== 1 ? "s" : ""}</span>}
+            </div>
+          )}
+
+          {/* ── Bento: Timesheets | Leave | Utilization ── */}
+          <section className="pd-main">
+
+            <div className="pd-card" style={{ gridArea: "ts" }}>
+              <CardHead icon="⏱" title="Recent Timesheets" action={() => navFn(portalPage, "timesheets")} />
+              {recentTs.length === 0 ? (
+                <div className="pd-empty"><span>🗒️</span>No timesheets yet</div>
+              ) : (
+                <div className="pd-list">
+                  {recentTs.map(t => (
+                    <div key={t.id} className="pd-row">
+                      <div className="pd-row-ico" style={{ color: C.accent, fontSize: 12, fontWeight: 800 }}>{mkAvi(t.project_name || "—")}</div>
+                      <div className="pd-row-main">
+                        <div className="pd-row-title">{t.project_name || "—"}</div>
+                        <div className="pd-row-sub">{fmtD2(tsDate(t))}{t.task ? ` · ${t.task}` : ""}</div>
+                      </div>
+                      <div className="pd-row-end">
+                        <span className="pd-hours">{(+t.hours || 0).toFixed(1)}h</span>
+                        <Pill status={t.status} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="pd-card" style={{ gridArea: "lv" }}>
+              <CardHead icon="🌴" title="Leave" action={() => navFn(portalPage, "leave")} />
+              {bal && !isInternGroup && (
+                <div className="pd-bal">
+                  <div className="pd-bal-row">
+                    <div className="pd-bal-num">{balNum}d<small>remaining</small></div>
+                    <span style={{ fontSize: 12, color: C.textDim, fontWeight: 600 }}>of {leaveCredited}d</span>
+                  </div>
+                  <div className="pd-progress" style={{ marginTop: 12 }}>
+                    <div style={{ width: `${Math.min(100, (balNum / Math.max(leaveCredited || 1, balNum)) * 100)}%`, background: `linear-gradient(90deg, ${balColor}, ${balColor}aa)` }} />
+                  </div>
+                  <div className="pd-bal-foot"><span>{leaveUsed}d used</span><span>{leaveCredited}d credited</span></div>
+                </div>
+              )}
+              {recentLeaves.length === 0 ? (
+                <div className="pd-empty"><span>🏖️</span>No leave requests yet</div>
+              ) : (
+                <div className="pd-list">
+                  {recentLeaves.map(l => {
+                    const days = Math.round((parseLocalDate(l.end_date) - parseLocalDate(l.start_date)) / 86400000) + 1;
+                    const typeIcon = { Annual: "🌴", Sick: "🤒", Unpaid: "⏸", Maternity: "🤰", Paternity: "👶", Reserve: "🗓️" }[l.leave_type] || "📋";
+                    return (
+                      <div key={l.id} className="pd-row">
+                        <div className="pd-row-ico">{typeIcon}</div>
+                        <div className="pd-row-main">
+                          <div className="pd-row-title">{l.leave_type}</div>
+                          <div className="pd-row-sub">{fmtD2(l.start_date)} → {fmtD2(l.end_date)} · {days}d</div>
+                        </div>
+                        <div className="pd-row-end"><Pill status={l.status} /></div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="pd-card" style={{ gridArea: "ut" }}>
+              <CardHead icon="📊" title={`${monthName} Utilization`} meta={<span style={{ fontSize: 12, color: C.textMuted, fontWeight: 600, whiteSpace: "nowrap" }}>{monthBaseHours}h base</span>} />
+              <div className="pd-util-body">
+                <div className="pd-donut">
+                  <ResponsiveContainer width="100%" height={220}>
                     <PieChart>
-                      <Pie data={utilizationData} dataKey="hours" cx="50%" cy="50%" outerRadius={105} innerRadius={65} paddingAngle={2} strokeWidth={0}>
-                        {utilizationData.map((d) => <Cell key={d.name} fill={d.color} />)}
+                      <Pie data={utilizationData} dataKey="hours" nameKey="name" cx="50%" cy="50%" outerRadius={100} innerRadius={76} paddingAngle={utilizationData.length > 1 ? 2 : 0} cornerRadius={8} strokeWidth={0} startAngle={90} endAngle={-270}>
+                        {utilizationData.map(d => <Cell key={d.name} fill={d.color} />)}
                       </Pie>
                       <Tooltip
                         formatter={(v, n) => [`${v}h (${monthBaseHours > 0 ? ((v / monthBaseHours) * 100).toFixed(0) : 0}%)`, n]}
@@ -5446,35 +6763,46 @@ function EmployeeDashboard({ currentUser, navFn }) {
                       />
                     </PieChart>
                   </ResponsiveContainer>
+                  <div className="pd-donut-center">
+                    <b>{utilPct}%</b>
+                    <span>Utilized</span>
+                  </div>
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
-                  {utilizationData.map((d) => (
-                    <div key={d.name} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <div style={{ width: 10, height: 10, borderRadius: 3, background: d.color, flexShrink: 0 }} />
-                      <div style={{ flex: 1, minWidth: 0, fontSize: 12, color: C.text, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{d.name}</div>
-                      <div style={{ fontSize: 11, color: C.textMuted, flexShrink: 0 }}>{d.hours}h · {monthBaseHours > 0 ? ((d.hours / monthBaseHours) * 100).toFixed(0) : 0}%</div>
-                    </div>
-                  ))}
+                <div className="pd-legend">
+                  <div>
+                    <div className="pd-legend-lbl"><span style={{ width: 8, height: 8, borderRadius: 3, background: C.green }} />Approved</div>
+                    <div className="pd-legend-val">{utilizedHours}h</div>
+                  </div>
+                  <div>
+                    <div className="pd-legend-lbl"><span style={{ width: 8, height: 8, borderRadius: 3, background: C.border }} />Remaining</div>
+                    <div className="pd-legend-val">{unutilizedHours}h</div>
+                  </div>
+                  <div>
+                    <div className="pd-legend-lbl"><span style={{ width: 8, height: 8, borderRadius: 3, background: C.textMuted }} />Base</div>
+                    <div className="pd-legend-val">{monthBaseHours}h</div>
+                  </div>
                 </div>
-              </>
-            )}
-          </div>
-        </div>
+              </div>
+            </div>
+          </section>
 
-        {/* ── Quick Actions ── */}
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, letterSpacing: .8, textTransform: "uppercase", marginBottom: 12 }}>Quick Actions</div>
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            {quickActions.map(a => (
-              <button key={a.label} className="db-qa" onClick={() => navFn(a.page, a.tab)}>
-                <div style={{ width: 44, height: 44, borderRadius: 13, background: a.color + "18", border: `1px solid ${a.color}28`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>{a.icon}</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{a.label}</div>
-                <div style={{ fontSize: 11, color: C.textMuted, textAlign: "center" }}>{a.sub}</div>
-              </button>
-            ))}
-          </div>
-        </div>
+          {/* ── Quick Actions ── */}
+          <section>
+            <div className="pd-eyebrow">Quick actions</div>
+            <div className="pd-qa-grid">
+              {quickActions.map(a => (
+                <button key={a.label} className="pd-qa" style={{ "--a": a.color }} onClick={() => navFn(a.page, a.tab)}>
+                  <div className="pd-qa-ico" style={{ background: a.color + "1a", border: `1px solid ${a.color}30` }}>{a.icon}</div>
+                  <div style={{ minWidth: 0 }}>
+                    <div className="pd-qa-lbl">{a.label}</div>
+                    <div className="pd-qa-sub">{a.sub}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </section>
 
+        </div>
       </div>
     </>
   );
