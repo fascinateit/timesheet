@@ -1,5 +1,5 @@
 """routes/employees.py"""
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required
 from db import query, execute, get_conn
 
@@ -76,17 +76,21 @@ def create_employee():
 def update_employee(eid):
     d = request.get_json(silent=True) or {}
     hr = d.get("hourlyRate")
-    execute(
-        "UPDATE employees SET name=%s, designation=%s, location=%s, pan_number=%s, email=%s, group_id=%s, hourly_rate=%s, manager_id=%s, joining_date=%s, ctc_annual=%s, variable_pay_amount=%s, dob=%s, address=%s, mobile=%s, emergency_contact=%s, bank_account_no=%s, bank_ifsc=%s, bank_name=%s, skillset=%s, custom_employee_id=%s WHERE id=%s",
-        (d.get("name"), d.get("designation") or None, d.get("location") or None, d.get("panNumber") or None,
-         d.get("email"), d.get("groupId") or None, float(hr) if hr else None, d.get("managerId") or None,
-         d.get("joiningDate") or None, float(d.get("ctcAnnual") or 0), float(d.get("variablePay") or 0),
-         d.get("dob") or None, d.get("address") or None,
-         d.get("mobile") or None, d.get("emergencyContact") or None,
-         d.get("bankAccountNo") or None,
-         d.get("bankIfsc") or None, d.get("bankName") or None,
-         d.get("skillset") or None, (d.get("customEmployeeId") or "").strip() or None, eid),
-    )
+    try:
+        execute(
+          "UPDATE employees SET name=%s, designation=%s, location=%s, pan_number=%s, email=%s, group_id=%s, hourly_rate=%s, manager_id=%s, joining_date=%s, ctc_annual=%s, variable_pay_amount=%s, dob=%s, address=%s, mobile=%s, emergency_contact=%s, bank_account_no=%s, bank_ifsc=%s, bank_name=%s, skillset=%s, custom_employee_id=%s WHERE id=%s",
+          (d.get("name"), d.get("designation") or None, d.get("location") or None, d.get("panNumber") or None,
+           d.get("email"), d.get("groupId") or None, float(hr) if hr else None, d.get("managerId") or None,
+           d.get("joiningDate") or None, float(d.get("ctcAnnual") or 0), float(d.get("variablePay") or 0),
+           d.get("dob") or None, d.get("address") or None,
+           d.get("mobile") or None, d.get("emergencyContact") or None,
+           d.get("bankAccountNo") or None,
+           d.get("bankIfsc") or None, d.get("bankName") or None,
+           d.get("skillset") or None, (str(d.get("customEmployeeId") or "")).strip() or None, eid),
+        )
+    except Exception as e:
+        current_app.logger.exception("Employee %s update failed", eid)
+        return jsonify(error=f"Could not save employee: {e}"), 400
     row = query(EMP_SELECT + " WHERE e.id=%s", (eid,), fetch="one")
     return jsonify(_fmt(row)), 200
 

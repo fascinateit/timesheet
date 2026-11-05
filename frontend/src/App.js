@@ -5931,7 +5931,10 @@ function MyProfile({ currentUser }) {
       setForm(f); setSkillDraft("");
     }
     setTouched(t => ({ ...t, __submit: true }));
-    if (Object.keys(validate(f)).length) return;
+    // Only block on fields in the section being edited: older records can hold values (e.g. an account
+    // number with spaces) that fail today's rules in a section the user can't see, which silently stopped the save.
+    const errs = validate(f);
+    if ((sectionFields[editing] || []).some(k => errs[k])) return;
     setSaving(true); setErr("");
     try {
       const clean = Object.fromEntries(Object.entries(f).map(([k, v]) => [k, typeof v === "string" ? v.trim() : v]));
@@ -5978,7 +5981,8 @@ function MyProfile({ currentUser }) {
   );
   const EditFooter = ({ sec }) => editing !== sec ? null : (
     <div className="pf-card-foot">
-      <span className="pf-foot-note">{dirty ? "● Unsaved changes" : "No changes yet"}</span>
+      {err ? <span className="pf-foot-note" role="alert" style={{ color: C.red, fontWeight: 600 }}>⚠ {err}</span>
+        : <span className="pf-foot-note">{dirty ? "● Unsaved changes" : "No changes yet"}</span>}
       <div style={{ display: "flex", gap: 8 }}>
         <button className="pf-btn pf-btn-ghost" onClick={cancelEdit} disabled={saving}>Cancel</button>
         <button className="pf-btn pf-btn-primary" onClick={handleSave} disabled={saving || !dirty || (touched.__submit && sectionHasErr(sec))}>{saving ? "Saving…" : "Save changes"}</button>
@@ -6150,7 +6154,9 @@ function MyProfile({ currentUser }) {
           .pf-edit-btn span { display: none; }
           .pf-card-foot { display: none; }
           .pf-sticky { display: flex; position: sticky; bottom: 12px; z-index: 20; gap: 10px; align-items: center; padding: 10px; border-radius: 16px; background: ${C.card}f2; border: 1px solid ${C.border}; box-shadow: 0 12px 40px rgba(0,0,0,.45); backdrop-filter: blur(10px); }
+          .pf-sticky { flex-wrap: wrap; }
           .pf-sticky .pf-btn { flex: 1; }
+          .pf-sticky-err { flex-basis: 100%; font-size: 12px; font-weight: 600; color: ${C.red}; padding: 0 4px; }
           .pf-pw-checks { grid-template-columns: 1fr; }
         }
       `}</style>
@@ -6322,6 +6328,7 @@ function MyProfile({ currentUser }) {
               {/* Mobile sticky save bar */}
               {editing && (
                 <div className="pf-sticky">
+                  {err && <div className="pf-sticky-err" role="alert">⚠ {err}</div>}
                   <button className="pf-btn pf-btn-ghost" onClick={cancelEdit} disabled={saving}>Cancel</button>
                   <button className="pf-btn pf-btn-primary" onClick={handleSave} disabled={saving || !dirty || (touched.__submit && sectionHasErr(editing))}>{saving ? "Saving…" : "Save changes"}</button>
                 </div>
