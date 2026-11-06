@@ -5105,10 +5105,19 @@ function Timesheets({ currentUser, viewOnly }) {
   const subRoster = viewOnly ? [] : (() => {
     const inactive = new Set(), activeAcc = new Set();
     (team.accounts || []).forEach(a => (a.active ? activeAcc : inactive).add(a.employee_id));
+    const relOf = e => (e.relieving_date ? String(e.relieving_date).slice(0, 10) : null);
+    // Currently working only. A resigned employee is removed as soon as their last working day is
+    // today or earlier; they stay while still serving notice (last day in the future), or if they
+    // logged hours this week that still need reviewing.
+    const inRoster = e => {
+      if (e.employment_status !== "resigned") return true;
+      if (weekRows.some(r => r.employee_id === e.id)) return true;
+      const rel = relOf(e);
+      return !!rel && rel > todayIso && rel >= wStart;
+    };
     return team.employees.filter(e =>
       e.id !== currentUser.employee_id &&
-      // Only people working this week: resigned employees drop off after their last working day.
-      !(e.employment_status === "resigned" && (!e.relieving_date || String(e.relieving_date).slice(0, 10) < wStart)) &&
+      inRoster(e) &&
       (currentUser.role === "admin" || e.manager_id === currentUser.employee_id) &&
       !(inactive.has(e.id) && !activeAcc.has(e.id)) &&
       !(e.joining_date && String(e.joining_date).slice(0, 10) > wEnd)
@@ -5123,13 +5132,18 @@ function Timesheets({ currentUser, viewOnly }) {
         });
       });
       const leaveTotal = Object.values(leaveDays).reduce((a, b) => a + b, 0);
-      const expected = Math.max(0, (5 - leaveTotal) * TS_DAY_TARGET);
+      const lastDay = e.employment_status === "resigned" ? relOf(e) : null;
+      const joinDay = e.joining_date ? String(e.joining_date).slice(0, 10) : null;
+      // Only weekdays they are employed for count towards expected hours.
+      const workDays = weekDays.slice(0, 5).map(isoDate).filter(iso => (!lastDay || iso <= lastDay) && (!joinDay || iso >= joinDay));
+      const leaveOnWork = workDays.reduce((a, iso) => a + (leaveDays[iso] || 0), 0);
+      const expected = Math.max(0, (workDays.length - leaveOnWork) * TS_DAY_TARGET);
       const total = sumH(mine);
       const n = k => mine.filter(r => r.status === k).length;
       const pending = mine.filter(r => r.status === "pending");
-      const status = !mine.length ? (leaveTotal >= 5 ? "leave" : "missing")
+      const status = !mine.length ? (leaveOnWork >= workDays.length ? "leave" : "missing")
         : n("rejected") ? "rejected" : pending.length ? "pending" : "approved";
-      return { e, hrs, leaveDays, leaveTotal, expected, total, pending, status, short: mine.length > 0 && total < expected && todayIso > isoDate(weekDays[4]) };
+      return { e, hrs, leaveDays, leaveTotal, expected, total, pending, status, lastDay, joinDay, short: mine.length > 0 && total < expected && todayIso > isoDate(weekDays[4]) };
     }).sort((a, b) => {
       const order = { missing: 0, rejected: 1, pending: 2, approved: 3, leave: 4 };
       return order[a.status] - order[b.status] || String(a.e.name).localeCompare(String(b.e.name));
@@ -5401,7 +5415,8 @@ function Timesheets({ currentUser, viewOnly }) {
             <div className="ts-sdays">
               {weekDays.map((d, i) => {
                 const iso = isoDate(d), h = r.hrs[iso] || 0, lv = r.leaveDays[iso];
-                const cls = h ? (h >= TS_DAY_TARGET ? "full" : "part") : lv ? "lv" : (i >= 5 || iso > todayIso) ? "off" : "miss";
+                const notEmployed = (r.lastDay && iso > r.lastDay) || (r.joinDay && iso < r.joinDay);
+                const cls = h ? (h >= TS_DAY_TARGET ? "full" : "part") : lv ? "lv" : (i >= 5 || iso > todayIso || notEmployed) ? "off" : "miss";
                 return <span key={iso} className={`ts-sday ${cls}`} title={`${DAY_NAMES[i]} ${d.getDate()}: ${h ? tsH(h) : lv ? (lv < 1 ? "Half-day leave" : "On leave") : "Nothing submitted"}`}>{h ? Math.round(h * 10) / 10 : lv ? "L" : "·"}</span>;
               })}
             </div>
@@ -5409,6 +5424,7 @@ function Timesheets({ currentUser, viewOnly }) {
               <div><b style={{ color: r.short ? C.amber : C.text }}>{tsH(r.total)}</b><span> / {r.expected}h</span></div>
               <div className="ts-sbar"><div style={{ width: `${pctH}%`, background: r.short ? C.amber : r.total ? C.green : C.border }} /></div>
               {r.leaveTotal > 0 && r.status !== "leave" && <small>🌴 {r.leaveTotal}d leave</small>}
+              {r.lastDay && <small style={{ color: C.amber }}>🚪 {r.lastDay > todayIso ? "Leaving" : "Left"} {fmtD(r.lastDay)}</small>}
             </div>
             <div><span className="ts-pill" style={{ color: m.color, background: m.color + "1a", borderColor: m.color + "33" }}><i style={{ background: m.color }} />{m.label}</span></div>
             <div className="ts-sacts">
@@ -10314,7 +10330,7 @@ function AdminEmployees({ readOnly = false, currentUser }) {
         <Modal title="Mark as resigned" onClose={() => setStatusModal(null)} maxWidth={420}>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div style={{ fontSize: 13.5, color: C.textDim, lineHeight: 1.5 }}>
-              <b style={{ color: C.text }}>{statusModal.name}</b> will be shown as resigned. They stay in timesheet approvals until their last working day, then drop off. Past timesheets, payslips and records are kept.
+              <b style={{ color: C.text }}>{statusModal.name}</b> will be shown as resigned and removed from the timesheet submission list once their last working day has arrived (if the last day is in the future they stay until then). Past timesheets, payslips and records are kept.
             </div>
             <Inp label="Last working day *" type="date" value={relDate} onChange={setRelDate} required />
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
