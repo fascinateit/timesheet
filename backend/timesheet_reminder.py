@@ -29,10 +29,6 @@ import argparse
 from datetime import date, timedelta
 from html import escape
 
-if __name__ == "__main__":  # load .env before the mailer reads its settings
-    import dotenv
-    dotenv.load_dotenv()
-
 from db import query
 from mailer import send_html_email
 
@@ -253,6 +249,15 @@ def send_timesheet_reminders(dry_run=False, override_to=None, today=None):
 
 
 if __name__ == "__main__":
+    # Same as wishes.py / daily_report.py: load .env when run as a standalone script.
+    import dotenv
+    dotenv.load_dotenv()
+    # pick up any reminder settings defined in .env
+    PORTAL_URL = os.environ.get("PORTAL_URL", PORTAL_URL)
+    DAY_TARGET = float(os.environ.get("TS_DAY_TARGET", DAY_TARGET))
+    SKIP_DONE = os.environ.get("TS_REMINDER_SKIP_DONE", "true" if SKIP_DONE else "false").lower() != "false"
+    INCLUDE_ADMINS = os.environ.get("TS_REMINDER_INCLUDE_ADMINS", "true" if INCLUDE_ADMINS else "false").lower() == "true"
+
     ap = argparse.ArgumentParser(description="Send Friday timesheet reminders")
     ap.add_argument("--dry-run", action="store_true", help="list recipients without sending")
     ap.add_argument("--to", help="send all reminders to this address instead (testing)")
