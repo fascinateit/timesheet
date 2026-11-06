@@ -314,6 +314,149 @@ const ErrBox = ({ msg, onRetry }) => (
 const CLIENT_COLORS = [C.accent, C.green, C.purple, C.amber, "#f97316", "#ec4899", "#06b6d4", "#84cc16"];
 const clientColor = idx => CLIENT_COLORS[idx % CLIENT_COLORS.length];
 
+// Shared styles for the Project Management & Ledger tabs (buttons, chips, modals, drawer, KPI cards)
+const pmSharedCss = () => `
+        .prj-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 10px 16px; border-radius: 12px; font-size: 13px; font-weight: 700; cursor: pointer; border: 1px solid transparent; font-family: inherit; transition: transform .15s, opacity .15s, border-color .15s; white-space: nowrap; }
+        .prj-btn:hover:not(:disabled) { transform: translateY(-1px); }
+        .prj-btn:disabled { opacity: .5; cursor: not-allowed; }
+        .prj-btn.sm { padding: 7px 12px; font-size: 12.5px; border-radius: 10px; }
+        .prj-btn-primary { background: ${C.accent}; color: #fff; box-shadow: 0 8px 22px ${C.accent}40; }
+        .prj-btn-ghost { background: ${C.surface}; color: ${C.text}; border-color: ${C.border}; }
+        .prj-btn-ghost:hover:not(:disabled) { border-color: ${C.accent}77; }
+        .prj-icon-btn { width: 34px; height: 34px; border-radius: 10px; border: 1px solid ${C.border}; background: ${C.surface}; color: ${C.textDim}; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; font-family: inherit; flex-shrink: 0; }
+        .prj-icon-btn:hover { color: ${C.accent}; border-color: ${C.accent}77; }
+        .prm-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.66); backdrop-filter: blur(3px); z-index: 1001; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .prm { width: 100%; max-width: 580px; max-height: min(92vh, 860px); display: flex; flex-direction: column; background: ${C.card}; border: 1px solid ${C.border}; border-radius: 22px; box-shadow: 0 30px 80px rgba(0,0,0,.6); overflow: hidden; animation: prmIn .18s ease-out; }
+        @keyframes prmIn { from { transform: translateY(12px); opacity: 0; } }
+        .prm-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 20px 22px 14px; border-bottom: 1px solid ${C.border}; }
+        .prm-title { font-size: 18px; font-weight: 800; color: ${C.text}; }
+        .prm-sub { font-size: 12.5px; color: ${C.textMuted}; margin-top: 4px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .prm-body { padding: 18px 22px; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .prm-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+        .prm-field.full, .prm-body .full { grid-column: 1 / -1; }
+        .prm-lbl { font-size: 12.5px; font-weight: 800; color: ${C.textDim}; }
+        .prm-input { width: 100%; box-sizing: border-box; background: ${C.surface}; border: 1px solid ${C.border}; border-radius: 12px; color: ${C.text}; padding: 10px 12px; font-size: 14px; font-family: inherit; outline: none; }
+        .prm-input:focus { border-color: ${C.accent}; box-shadow: 0 0 0 3px ${C.accentGlow}; }
+        .prm-input.err { border-color: ${C.red}; }
+        .prm-err { font-size: 12px; color: ${C.red}; font-weight: 600; }
+        .prm-hint { font-size: 12px; color: ${C.textMuted}; font-weight: 600; margin-top: -4px; }
+        .prm-preview { --c: ${C.amber}; border: 1px solid color-mix(in srgb, var(--c) 35%, ${C.border}); background: color-mix(in srgb, var(--c) 8%, ${C.surface}); border-radius: 12px; padding: 10px 14px; }
+        .prm-preview > div:first-child { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; color: ${C.textMuted}; font-weight: 700; flex-wrap: wrap; }
+        .prm-preview b { color: var(--c); font-size: 14.5px; }
+        .prm-preview-bar { height: 5px; border-radius: 4px; background: ${C.border}; margin-top: 8px; overflow: hidden; }
+        .prm-preview-bar i { display: block; height: 100%; background: ${C.green}; transition: width .3s; }
+        .prm-seg { display: flex; gap: 6px; flex-wrap: wrap; }
+        .prm-seg button { --c: ${C.accent}; display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px; border: 1px solid ${C.border}; background: ${C.surface}; color: ${C.textDim}; font-size: 12.5px; font-weight: 700; cursor: pointer; font-family: inherit; }
+        .prm-seg button i { width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
+        .prm-seg button.on { border-color: var(--c); color: ${C.text}; background: color-mix(in srgb, var(--c) 16%, ${C.surface}); }
+        .prm-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 14px 22px; border-top: 1px solid ${C.border}; background: ${C.surface}; }
+        .prm-foot-acts { display: flex; gap: 8px; }
+        .prm-kbd { font-size: 11.5px; color: ${C.textMuted}; }
+        @media (max-width: 640px) {
+          .prm-backdrop { align-items: flex-end; padding: 0; }
+          .prm { max-width: none; border-radius: 22px 22px 0 0; max-height: 94vh; }
+          .prm-head, .prm-body, .prm-foot { padding-left: 16px; padding-right: 16px; }
+          .prm-body { grid-template-columns: 1fr; }
+          .prm-kbd { display: none; }
+          .prm-foot-acts { flex: 1; }
+          .prm-foot-acts .prj-btn { flex: 1; }
+          .prm-foot-acts .prj-btn { flex: 1; }
+        }
+        .il-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 10px 16px; border-radius: 12px; font-size: 13px; font-weight: 700; cursor: pointer; border: 1px solid transparent; font-family: inherit; white-space: nowrap; transition: transform .15s, border-color .15s; }
+        .il-btn:hover:not(:disabled) { transform: translateY(-1px); }
+        .il-btn-primary { background: ${C.accent}; color: #fff; box-shadow: 0 8px 22px ${C.accent}40; }
+        .il-btn-ghost { background: ${C.surface}; color: ${C.text}; border-color: ${C.border}; }
+        .il-btn-ghost:hover { border-color: ${C.accent}77; }
+        .il-link { background: none; border: none; color: ${C.accent}; font-size: 12.5px; font-weight: 700; cursor: pointer; font-family: inherit; padding: 2px 4px; }
+        .il-legend { display: flex; gap: 14px; font-size: 11.5px; color: ${C.textMuted}; font-weight: 600; margin-top: 10px; flex-wrap: wrap; }
+        .il-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+        .il-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        .il-search { flex: 1 1 220px; min-width: 0; background: ${C.surface}; border: 1px solid ${C.border}; border-radius: 12px; color: ${C.text}; padding: 10px 14px; font-size: 13px; outline: none; font-family: inherit; }
+        .il-select { background-color: ${C.surface}; border: 1px solid ${C.border}; border-radius: 12px; color: ${C.text}; padding: 10px 12px; font-size: 13px; outline: none; font-family: inherit; min-width: 0; max-width: 220px; }
+        .il-search:focus, .il-select:focus { border-color: ${C.accent}; }
+        .il-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+        .il-chip { --c: ${C.accent}; display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 999px; border: 1px solid ${C.border}; background: ${C.surface}; color: ${C.textDim}; font-size: 12.5px; font-weight: 700; cursor: pointer; font-family: inherit; flex-shrink: 0; }
+        .il-chip i { width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
+        .il-chip b { font-size: 11.5px; padding: 1px 7px; border-radius: 999px; background: ${C.border}; color: ${C.text}; }
+        .il-chip.on { border-color: var(--c); color: ${C.text}; background: color-mix(in srgb, var(--c) 14%, ${C.surface}); }
+        .il-chip.on b { background: var(--c); color: #fff; }
+        .il-active { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 12px; color: ${C.textMuted}; }
+        .il-active button.tag { display: inline-flex; gap: 6px; align-items: center; background: ${C.accent}14; color: ${C.text}; border: 1px solid ${C.accent}44; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; }
+        .il-pill { --c: ${C.amber}; display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 800; padding: 3px 9px; border-radius: 999px; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); border: 1px solid color-mix(in srgb, var(--c) 30%, transparent); white-space: nowrap; text-transform: capitalize; width: fit-content; }
+        .il-pill i { width: 6px; height: 6px; border-radius: 50%; background: var(--c); }
+        .il-ib { width: 32px; height: 32px; border-radius: 9px; border: 1px solid ${C.border}; background: ${C.surface}; color: ${C.textDim}; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-family: inherit; flex-shrink: 0; }
+        .il-ib:hover { color: ${C.accent}; border-color: ${C.accent}77; }
+        .il-ib.danger:hover { color: ${C.red}; border-color: ${C.red}77; }
+        .il-empty { padding: 44px 20px; text-align: center; color: ${C.textMuted}; font-size: 13.5px; border-top: 1px solid ${C.border}44; }
+        .il-empty div { font-size: 30px; margin-bottom: 8px; }
+        .prj button:focus-visible, .prd button:focus-visible, .prm button:focus-visible, .prj-trow:focus-visible { outline: 2px solid ${C.accent}; outline-offset: 2px; }
+        .prj-spacer { flex: 1; }
+        .prj-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+        .prj-title { margin: 0; font-size: clamp(20px, 2.2vw, 24px); font-weight: 800; color: ${C.text}; letter-spacing: -.4px; }
+        .prj-subtitle { margin: 4px 0 0; color: ${C.textMuted}; font-size: 13px; }
+        .prj-seg { display: inline-flex; background: ${C.surface}; border: 1px solid ${C.border}; border-radius: 12px; padding: 3px; }
+        .prj-seg button { background: transparent; border: 1px solid transparent; color: ${C.textMuted}; border-radius: 9px; padding: 6px 12px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
+        .prj-seg button.on { background: ${C.card}; color: ${C.text}; border-color: ${C.border}; }
+        .prd .prj-card-top { padding: 0; }
+        .prj-pill { --c: ${C.textMuted}; display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 800; padding: 3px 9px; border-radius: 999px; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); border: 1px solid color-mix(in srgb, var(--c) 30%, transparent); white-space: nowrap; text-transform: capitalize; }
+        .prj-pill i { width: 6px; height: 6px; border-radius: 50%; background: var(--c); }
+        .prj-empty { padding: 48px 20px; text-align: center; color: ${C.textMuted}; font-size: 13.5px; background: ${C.card}; border: 1px dashed ${C.border}; border-radius: 20px; }
+        .prj-empty div { font-size: 32px; margin-bottom: 8px; }
+        .prd-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); backdrop-filter: blur(3px); z-index: 1000; display: flex; justify-content: flex-end; }
+        .prd { width: min(520px, 100%); height: 100%; background: ${C.card}; border-left: 1px solid ${C.border}; display: flex; flex-direction: column; box-shadow: -30px 0 80px rgba(0,0,0,.5); animation: prdIn .22s ease-out; }
+        @keyframes prdIn { from { transform: translateX(40px); opacity: 0; } }
+        .prd-head { display: flex; justify-content: space-between; gap: 12px; padding: 20px 22px 16px; border-bottom: 1px solid ${C.border}; background: linear-gradient(180deg, color-mix(in srgb, var(--hc) 10%, transparent), transparent); }
+        .prd-title { font-size: 20px; font-weight: 800; color: ${C.text}; letter-spacing: -.3px; overflow-wrap: anywhere; margin-bottom: 10px; }
+        .prd .prj-client { margin-top: 0; }
+        .prd-body { flex: 1; overflow-y: auto; padding: 18px 22px 24px; display: flex; flex-direction: column; gap: 12px; }
+        .prd-health { --c: ${C.green}; border: 1px solid color-mix(in srgb, var(--c) 35%, transparent); background: color-mix(in srgb, var(--c) 10%, transparent); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px; }
+        .prd-health b { color: var(--c); font-size: 14px; }
+        .prd-health span { color: ${C.textDim}; font-size: 12.5px; }
+        .prd-sec { font-size: 12px; font-weight: 800; color: ${C.textMuted}; text-transform: uppercase; letter-spacing: .6px; margin-top: 8px; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+        .prd-sec small { text-transform: none; letter-spacing: 0; font-weight: 600; }
+        .prd-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+        .prd-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .prd-stat { background: ${C.surface}; border: 1px solid ${C.border}66; border-radius: 12px; padding: 10px 12px; min-width: 0; }
+        .prd-stat span { font-size: 11px; color: ${C.textMuted}; font-weight: 700; display: block; }
+        .prd-stat b { display: block; font-size: 14.5px; font-weight: 800; color: ${C.text}; margin-top: 3px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .prd-note { font-size: 12px; color: ${C.textMuted}; }
+        .prd-invs { display: flex; flex-direction: column; gap: 6px; }
+        .prd-inv { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 12px; background: ${C.surface}; border: 1px solid ${C.border}66; }
+        .prd-inv b { display: block; font-size: 13px; color: ${C.text}; font-variant-numeric: tabular-nums; }
+        .prd-inv small { display: block; font-size: 11.5px; color: ${C.textMuted}; margin-top: 2px; }
+        .prd-inv .prj-pill { margin-top: 4px; }
+        .prd-foot { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 14px 22px; border-top: 1px solid ${C.border}; background: ${C.surface}; }
+        @media (max-width: 640px) {
+          .prd-backdrop { align-items: flex-end; }
+          .prd { width: 100%; height: auto; max-height: 92vh; border-left: none; border-top: 1px solid ${C.border}; border-radius: 22px 22px 0 0; animation: prdUp .22s ease-out; }
+          @keyframes prdUp { from { transform: translateY(40px); opacity: 0; } }
+          .prd-head, .prd-body, .prd-foot { padding-left: 16px; padding-right: 16px; }
+          .prd-grid.three { grid-template-columns: 1fr 1fr; }
+          .prd-foot .prj-btn { flex: 1 1 auto; }
+        }
+        .cx-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+        .cx-kpi { all: unset; box-sizing: border-box; background: ${C.card}; border: 1px solid ${C.border}; border-radius: 18px; padding: 16px; position: relative; overflow: hidden; min-width: 0; display: flex; flex-direction: column; gap: 4px; cursor: pointer; transition: border-color .15s, transform .15s; }
+        .cx-kpi:hover { transform: translateY(-1px); border-color: color-mix(in srgb, var(--c) 50%, ${C.border}); }
+        .cx-kpi.on { border-color: var(--c); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 18%, transparent); }
+        .cx-kpi::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--c); }
+        .cx-kpi span { font-size: 11.5px; color: ${C.textMuted}; font-weight: 700; display: flex; gap: 6px; align-items: center; }
+        .cx-kpi b { font-size: 22px; font-weight: 800; letter-spacing: -.5px; color: var(--c); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .cx-kpi small { font-size: 11.5px; color: ${C.textMuted}; font-weight: 600; }
+        .cx-card { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 20px; padding: 18px; min-width: 0; }
+        .cx-sp { flex: 1; }
+        .cx-chart-empty { height: 230px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: ${C.textMuted}; font-size: 13px; text-align: center; }
+        .cx-c { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+        .cx-c > small.lbl { display: none; font-size: 10.5px; color: ${C.textMuted}; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; }
+        .cx-sub { font-size: 11.5px; color: ${C.textMuted}; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .cx-amt { font-weight: 800; font-variant-numeric: tabular-nums; }
+        .cx-acts { display: flex; gap: 5px; justify-content: flex-end; flex-wrap: nowrap; }
+        .cx-gst { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 12px; color: ${C.textMuted}; font-weight: 700; }
+        .cx-gst button { padding: 5px 11px; border-radius: 999px; border: 1px solid ${C.border}; background: ${C.surface}; color: ${C.textDim}; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; }
+        .cx-gst button.on { border-color: ${C.accent}; color: ${C.text}; background: ${C.accent}1c; }
+        .cx-gst button:disabled { opacity: .45; cursor: default; }
+`;
+
+// ── Clients (module-level) ──
 function AdminClients() {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -565,466 +708,1024 @@ const PALETTE = [C.accent, C.green, C.purple, "#f97316", "#ec4899", "#06b6d4", "
 
 // ════════════════════════════════════════════════════════
 // PROJECT MANAGEMENT & INVOICES
-function ProjectDashboard({ projects, invoices }) {
-  const [filterStr, setFilterStr] = useState("");
-  const [filterStatus, setFilterStatus] = useState("all");
-  const [tdsEdits, setTdsEdits] = useState({});     // { clientName: overrideAmount }
-  const [editingTds, setEditingTds] = useState(null); // clientName being edited
-  const [tdsInput, setTdsInput] = useState("");
-  const [tdsExpectedOverride, setTdsExpectedOverride] = useState(null); // override for global Expected chip
-  const [editingTdsExpected, setEditingTdsExpected] = useState(false);
-  const [tdsExpectedInput, setTdsExpectedInput] = useState("");
+function ProjectDashboard({ projects = [], invoices = [], clients = [], onOpen = () => {} }) {
+  const [expenses, setExpenses] = useState([]);
+  const [expLoaded, setExpLoaded] = useState(false);
+  const [period, setPeriod] = useState(() => localStorage.getItem("pp_dash_period") || "fy");
+  const [range, setRange] = useState(6);
+  useEffect(() => { localStorage.setItem("pp_dash_period", period); }, [period]);
+  useEffect(() => {
+    let live = true;
+    api.getCompanyExpenses().then(e => { if (live) setExpenses(e || []); }).catch(() => {}).finally(() => { if (live) setExpLoaded(true); });
+    return () => { live = false; };
+  }, []);
 
-  const filtered = projects.filter(p => {
-    if (filterStatus !== "all" && p.status !== filterStatus) return false;
-    if (filterStr && !p.name.toLowerCase().includes(filterStr.toLowerCase()) && !p.code.toLowerCase().includes(filterStr.toLowerCase())) return false;
-    return true;
+  const now = new Date();
+  const today = new Date(now); today.setHours(0, 0, 0, 0);
+  const todayIso = isoDate(now);
+  const day = d => (d ? String(d).slice(0, 10) : "");
+  const num = v => parseFloat(v || 0) || 0;
+  const pStart = period === "month" ? isoDate(new Date(now.getFullYear(), now.getMonth(), 1))
+    : period === "fy" ? isoDate(new Date(now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1, 3, 1))
+      : "";
+  const inP = d => !pStart || (day(d) && day(d) >= pStart);
+  const periodLabel = { month: "this month", fy: "this financial year", all: "all time" }[period];
+
+  // ── Invoices ──
+  const roots = invoices.filter(i => !i.parent_invoice_id);
+  const collectedOf = i => i.payment_received != null ? num(i.payment_received) : i.status === "cleared" ? num(i.amount) - num(i.tds_amount) : 0;
+  const billed = roots.filter(i => inP(i.raised_date)).reduce((a, i) => a + num(i.amount), 0);
+  const billedCount = roots.filter(i => inP(i.raised_date)).length;
+  const collected = period === "all"
+    ? roots.reduce((a, i) => a + (i.status === "cleared" ? num(i.amount) - num(i.tds_amount) : i.status === "partial" ? num(i.payment_received) : 0), 0)
+    : roots.filter(i => inP(i.payment_received_date)).reduce((a, i) => a + collectedOf(i), 0);
+  const netBillable = roots.reduce((a, i) => a + num(i.amount) - num(i.tds_amount), 0);
+  const collectedAll = roots.reduce((a, i) => a + (i.status === "cleared" ? num(i.amount) - num(i.tds_amount) : i.status === "partial" ? num(i.payment_received) : 0), 0);
+  const collectRate = netBillable > 0 ? Math.min(100, Math.round((collectedAll / netBillable) * 100)) : 0;
+  const outstanding = roots.reduce((a, i) => a + ilOutstanding(i), 0);
+  const overdueInv = roots.filter(i => (ilDaysPastDue(i, todayIso) || 0) > 0);
+  const overdueAmt = overdueInv.reduce((a, i) => a + ilOutstanding(i), 0);
+  const dueSoon = roots.filter(i => { const d = ilDaysPastDue(i, todayIso); return d !== null && d <= 0 && d >= -7; });
+  const tdsList = roots.filter(i => inP(i.raised_date) && num(i.tds_amount) > 0);
+  const tdsTotal = tdsList.reduce((a, i) => a + num(i.tds_amount), 0);
+  const tdsDeducted = tdsList.filter(i => i.status === "cleared").reduce((a, i) => a + num(i.tds_amount), 0);
+  const tdsExpected = tdsTotal - tdsDeducted;
+
+  // ── Expenses ──
+  const spentList = expenses.filter(e => inP(e.expense_date));
+  const spent = spentList.reduce((a, e) => a + cxTotal(e), 0);
+  const expPending = expenses.filter(e => e.status === "pending");
+  const expPendingAmt = expPending.reduce((a, e) => a + cxTotal(e), 0);
+  const oldPending = expPending.filter(e => cxAgeDays(e.expense_date, todayIso) > 30);
+  const owed = expPending.filter(e => !cxIsCompany(e.paid_by));
+  const notAudited = expenses.filter(e => e.status === "cleared");
+  const net = collected - spent;
+
+  // ── Projects ──
+  const pRows = projects.map(p => ({ p, k: prjCompute(p, today), inv: roots.filter(i => i.project_id === p.id).reduce((a, i) => a + num(i.amount), 0) }));
+  const active = pRows.filter(r => r.p.status === "active");
+  const over = pRows.filter(r => r.k.health.k === "over");
+  const late = pRows.filter(r => r.k.health.k === "overdue");
+  const risk = pRows.filter(r => r.k.health.k === "risk");
+  const attnProjects = over.length + late.length + risk.length;
+
+  // ── Clients ──
+  const clientAgg = {};
+  roots.forEach(i => {
+    const key = i.client_name || "Unknown";
+    const c = (clientAgg[key] = clientAgg[key] || { name: key, billed: 0, collected: 0, outstanding: 0, overdue: 0 });
+    c.billed += num(i.amount);
+    c.collected += i.status === "cleared" ? num(i.amount) - num(i.tds_amount) : i.status === "partial" ? num(i.payment_received) : 0;
+    c.outstanding += ilOutstanding(i);
+    if ((ilDaysPastDue(i, todayIso) || 0) > 0) c.overdue += ilOutstanding(i);
   });
+  const clientList = Object.values(clientAgg);
+  const totalBilledAll = clientList.reduce((a, c) => a + c.billed, 0);
+  const missingClients = clients.filter(c => !c.email || !c.gst_number || c.pay_day == null || c.pay_day === "");
+  const billedIds = new Set(roots.map(i => i.client_id).filter(v => v != null));
+  const billedNames = new Set(roots.map(i => (i.client_name || "").trim().toLowerCase()));
+  const idleClients = clients.filter(c => !billedIds.has(c.id) && !billedNames.has((c.client_name || "").trim().toLowerCase()));
 
-  // ── Global aggregates ─────────────────────────────────────────────────
-  const totalBudget = projects.reduce((a, p) => p.status === "active" ? a + parseFloat(p.budget || 0) : a, 0);
-  const totalBurned = projects.reduce((a, p) => p.status === "active" ? a + parseFloat(p.burned || 0) : a, 0);
-  const rootInvs = invoices.filter(i => !i.parent_invoice_id);
-  const totalRaised = rootInvs.reduce((a, i) => a + parseFloat(i.amount || 0), 0);
-  const totalTdsSum = rootInvs.reduce((a, i) => a + parseFloat(i.tds_amount || 0), 0);
-  const tdsDeducted = rootInvs.filter(i => i.status === "cleared").reduce((a, i) => a + parseFloat(i.tds_amount || 0), 0);
-  const tdsExpected = rootInvs.filter(i => i.status !== "cleared").reduce((a, i) => a + parseFloat(i.tds_amount || 0), 0);
-  const totalCleared = rootInvs.filter(i => i.status === "cleared").reduce((a, i) => a + (parseFloat(i.amount || 0) - parseFloat(i.tds_amount || 0)), 0)
-    + rootInvs.filter(i => i.status === "partial").reduce((a, i) => a + parseFloat(i.payment_received || 0), 0);
-  const totalPending = rootInvs.filter(i => i.status === "partial").reduce((a, i) => a + parseFloat(i.balance_amount || 0), 0)
-    + rootInvs.filter(i => i.status === "pending").reduce((a, i) => a + parseFloat(i.amount || 0), 0);
-  const collectPct = (totalRaised - totalTdsSum) > 0 ? Math.min(Math.round((totalCleared / (totalRaised - totalTdsSum)) * 100), 100) : 0;
-  const activeCount = projects.filter(p => p.status === "active").length;
-  const pendingCount = rootInvs.filter(i => i.status !== "cleared").length;
-
-  // ── Chart helpers ─────────────────────────────────────────────────────
-  const tooltipStyle = { backgroundColor: C.card, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, boxShadow: "0 8px 32px rgba(0,0,0,0.4)" };
-  const tickFmt = v => `₹${v >= 100000 ? (v / 100000).toFixed(1) + "L" : v >= 1000 ? (v / 1000).toFixed(1) + "k" : v}`;
-
-  // ── Per-client aggregates ─────────────────────────────────────────────
-  const clientStats = {};
-  invoices.forEach(inv => {
-    if (inv.parent_invoice_id) return; // BAL invoices are tracked via balance_amount on the parent
-    const key = inv.client_name || "Unknown";
-    if (!clientStats[key]) clientStats[key] = { name: key, raised: 0, cleared: 0, pending: 0, count: 0, tds: 0 };
-    const amt = parseFloat(inv.amount || 0);
-    const tds = parseFloat(inv.tds_amount || 0);
-    clientStats[key].raised += amt;
-    clientStats[key].tds += tds;
-    clientStats[key].count += 1;
-    if (inv.status === "cleared") {
-      clientStats[key].cleared += amt - tds; // full settled value (BAL payments included via invoice amount)
-    } else if (inv.status === "partial") {
-      clientStats[key].cleared += parseFloat(inv.payment_received || 0);
-      clientStats[key].pending += parseFloat(inv.balance_amount || 0);
-    } else {
-      clientStats[key].pending += amt;
-    }
+  // ── Cash-flow chart ──
+  const months = Array.from({ length: range }, (_, k) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (range - 1) + k, 1);
+    return { key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, name: `${MONTH_NAMES[d.getMonth()].slice(0, 3)}${range > 6 ? ` ’${String(d.getFullYear()).slice(2)}` : ""}`, billed: 0, collected: 0, spent: 0 };
   });
-  const clientList = Object.values(clientStats).sort((a, b) => b.raised - a.raised);
+  const mIdx = Object.fromEntries(months.map((m, i) => [m.key, i]));
+  roots.forEach(i => {
+    const r = mIdx[day(i.raised_date).slice(0, 7)]; if (r !== undefined) months[r].billed += num(i.amount);
+    const c = mIdx[day(i.payment_received_date).slice(0, 7)]; if (c !== undefined) months[c].collected += collectedOf(i);
+  });
+  expenses.forEach(e => { const x = mIdx[day(e.expense_date).slice(0, 7)]; if (x !== undefined) months[x].spent += cxTotal(e); });
+  const chartHasData = months.some(m => m.billed || m.collected || m.spent);
+  const chartNet = months.reduce((a, m) => a + m.collected - m.spent, 0);
 
-  // ── Chart data ────────────────────────────────────────────────────────
-  const budgetChartData = filtered.filter(p => p.status === "active").map(p => ({
-    name: p.code, fullName: p.name,
-    Budget: parseFloat(p.budget || 0),
-    Raised: invoices.filter(i => i.project_id === p.id && !i.parent_invoice_id).reduce((s, i) => s + parseFloat(i.amount || 0), 0),
-    Burned: parseFloat(p.burned || 0),
-  }));
+  // ── Attention items ──
+  const attention = [
+    overdueInv.length && { ic: "⏰", tone: C.red, tab: "invoices", t: `${overdueInv.length} overdue invoice${overdueInv.length === 1 ? "" : "s"}`, s: `${fmt$(overdueAmt)} to chase`, },
+    over.length && { ic: "🔥", tone: C.red, tab: "projects", t: `${over.length} project${over.length === 1 ? "" : "s"} over budget`, s: over.slice(0, 2).map(r => r.p.name).join(", ") },
+    late.length && { ic: "📅", tone: C.red, tab: "projects", t: `${late.length} active project${late.length === 1 ? "" : "s"} past end date`, s: late.slice(0, 2).map(r => r.p.name).join(", ") },
+    dueSoon.length && { ic: "🔔", tone: C.amber, tab: "invoices", t: `${dueSoon.length} invoice${dueSoon.length === 1 ? "" : "s"} due within 7 days`, s: fmt$(dueSoon.reduce((a, i) => a + ilOutstanding(i), 0)) },
+    risk.length && { ic: "⚠️", tone: C.amber, tab: "projects", t: `${risk.length} project${risk.length === 1 ? "" : "s"} at risk`, s: "Spending ahead of schedule" },
+    owed.length && { ic: "💸", tone: C.amber, tab: "company_expenses", t: `${fmt$(owed.reduce((a, e) => a + cxTotal(e), 0))} to reimburse`, s: `Paid personally by ${Array.from(new Set(owed.map(e => e.paid_by))).slice(0, 2).join(", ")}` },
+    oldPending.length && { ic: "⏳", tone: C.amber, tab: "company_expenses", t: `${oldPending.length} expense${oldPending.length === 1 ? "" : "s"} pending 30+ days`, s: fmt$(oldPending.reduce((a, e) => a + cxTotal(e), 0)) },
+    notAudited.length && { ic: "📁", tone: C.purple, tab: "company_expenses", t: `${notAudited.length} cleared expense${notAudited.length === 1 ? "" : "s"} not sent to audit`, s: fmt$(notAudited.reduce((a, e) => a + cxTotal(e), 0)) },
+    missingClients.length && { ic: "📝", tone: C.textDim, tab: "clients", t: `${missingClients.length} client${missingClients.length === 1 ? "" : "s"} with missing details`, s: "Email, GST or payment terms" },
+  ].filter(Boolean);
 
-  const projectInvData = filtered.map(p => {
-    const pInvs = invoices.filter(i => i.project_id === p.id && !i.parent_invoice_id);
-    return {
-      name: p.code, fullName: p.name,
-      Raised: pInvs.reduce((s, i) => s + parseFloat(i.amount || 0), 0),
-      Cleared: pInvs.filter(i => i.status === "cleared").reduce((s, i) => s + (parseFloat(i.amount || 0) - parseFloat(i.tds_amount || 0)), 0)
-        + pInvs.filter(i => i.status === "partial").reduce((s, i) => s + parseFloat(i.payment_received || 0), 0),
-      Pending: pInvs.filter(i => i.status === "partial").reduce((s, i) => s + parseFloat(i.balance_amount || 0), 0)
-        + pInvs.filter(i => i.status === "pending").reduce((s, i) => s + parseFloat(i.amount || 0), 0),
-    };
-  }).filter(d => d.Raised > 0);
+  // ── Recent activity ──
+  const activity = [
+    ...roots.filter(i => i.raised_date).map(i => ({ d: day(i.raised_date), ic: "🧾", tone: C.accent, tab: "invoices", t: `Invoice ${i.invoice_number || `#${i.id}`} raised`, s: `${i.client_name || "—"} · ${i.project_name || ""}`, amt: num(i.amount) })),
+    ...roots.filter(i => i.payment_received_date).map(i => ({ d: day(i.payment_received_date), ic: "💰", tone: C.green, tab: "invoices", t: `Payment received${i.invoice_number ? ` · ${i.invoice_number}` : ""}`, s: i.client_name || "—", amt: collectedOf(i), plus: true })),
+    ...expenses.filter(e => e.expense_date).map(e => ({ d: day(e.expense_date), ic: "💳", tone: C.amber, tab: "company_expenses", t: e.purpose || "Company expense", s: `Paid by ${e.paid_by || "—"}`, amt: cxTotal(e), minus: true })),
+  ].filter(a => a.d <= todayIso).sort((a, b) => b.d.localeCompare(a.d)).slice(0, 8);
+  const ago = d => { const n = Math.round((new Date(todayIso + "T00:00:00") - new Date(d + "T00:00:00")) / 86400000); return n === 0 ? "Today" : n === 1 ? "Yesterday" : n < 30 ? `${n}d ago` : fmtD(d); };
 
-  const clientInvData = clientList.map(cl => ({
-    name: cl.name.length > 14 ? cl.name.slice(0, 14) + "…" : cl.name,
-    fullName: cl.name, Raised: cl.raised, Cleared: cl.cleared, Pending: cl.pending,
-  }));
+  // ── Expense breakdown ──
+  const byPurpose = Object.values(spentList.reduce((m, e) => { const k = (e.purpose || "Other").trim(); (m[k] = m[k] || { k, v: 0, n: 0 }).v += cxTotal(e); m[k].n += 1; return m; }, {})).sort((a, b) => b.v - a.v).slice(0, 5);
+  const statusSplit = CX_STATUSES.map(s => ({ s, v: spentList.filter(e => e.status === s).reduce((a, e) => a + cxTotal(e), 0) }));
+
+  const tick = v => v >= 100000 ? `₹${(v / 100000).toFixed(1)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`;
+  const Head = ({ title, sub, tab, label = "View all" }) => (
+    <div className="dsh-h">
+      <div><b>{title}</b>{sub && <small>{sub}</small>}</div>
+      <button className="il-link" onClick={() => onOpen(tab)}>{label} →</button>
+    </div>
+  );
+  const kpi = (tab, label, value, color, sub, extra) => (
+    <button className="cx-kpi dsh-kpi" style={{ "--c": color }} onClick={() => tab && onOpen(tab)} disabled={!tab}>
+      <span>{label}</span><b>{value}</b>{sub && <small>{sub}</small>}{extra}
+    </button>
+  );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+    <>
+      <style>{`
+${pmSharedCss()}
+        .dsh { container-type: inline-size; container-name: dsh; }
+        .dsh .cx-seg { display: inline-flex; gap: 4px; }
+        .dsh .cx-seg button { height: 32px; padding: 0 12px; border-radius: 9px; border: 1px solid ${C.border}; background: ${C.surface}; color: ${C.textDim}; font-size: 12.5px; font-weight: 700; cursor: pointer; font-family: inherit; }
+        .dsh .cx-seg button.on { background: ${C.accent}; border-color: ${C.accent}; color: #fff; }
+        .dsh-wrap { display: flex; flex-direction: column; gap: 18px; }
+        .dsh-top { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+        .dsh-kpis { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 12px; }
+        .dsh-kpi:disabled { cursor: default; transform: none; }
+        .dsh-kpi b { font-size: 21px; }
+        .dsh-kpi .dsh-mini { height: 5px; border-radius: 4px; background: ${C.border}; overflow: hidden; margin-top: 4px; }
+        .dsh-kpi .dsh-mini i { display: block; height: 100%; background: var(--c); border-radius: 4px; }
+        .dsh-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+        .dsh-grid.lead { grid-template-columns: minmax(0, 1.65fr) minmax(300px, 1fr); }
+        .dsh-card { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 20px; padding: 18px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+        .dsh-h { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+        .dsh-h b { display: block; font-size: 14.5px; font-weight: 800; color: ${C.text}; }
+        .dsh-h small { display: block; font-size: 12px; color: ${C.textMuted}; font-weight: 600; margin-top: 2px; }
+        .dsh-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 11.5px; color: ${C.textMuted}; font-weight: 700; align-items: center; }
+        .dsh-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+        .dsh-att { display: flex; flex-direction: column; gap: 6px; }
+        .dsh-att-i { all: unset; box-sizing: border-box; cursor: pointer; display: flex; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 12px; background: ${C.surface}; border: 1px solid ${C.border}66; border-left: 3px solid var(--t); transition: border-color .15s, transform .15s; }
+        .dsh-att-i:hover { transform: translateX(2px); border-color: color-mix(in srgb, var(--t) 50%, ${C.border}); }
+        .dsh-att-i:focus-visible { outline: 2px solid ${C.accent}; outline-offset: 2px; }
+        .dsh-att-ic { font-size: 17px; width: 22px; text-align: center; flex-shrink: 0; }
+        .dsh-att-b { flex: 1; min-width: 0; }
+        .dsh-att-b b { display: block; font-size: 13px; color: ${C.text}; font-weight: 800; }
+        .dsh-att-b small { display: block; font-size: 11.5px; color: ${C.textMuted}; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .dsh-ok { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 26px 10px; color: ${C.textMuted}; font-size: 13px; text-align: center; flex: 1; }
+        .dsh-ok b { font-size: 30px; }
+        .dsh-list { display: flex; flex-direction: column; }
+        .dsh-row { all: unset; box-sizing: border-box; cursor: pointer; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; padding: 10px 8px; border-radius: 10px; border-bottom: 1px solid ${C.border}44; }
+        .dsh-row:last-child { border-bottom: none; }
+        .dsh-row:hover { background: ${C.surface}; }
+        .dsh-row-n { min-width: 0; }
+        .dsh-row-n b { display: block; font-size: 13px; color: ${C.text}; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .dsh-row-n small { display: block; font-size: 11.5px; color: ${C.textMuted}; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .dsh-row-v { text-align: right; font-size: 13px; font-weight: 800; color: ${C.text}; font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .dsh-row-v small { display: block; font-size: 11px; font-weight: 700; color: ${C.textMuted}; }
+        .dsh-bar { grid-column: 1 / -1; position: relative; height: 7px; border-radius: 5px; background: ${C.border}; overflow: visible; display: flex; }
+        .dsh-bar > i { display: block; height: 100%; }
+        .dsh-bar > i:first-child { border-radius: 5px 0 0 5px; }
+        .dsh-bar em { position: absolute; top: -3px; width: 3px; height: 13px; border-radius: 2px; background: ${C.text}; transform: translateX(-50%); }
+        .dsh-stack { display: flex; height: 10px; border-radius: 6px; overflow: hidden; background: ${C.border}; }
+        .dsh-stack i { display: block; height: 100%; }
+        .dsh-mini-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+        .dsh-mini-stats div { background: ${C.surface}; border: 1px solid ${C.border}66; border-radius: 12px; padding: 9px 11px; min-width: 0; }
+        .dsh-mini-stats span { display: block; font-size: 10.5px; color: ${C.textMuted}; font-weight: 700; }
+        .dsh-mini-stats b { display: block; font-size: 14.5px; font-weight: 800; color: ${C.text}; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+        .dsh-act { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px; }
+        .dsh-act-i { all: unset; box-sizing: border-box; cursor: pointer; display: flex; gap: 12px; align-items: center; padding: 9px 10px; border-radius: 12px; min-width: 0; }
+        .dsh-act-i:hover { background: ${C.surface}; }
+        .dsh-act-ic { width: 34px; height: 34px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; background: color-mix(in srgb, var(--t) 16%, ${C.surface}); }
+        .dsh-empty { font-size: 12.5px; color: ${C.textMuted}; padding: 14px 0; text-align: center; }
 
-      {/* ── SECTION 1: Hero KPI row ──────────────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
-
-        {/* Card: Total Budget */}
-        <div style={{ background: `linear-gradient(135deg, ${C.surface} 0%, ${C.card} 100%)`, border: `1px solid ${C.border}`, borderLeft: `3px solid ${C.accent}`, borderRadius: 14, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 10, position: "relative", overflow: "hidden" }}>
-          <div style={{ position: "absolute", top: -20, right: -20, width: 80, height: 80, borderRadius: "50%", background: `radial-gradient(circle, ${C.accent}15 0%, transparent 70%)`, pointerEvents: "none" }} />
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .6 }}>Total Client Budget</div>
-            <span style={{ background: C.accent + "22", color: C.accent, borderRadius: 20, padding: "2px 9px", fontSize: 10, fontWeight: 800 }}>{activeCount} active</span>
-          </div>
-          <div style={{ fontSize: 28, fontWeight: 900, color: C.text, letterSpacing: -.5 }}>{fmt$(totalBudget)}</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <div style={{ flex: 1, height: 3, borderRadius: 4, background: C.border, overflow: "hidden" }}>
-              <div style={{ width: `${totalBudget > 0 ? Math.min((totalBurned / totalBudget) * 100, 100) : 0}%`, height: "100%", background: `linear-gradient(90deg, ${C.accent}, ${C.purple})`, borderRadius: 4 }} />
-            </div>
-            <span style={{ fontSize: 10, color: C.textMuted, fontWeight: 600, whiteSpace: "nowrap" }}>{totalBudget > 0 ? Math.round((totalBurned / totalBudget) * 100) : 0}% utilized</span>
-          </div>
-        </div>
-
-        {/* Card: Total Raised */}
-        <div style={{ background: `linear-gradient(135deg, ${C.surface} 0%, ${C.card} 100%)`, border: `1px solid ${C.border}`, borderLeft: `3px solid ${C.green}`, borderRadius: 14, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 10, position: "relative", overflow: "hidden" }}>
-          <div style={{ position: "absolute", top: -20, right: -20, width: 80, height: 80, borderRadius: "50%", background: `radial-gradient(circle, ${C.green}15 0%, transparent 70%)`, pointerEvents: "none" }} />
-          <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .6 }}>Total Raised</div>
-          <div style={{ fontSize: 28, fontWeight: 900, color: C.green, letterSpacing: -.5 }}>{fmt$(totalRaised)}</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-            <div style={{ background: C.green + "12", borderRadius: 7, padding: "6px 10px", border: `1px solid ${C.green}28` }}>
-              <div style={{ fontSize: 9, color: C.green, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>Cleared</div>
-              <div style={{ fontSize: 12, fontWeight: 800, color: C.green, marginTop: 2 }}>{fmt$(totalCleared)}</div>
-            </div>
-            <div style={{ background: C.amber + "12", borderRadius: 7, padding: "6px 10px", border: `1px solid ${C.amber}28` }}>
-              <div style={{ fontSize: 9, color: C.amber, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>Pending</div>
-              <div style={{ fontSize: 12, fontWeight: 800, color: C.amber, marginTop: 2 }}>{fmt$(totalPending)}</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Card: Collection Rate */}
-        <div style={{ background: `linear-gradient(135deg, ${C.surface} 0%, ${C.card} 100%)`, border: `1px solid ${C.border}`, borderLeft: `3px solid ${C.purple}`, borderRadius: 14, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 10 }}>
-          <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .6 }}>Collection Rate</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-              <Ring pct={collectPct} color={collectPct >= 80 ? C.green : collectPct >= 50 ? C.accent : C.amber} size={64} stroke={6} />
-              <div style={{ position: "absolute", fontSize: 13, fontWeight: 900, color: C.text }}>{collectPct}%</div>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <div style={{ fontSize: 11, color: C.textMuted }}>
-                <span style={{ color: C.green, fontWeight: 700 }}>{invoices.filter(i => i.status === "cleared").length}</span> cleared
-              </div>
-              <div style={{ fontSize: 11, color: C.textMuted }}>
-                <span style={{ color: C.amber, fontWeight: 700 }}>{pendingCount}</span> pending
-              </div>
-              <div style={{ fontSize: 11, color: C.textMuted }}>
-                <span style={{ color: C.textDim, fontWeight: 700 }}>{invoices.length}</span> total
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Card: TDS Summary */}
-        {totalTdsSum > 0 && (
-          <div style={{ background: `linear-gradient(135deg, ${C.surface} 0%, ${C.card} 100%)`, border: `1px solid ${C.border}`, borderLeft: `3px solid ${C.red}`, borderRadius: 14, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 10, position: "relative", overflow: "hidden" }}>
-            <div style={{ position: "absolute", top: -20, right: -20, width: 80, height: 80, borderRadius: "50%", background: `radial-gradient(circle, ${C.red}15 0%, transparent 70%)`, pointerEvents: "none" }} />
-            <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .6 }}>Total TDS (10%)</div>
-            <div style={{ fontSize: 28, fontWeight: 900, color: C.red, letterSpacing: -.5 }}>{fmt$(totalTdsSum)}</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-              <div style={{ background: C.red + "12", borderRadius: 7, padding: "6px 10px", border: `1px solid ${C.red}28` }}>
-                <div style={{ fontSize: 9, color: C.red, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>Deducted</div>
-                <div style={{ fontSize: 12, fontWeight: 800, color: C.red, marginTop: 2 }}>{fmt$(tdsDeducted)}</div>
-              </div>
-              <div style={{ background: C.amber + "12", borderRadius: 7, padding: "6px 10px", border: `1px solid ${C.amber}28` }}>
-                <div style={{ fontSize: 9, color: C.amber, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5, display: "flex", alignItems: "center", gap: 4 }}>
-                  Expected
-                  {!editingTdsExpected && (
-                    <span title="Enter expected TDS" style={{ cursor: "pointer", opacity: 0.65, fontSize: 9 }}
-                      onClick={() => { setEditingTdsExpected(true); setTdsExpectedInput(String(tdsExpectedOverride ?? tdsExpected)); }}>✏</span>
-                  )}
-                </div>
-                {editingTdsExpected ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 3, marginTop: 3 }}>
-                    <input type="number" value={tdsExpectedInput} onChange={e => setTdsExpectedInput(e.target.value)} autoFocus
-                      onKeyDown={e => { if (e.key === "Enter") { setTdsExpectedOverride(parseFloat(tdsExpectedInput) || 0); setEditingTdsExpected(false); } if (e.key === "Escape") setEditingTdsExpected(false); }}
-                      style={{ flex: 1, width: 0, background: C.bg, border: `1px solid ${C.amber}`, borderRadius: 4, color: C.text, padding: "2px 4px", fontSize: 11, outline: "none", textAlign: "center" }} />
-                    <span style={{ cursor: "pointer", color: C.green, fontWeight: 900, fontSize: 12 }} onClick={() => { setTdsExpectedOverride(parseFloat(tdsExpectedInput) || 0); setEditingTdsExpected(false); }}>✓</span>
-                    <span style={{ cursor: "pointer", color: C.red, fontWeight: 900, fontSize: 12 }} onClick={() => setEditingTdsExpected(false)}>✕</span>
-                  </div>
-                ) : (
-                  <div style={{ fontSize: 12, fontWeight: 800, color: C.amber, marginTop: 2 }}>{fmt$(tdsExpectedOverride ?? tdsExpected)}</div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Card: Burned Cost */}
-        <div style={{ background: `linear-gradient(135deg, ${C.surface} 0%, ${C.card} 100%)`, border: `1px solid ${C.border}`, borderLeft: `3px solid ${C.amber}`, borderRadius: 14, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 10, position: "relative", overflow: "hidden" }}>
-          <div style={{ position: "absolute", top: -20, right: -20, width: 80, height: 80, borderRadius: "50%", background: `radial-gradient(circle, ${C.amber}15 0%, transparent 70%)`, pointerEvents: "none" }} />
-          <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .6 }}>Burned Cost</div>
-          <div style={{ fontSize: 28, fontWeight: 900, color: C.amber, letterSpacing: -.5 }}>{fmt$(totalBurned)}</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: C.textMuted }}>
-              <span>vs Budget</span>
-              <span style={{ fontWeight: 700, color: totalBurned > totalBudget ? C.red : C.textDim }}>
-                {totalBudget > 0 ? Math.round((totalBurned / totalBudget) * 100) : 0}%
-              </span>
-            </div>
-            <div style={{ height: 3, borderRadius: 4, background: C.border, overflow: "hidden" }}>
-              <div style={{ width: `${totalBudget > 0 ? Math.min((totalBurned / totalBudget) * 100, 100) : 0}%`, height: "100%", background: `linear-gradient(90deg, ${C.amber}, ${C.red})`, borderRadius: 4 }} />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── SECTION 2: Client Invoice KPI Cards ─────────────────────────── */}
-      {clientList.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {/* Section label */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 3, height: 18, background: `linear-gradient(180deg, ${C.accent}, ${C.purple})`, borderRadius: 2 }} />
-            <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Client Invoice Overview</span>
-            <span style={{ background: C.accent + "1a", color: C.accent, borderRadius: 20, padding: "2px 10px", fontSize: 10, fontWeight: 700 }}>{clientList.length} clients</span>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14 }}>
-            {clientList.map((cl, idx) => {
-              const netRaised = cl.raised - cl.tds;
-              const pct = netRaised > 0 ? Math.min(Math.round((cl.cleared / netRaised) * 100), 100) : 0;
-              const col = PALETTE[idx % PALETTE.length];
-              const hColor = pct === 100 ? C.green : pct >= 60 ? C.accent : C.amber;
-              const initials = cl.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
-              return (
-                <div key={cl.name} style={{
-                  background: `linear-gradient(145deg, ${C.surface}, ${C.card})`,
-                  border: `1px solid ${hColor}33`,
-                  borderRadius: 16, padding: "18px 20px",
-                  display: "flex", flexDirection: "column", gap: 14,
-                  position: "relative", overflow: "hidden"
-                }}>
-                  {/* Ambient glow */}
-                  <div style={{ position: "absolute", top: -40, right: -40, width: 120, height: 120, borderRadius: "50%", background: `radial-gradient(circle, ${col}12 0%, transparent 70%)`, pointerEvents: "none" }} />
-
-                  {/* Row 1: avatar + name + badge */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 12, zIndex: 1 }}>
-                    <div style={{ width: 44, height: 44, borderRadius: 12, background: `linear-gradient(135deg, ${col}33, ${col}15)`, border: `1.5px solid ${col}55`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 900, color: col, flexShrink: 0 }}>{initials}</div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{cl.name}</div>
-                      <div style={{ fontSize: 11, color: C.textMuted, marginTop: 1 }}>{cl.count} invoice{cl.count !== 1 ? "s" : ""}</div>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                      <Ring pct={pct} color={hColor} size={40} stroke={4} />
-                      <span style={{ fontSize: 13, fontWeight: 800, color: hColor }}>{pct}%</span>
-                    </div>
-                  </div>
-
-                  {/* Row 2: stat chips */}
-                  <div style={{ display: "grid", gridTemplateColumns: cl.tds > 0 ? "1fr 1fr" : "1fr 1fr 1fr", gap: 7, zIndex: 1 }}>
-                    <div style={{ background: C.bg, borderRadius: 9, padding: "8px", border: `1px solid ${C.border}`, textAlign: "center" }}>
-                      <div style={{ fontSize: 9, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>Raised</div>
-                      <div style={{ fontSize: 12, fontWeight: 800, color: C.text, marginTop: 3 }}>{fmt$(cl.raised)}</div>
-                    </div>
-                    {cl.tds > 0 && (
-                      <div style={{ background: C.red + "0e", borderRadius: 9, padding: "8px", border: `1px solid ${C.red}2a`, textAlign: "center" }}>
-                        <div style={{ fontSize: 9, color: C.red, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5, display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
-                          TDS (10%)
-                          {editingTds !== cl.name && (
-                            <span title="Edit expected TDS" style={{ cursor: "pointer", opacity: 0.6, fontSize: 9 }} onClick={() => { setEditingTds(cl.name); setTdsInput(String(tdsEdits[cl.name] ?? cl.tds)); }}>✏</span>
-                          )}
-                        </div>
-                        {editingTds === cl.name ? (
-                          <div style={{ display: "flex", alignItems: "center", gap: 3, marginTop: 3 }}>
-                            <input type="number" value={tdsInput} onChange={e => setTdsInput(e.target.value)} autoFocus
-                              onKeyDown={e => { if (e.key === "Enter") { setTdsEdits(p => ({ ...p, [cl.name]: parseFloat(tdsInput) || 0 })); setEditingTds(null); } if (e.key === "Escape") setEditingTds(null); }}
-                              style={{ flex: 1, width: 0, background: C.bg, border: `1px solid ${C.red}`, borderRadius: 4, color: C.text, padding: "2px 4px", fontSize: 11, outline: "none", textAlign: "center" }} />
-                            <span style={{ cursor: "pointer", color: C.green, fontWeight: 900, fontSize: 12 }} onClick={() => { setTdsEdits(p => ({ ...p, [cl.name]: parseFloat(tdsInput) || 0 })); setEditingTds(null); }}>✓</span>
-                            <span style={{ cursor: "pointer", color: C.red, fontWeight: 900, fontSize: 12 }} onClick={() => setEditingTds(null)}>✕</span>
-                          </div>
-                        ) : (
-                          <div style={{ fontSize: 12, fontWeight: 800, color: C.red, marginTop: 3 }}>{fmt$(tdsEdits[cl.name] ?? cl.tds)}</div>
-                        )}
-                      </div>
-                    )}
-                    <div style={{ background: C.green + "0e", borderRadius: 9, padding: "8px", border: `1px solid ${C.green}2a`, textAlign: "center" }}>
-                      <div style={{ fontSize: 9, color: C.green, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>Cleared</div>
-                      <div style={{ fontSize: 12, fontWeight: 800, color: C.green, marginTop: 3 }}>{fmt$(cl.cleared)}</div>
-                    </div>
-                    <div style={{ background: C.amber + "0e", borderRadius: 9, padding: "8px", border: `1px solid ${C.amber}2a`, textAlign: "center" }}>
-                      <div style={{ fontSize: 9, color: C.amber, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>Pending</div>
-                      <div style={{ fontSize: 12, fontWeight: 800, color: C.amber, marginTop: 3 }}>{fmt$(cl.pending)}</div>
-                    </div>
-                  </div>
-
-                  {/* Row 3: stacked bar */}
-                  <div style={{ zIndex: 1 }}>
-                    <div style={{ height: 6, borderRadius: 6, background: C.border, overflow: "hidden", display: "flex" }}>
-                      <div style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${hColor === C.green ? C.green : C.accent}, ${C.green})`, transition: "width .4s ease" }} />
-                      <div style={{ flex: 1, background: C.amber + "55" }} />
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5, fontSize: 10, color: C.textMuted }}>
-                      <span>Clearance progress</span>
-                      <span style={{ fontWeight: 700, color: hColor }}>{pct}% cleared</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* ── SECTION 3: Project Cards ─────────────────────────────────────── */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        {/* Header + filters inline */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <div style={{ width: 3, height: 18, background: `linear-gradient(180deg, ${C.amber}, ${C.accent})`, borderRadius: 2 }} />
-          <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Project Breakdown</span>
-          <div style={{ flex: 1 }} />
-          <input type="text" placeholder="Search projects…" value={filterStr} onChange={e => setFilterStr(e.target.value)}
-            style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "7px 12px", fontSize: 12, outline: "none", width: 200 }} />
-          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-            style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "7px 12px", fontSize: 12, outline: "none", cursor: "pointer" }}>
-            <option value="all">All Statuses</option>
-            <option value="active">Active</option>
-            <option value="on-hold">On Hold</option>
-            <option value="completed">Completed</option>
-            <option value="closed">Closed</option>
-          </select>
-        </div>
-
-        {filtered.length === 0
-          ? <div style={{ padding: 48, textAlign: "center", color: C.textMuted, background: C.surface, borderRadius: 16, fontSize: 13 }}>No projects match your filters.</div>
-          : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 14 }}>
-            {filtered.map((p, idx) => {
-              const raised = invoices.filter(i => i.project_id === p.id).reduce((s, i) => s + parseFloat(i.amount || 0), 0);
-              const budget = parseFloat(p.budget || 0);
-              const burned = parseFloat(p.burned || 0);
-              const highest = Math.max(budget, raised, burned, 1);
-              const isOver = raised > budget;
-              const col = PALETTE[idx % PALETTE.length];
-              const utilPct = budget > 0 ? Math.min(Math.round((raised / budget) * 100), 999) : 0;
-
-              return (
-                <div key={p.id} style={{
-                  background: C.card, border: `1px solid ${C.border}`,
-                  borderRadius: 16, overflow: "hidden",
-                  display: "flex", flexDirection: "column"
-                }}>
-                  {/* Colored header strip */}
-                  <div style={{ background: `linear-gradient(90deg, ${col}33, ${col}0a)`, borderBottom: `1px solid ${col}22`, padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div>
-                      <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>{p.name}</div>
-                      <div style={{ fontSize: 11, color: col, fontWeight: 600, marginTop: 2 }}>{p.code}</div>
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-                      <StatusBadge status={p.status} />
-                      <span style={{ fontSize: 10, color: C.textMuted }}>
-                        {isOver ? "⚠ Over budget" : `${fmt$(budget - raised)} pending`}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Body */}
-                  <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
-                    {[
-                      { label: "BUDGET", value: budget, color: C.accent },
-                      { label: "RAISED", value: raised, color: isOver ? C.red : C.green },
-                      { label: "BURNED", value: burned, color: C.amber },
-                    ].map(row => (
-                      <div key={row.label} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={{ width: 52, fontSize: 10, color: C.textMuted, fontWeight: 700, letterSpacing: .5, textAlign: "right" }}>{row.label}</div>
-                        <div style={{ flex: 1, height: 8, borderRadius: 6, background: C.surface, overflow: "hidden", border: `1px solid ${C.border}` }}>
-                          <div style={{ width: `${(row.value / highest) * 100}%`, height: "100%", background: row.color, borderRadius: 6, transition: "width .35s ease" }} />
-                        </div>
-                        <div style={{ width: 82, fontSize: 12, fontWeight: 700, color: row.color, textAlign: "right" }}>{fmt$(row.value)}</div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Footer: utilization */}
-                  <div style={{ borderTop: `1px solid ${C.border}`, padding: "10px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", background: C.surface }}>
-                    <span style={{ fontSize: 11, color: C.textMuted }}>Budget utilization</span>
-                    <span style={{ fontSize: 12, fontWeight: 800, color: isOver ? C.red : utilPct >= 85 ? C.amber : C.green }}>{utilPct}%</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+        @container dsh (max-width: 1350px) { .dsh-kpis { grid-template-columns: repeat(12, minmax(0, 1fr)); } .dsh-kpis > * { grid-column: span 3; } .dsh-kpis > :nth-child(n+5) { grid-column: span 4; } }
+        @container dsh (max-width: 900px) { .dsh-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } .dsh-kpis > *, .dsh-kpis > :nth-child(n+5) { grid-column: auto; } .dsh-kpis > :nth-child(7) { grid-column: 1 / -1; } }
+        @container dsh (max-width: 980px) {
+          .dsh-grid, .dsh-grid.lead { grid-template-columns: 1fr; }
+          .dsh-act { grid-template-columns: 1fr; }
         }
-      </div>
+        @container dsh (max-width: 600px) {
+          .dsh-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+          .dsh-kpis > :nth-child(7) { grid-column: 1 / -1; }
+          .dsh-kpi b { font-size: 18px; }
+          .dsh-card { padding: 14px; border-radius: 18px; }
+          .dsh-top > * { width: 100%; }
+          .dsh-top .cx-seg { display: flex; }
+          .dsh-top .cx-seg button { flex: 1; }
+          .dsh-mini-stats b { font-size: 13px; }
+        }
+      `}</style>
 
-      {/* ── SECTION 4: Analytics Charts ─────────────────────────────────── */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 3, height: 18, background: `linear-gradient(180deg, ${C.green}, ${C.accent})`, borderRadius: 2 }} />
-          <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Analytics</span>
-        </div>
+      <div className="dsh">
+        <div className="dsh-wrap">
+          <div className="dsh-top">
+            <div>
+              <h3 className="prj-title">Business overview</h3>
+              <p className="prj-subtitle">Billing, collections, spend and project health · figures for {periodLabel}</p>
+            </div>
+            <div className="cx-seg" role="tablist" aria-label="Period">
+              {[["month", "This month"], ["fy", "This FY"], ["all", "All time"]].map(([k, l]) => <button key={k} role="tab" aria-selected={period === k} className={period === k ? "on" : ""} onClick={() => setPeriod(k)}>{l}</button>)}
+            </div>
+          </div>
 
-        {/* Row 1: Budget vs Raised vs Burned */}
-        {budgetChartData.length > 0 && (
-          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: "22px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Budget vs Raised vs Burned</div>
-                <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>Active projects only</div>
+          <div className="dsh-kpis">
+            {kpi("invoices", "🧾 Billed", fmt$(billed), C.accent, `${billedCount} invoice${billedCount === 1 ? "" : "s"} raised`)}
+            {kpi("invoices", "💰 Collected", fmt$(collected), C.green, `${collectRate}% of all billing collected`, <span className="dsh-mini"><i style={{ width: `${collectRate}%` }} /></span>)}
+            {kpi("invoices", "⏳ Outstanding", fmt$(outstanding), C.amber, overdueAmt ? <span style={{ color: C.red, fontWeight: 700 }}>{fmt$(overdueAmt)} overdue</span> : "Nothing overdue")}
+            {kpi("invoices", "🏛 Total TDS", fmt$(tdsTotal), C.red, <>Deducted <span style={{ display: "inline", fontSize: "inherit", color: C.red, fontWeight: 800 }}>{fmt$(tdsDeducted)}</span></>, (
+              <small>Expected <span style={{ display: "inline", fontSize: "inherit", color: C.amber, fontWeight: 800 }}>{fmt$(tdsExpected)}</span> · {tdsList.length} invoice{tdsList.length === 1 ? "" : "s"}</small>
+            ))}
+            {kpi("company_expenses", "💳 Company spend", expLoaded ? fmt$(spent) : "…", C.purple, `${fmt$(expPendingAmt)} still pending`)}
+            {kpi(null, "📊 Net cash", expLoaded ? `${net < 0 ? "−" : ""}${fmt$(Math.abs(net))}` : "…", net >= 0 ? C.green : C.red, "Collected − spend")}
+            {kpi("projects", "📁 Active projects", String(active.length), attnProjects ? C.red : C.accent, attnProjects ? <span style={{ color: C.red, fontWeight: 700 }}>{attnProjects} need attention</span> : `${projects.length} total · all on track`)}
+          </div>
+
+          <div className="dsh-grid lead">
+            <div className="dsh-card">
+              <div className="dsh-h">
+                <div><b>Cash flow</b><small>Billed vs collected vs spent · last {range} months · net {chartNet < 0 ? "−" : ""}{fmt$(Math.abs(chartNet))}</small></div>
+                <div className="cx-seg">{[6, 12].map(n => <button key={n} className={range === n ? "on" : ""} onClick={() => setRange(n)}>{n}M</button>)}</div>
               </div>
-              <div style={{ display: "flex", gap: 16 }}>
-                {[{ label: "Budget", color: C.accent }, { label: "Raised", color: C.green }, { label: "Burned", color: C.amber }].map(l => (
-                  <div key={l.label} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: C.textDim }}>
-                    <div style={{ width: 8, height: 8, borderRadius: 2, background: l.color }} />
-                    {l.label}
+              {chartHasData ? (
+                <div style={{ width: "100%", flex: 1, minHeight: 250 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={months} barCategoryGap="22%" barGap={3}>
+                      <XAxis dataKey="name" stroke={C.border} tick={{ fill: C.textMuted, fontSize: 11 }} tickLine={false} />
+                      <YAxis stroke={C.border} tick={{ fill: C.textMuted, fontSize: 11 }} tickLine={false} axisLine={false} width={48} tickFormatter={tick} />
+                      <Tooltip cursor={{ fill: C.accentGlow }} contentStyle={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 12 }}
+                        formatter={(v, n) => [fmt$(v), n]} labelFormatter={(l, p) => { const m = p && p[0] && p[0].payload; return m ? `${l} · net ${m.collected - m.spent < 0 ? "−" : ""}${fmt$(Math.abs(m.collected - m.spent))}` : l; }} />
+                      <Bar dataKey="billed" name="Billed" fill={C.accent} radius={[5, 5, 0, 0]} />
+                      <Bar dataKey="collected" name="Collected" fill={C.green} radius={[5, 5, 0, 0]} />
+                      <Bar dataKey="spent" name="Spent" fill={C.purple} radius={[5, 5, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : <div className="dsh-ok"><b>📭</b>No billing, payments or expenses in the last {range} months.</div>}
+              <div className="dsh-legend"><span><i style={{ background: C.accent }} />Billed</span><span><i style={{ background: C.green }} />Collected</span><span><i style={{ background: C.purple }} />Company spend</span></div>
+            </div>
+
+            <div className="dsh-card">
+              <div className="dsh-h"><div><b>Needs attention</b><small>{attention.length ? `${attention.length} item${attention.length === 1 ? "" : "s"} across the ledger` : "Nothing urgent"}</small></div></div>
+              {attention.length === 0 ? <div className="dsh-ok"><b>✅</b>All clear — no overdue invoices, budget overruns or stale expenses.</div> : (
+                <div className="dsh-att">
+                  {attention.map((a, i) => (
+                    <button key={i} className="dsh-att-i" style={{ "--t": a.tone }} onClick={() => onOpen(a.tab)}>
+                      <span className="dsh-att-ic">{a.ic}</span>
+                      <span className="dsh-att-b"><b>{a.t}</b><small>{a.s}</small></span>
+                      <span style={{ color: C.textMuted }}>›</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="dsh-grid">
+            <div className="dsh-card">
+              <Head title="Projects" sub={`${active.length} active · ${fmt$(active.reduce((a, r) => a + r.k.budget, 0))} budget · ${fmt$(active.reduce((a, r) => a + r.k.burned, 0))} burned`} tab="projects" />
+              {active.length === 0 ? <div className="dsh-empty">No active projects.</div> : (
+                <>
+                  <div className="dsh-legend"><span><i style={{ background: C.accent }} />Cost burned</span><span><i style={{ background: C.text }} />Time elapsed</span><span style={{ marginLeft: "auto" }}>vs budget</span></div>
+                  <div className="dsh-list">
+                    {[...active].sort((a, b) => (b.k.attention - a.k.attention) || b.k.burnPct - a.k.burnPct).slice(0, 5).map(({ p, k, inv }) => {
+                      const bc = k.burnPct > 100 ? C.red : k.burnPct > 85 ? C.amber : C.accent;
+                      return (
+                        <button key={p.id} className="dsh-row" onClick={() => onOpen("projects")} title={`${p.name}: ${prjPct(k.burnPct)} of budget burned`}>
+                          <span className="dsh-row-n"><b>{p.name}</b><small><span style={{ color: k.health.color, fontWeight: 800 }}>{k.health.icon} {k.health.label}</span> · {p.client || p.code}{k.live && prjDaysLabel(k.daysLeft) ? ` · ${prjDaysLabel(k.daysLeft)}` : ""}</small></span>
+                          <span className="dsh-row-v">{fmt$(k.burned)}<small>of {fmt$(k.budget)} · {Math.round(k.burnPct)}%</small></span>
+                          <span className="dsh-bar"><i style={{ width: `${Math.min(100, k.burnPct)}%`, background: bc, borderRadius: 5 }} />{k.timePct !== null && <em style={{ left: `${k.timePct}%` }} />}</span>
+                          {inv > 0 && <span className="dsh-row-n" style={{ gridColumn: "1 / -1" }}><small>Invoiced {fmt$(inv)} · {fmt$(Math.max(0, k.budget - inv))} left to invoice</small></span>}
+                        </button>
+                      );
+                    })}
                   </div>
+                </>
+              )}
+            </div>
+
+            <div className="dsh-card">
+              <Head title="Receivables by client" sub={`${fmt$(outstanding)} outstanding · ${collectRate}% collected overall`} tab="invoices" />
+              {clientList.length === 0 ? <div className="dsh-empty">No invoices raised yet.</div> : (
+                <>
+                  <div className="dsh-legend"><span><i style={{ background: C.green }} />Collected</span><span><i style={{ background: C.amber }} />Outstanding</span><span><i style={{ background: C.red }} />Overdue</span></div>
+                  <div className="dsh-list">
+                    {[...clientList].sort((a, b) => b.outstanding - a.outstanding || b.billed - a.billed).slice(0, 5).map(c => {
+                      const tot = Math.max(1, c.collected + c.outstanding);
+                      return (
+                        <button key={c.name} className="dsh-row" onClick={() => onOpen("invoices")}>
+                          <span className="dsh-row-n"><b>{c.name}</b><small>Billed {fmt$(c.billed)}{c.overdue ? <span style={{ color: C.red }}> · {fmt$(c.overdue)} overdue</span> : ""}</small></span>
+                          <span className="dsh-row-v" style={{ color: c.outstanding ? C.amber : C.green }}>{c.outstanding ? fmt$(c.outstanding) : "Paid up"}<small>{c.outstanding ? "outstanding" : `${fmt$(c.collected)} collected`}</small></span>
+                          <span className="dsh-bar" style={{ overflow: "hidden" }}>
+                            <i style={{ width: `${(c.collected / tot) * 100}%`, background: C.green }} />
+                            <i style={{ width: `${((c.outstanding - c.overdue) / tot) * 100}%`, background: C.amber }} />
+                            <i style={{ width: `${(c.overdue / tot) * 100}%`, background: C.red }} />
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="dsh-grid">
+            <div className="dsh-card">
+              <Head title="Company expenses" sub={`${fmt$(spent)} spent ${periodLabel} · ${spentList.length} entr${spentList.length === 1 ? "y" : "ies"}`} tab="company_expenses" />
+              {!expLoaded ? <div className="dsh-empty">Loading…</div> : (
+                <>
+                  <div className="dsh-mini-stats">
+                    {statusSplit.map(x => <div key={x.s}><span style={{ color: cxMeta(x.s).color }}>{cxMeta(x.s).label}</span><b>{fmt$(x.v)}</b></div>)}
+                  </div>
+                  {spent > 0 && <div className="dsh-stack">{statusSplit.map(x => <i key={x.s} style={{ width: `${(x.v / spent) * 100}%`, background: cxMeta(x.s).color }} title={`${cxMeta(x.s).label}: ${fmt$(x.v)}`} />)}</div>}
+                  {byPurpose.length === 0 ? <div className="dsh-empty">No expenses {periodLabel}.</div> : (
+                    <div className="dsh-list">
+                      <div style={{ fontSize: 11.5, color: C.textMuted, fontWeight: 800, textTransform: "uppercase", letterSpacing: .5, padding: "4px 8px 0" }}>Top spend</div>
+                      {byPurpose.map(x => (
+                        <button key={x.k} className="dsh-row" onClick={() => onOpen("company_expenses")}>
+                          <span className="dsh-row-n"><b>{x.k}</b><small>{x.n} entr{x.n === 1 ? "y" : "ies"} · {spent ? Math.round((x.v / spent) * 100) : 0}% of spend</small></span>
+                          <span className="dsh-row-v">{fmt$(x.v)}</span>
+                          <span className="dsh-bar" style={{ height: 5 }}><i style={{ width: `${spent ? (x.v / byPurpose[0].v) * 100 : 0}%`, background: C.purple, borderRadius: 5 }} /></span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="dsh-card">
+              <Head title="Clients" sub={`${clients.length} client${clients.length === 1 ? "" : "s"} · ${clientList.length} billed`} tab="clients" />
+              <div className="dsh-mini-stats">
+                <div><span>Clients</span><b>{clients.length}</b></div>
+                <div><span>Not yet billed</span><b>{idleClients.length}</b></div>
+                <div><span>Missing details</span><b style={{ color: missingClients.length ? C.amber : C.green }}>{missingClients.length}</b></div>
+              </div>
+              {clientList.length === 0 ? <div className="dsh-empty">No billing yet.</div> : (
+                <div className="dsh-list">
+                  <div style={{ fontSize: 11.5, color: C.textMuted, fontWeight: 800, textTransform: "uppercase", letterSpacing: .5, padding: "4px 8px 0" }}>Share of billing</div>
+                  {[...clientList].sort((a, b) => b.billed - a.billed).slice(0, 5).map((c, i) => {
+                    const col = PALETTE[i % PALETTE.length];
+                    const pct = totalBilledAll ? (c.billed / totalBilledAll) * 100 : 0;
+                    const cl = clients.find(x => (x.client_name || "").trim().toLowerCase() === c.name.trim().toLowerCase());
+                    return (
+                      <button key={c.name} className="dsh-row" onClick={() => onOpen("clients")}>
+                        <span className="dsh-row-n" style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                          <span style={{ width: 28, height: 28, borderRadius: "50%", flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 10.5, fontWeight: 800, color: col, background: col + "22", border: `1px solid ${col}55` }}>{mkAvi(c.name)}</span>
+                          <span style={{ minWidth: 0 }}><b>{c.name}</b><small>{cl && cl.pay_day ? `Net ${cl.pay_day} days` : "No terms set"}{cl && cl.gst_number ? ` · ${cl.gst_number}` : ""}</small></span>
+                        </span>
+                        <span className="dsh-row-v">{Math.round(pct)}%<small>{fmt$(c.billed)}</small></span>
+                        <span className="dsh-bar" style={{ height: 5 }}><i style={{ width: `${pct}%`, background: col, borderRadius: 5 }} /></span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="dsh-card">
+            <div className="dsh-h"><div><b>Recent activity</b><small>Latest invoices, payments and expenses</small></div></div>
+            {activity.length === 0 ? <div className="dsh-empty">No activity yet.</div> : (
+              <div className="dsh-act">
+                {activity.map((a, i) => (
+                  <button key={i} className="dsh-act-i" style={{ "--t": a.tone }} onClick={() => onOpen(a.tab)}>
+                    <span className="dsh-act-ic">{a.ic}</span>
+                    <span className="dsh-row-n" style={{ flex: 1 }}><b>{a.t}</b><small>{a.s} · {ago(a.d)}</small></span>
+                    <span className="dsh-row-v" style={{ color: a.plus ? C.green : a.minus ? C.text : C.text }}>{a.plus ? "+" : a.minus ? "−" : ""}{fmt$(a.amt)}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── Client Budgets & Invoices (module-level) ──
+const ilNum = v => parseFloat(v || 0) || 0;
+const ilDay = d => (d ? String(d).slice(0, 10) : "");
+const ilTasks = raw => {
+  try { const p = JSON.parse(raw); if (Array.isArray(p)) return p.map(x => x.description).filter(Boolean).join(", "); } catch { /* plain text */ }
+  return raw || "";
+};
+// Outstanding amount of a root invoice (matches the KPI formulas: BAL children are tracked via the parent's balance)
+const ilOutstanding = i => i.status === "cleared" ? 0 : i.status === "partial" ? ilNum(i.balance_amount) : ilNum(i.amount);
+const ilDaysPastDue = (i, todayIso) => {
+  if (i.status === "cleared" || !i.payment_due_date) return null;
+  const a = new Date(ilDay(i.payment_due_date) + "T00:00:00"), b = new Date(todayIso + "T00:00:00");
+  return Math.round((b - a) / 86400000);
+};
+const IL_AGING = [
+  { k: "current", label: "Not yet due", test: d => d === null || d <= 0 },
+  { k: "1-30", label: "1–30 days", test: d => d > 0 && d <= 30 },
+  { k: "31-60", label: "31–60 days", test: d => d > 30 && d <= 60 },
+  { k: "61-90", label: "61–90 days", test: d => d > 60 && d <= 90 },
+  { k: "90+", label: "90+ days", test: d => d > 90 },
+];
+const ilAgingColor = k => ({ current: C.accent, "1-30": C.amber, "31-60": "#f97316", "61-90": C.red, "90+": "#be123c" }[k]);
+const ilStatusColor = (s, overdue) => overdue ? C.red : s === "cleared" ? C.green : s === "partial" ? "#f97316" : C.amber;
+const ilPeriodStart = (period, now) => {
+  const y = now.getFullYear(), m = now.getMonth();
+  const iso = d => isoDate(d);
+  if (period === "month") return iso(new Date(y, m, 1));
+  if (period === "30d") { const d = new Date(now); d.setDate(d.getDate() - 30); return iso(d); }
+  if (period === "quarter") return iso(new Date(y, Math.floor(m / 3) * 3, 1));
+  if (period === "fy") return iso(new Date(m >= 3 ? y : y - 1, 3, 1)); // Indian FY starts 1 April
+  return "";
+};
+
+function IlTdsEdit({ value, color, onSave }) {
+  const [editing, setEditing] = useState(false);
+  const [v, setV] = useState("");
+  if (!editing) return (
+    <span className="il-tds-val">
+      <b style={{ color }}>{fmt$(value)}</b>
+      <button className="il-mini-btn" onClick={e => { e.stopPropagation(); setV(String(value)); setEditing(true); }} title="Override amount (this view only)" aria-label="Edit amount">✎</button>
+    </span>
+  );
+  const save = () => { onSave(parseFloat(v) || 0); setEditing(false); };
+  return (
+    <span className="il-tds-edit" onClick={e => e.stopPropagation()}>
+      <input type="number" value={v} autoFocus onChange={e => setV(e.target.value)}
+        onKeyDown={e => { if (e.key === "Enter") save(); if (e.key === "Escape") setEditing(false); }} aria-label="Amount" />
+      <button onClick={save} style={{ color: C.green }} aria-label="Save">✓</button>
+      <button onClick={() => setEditing(false)} style={{ color: C.red }} aria-label="Cancel">✕</button>
+    </span>
+  );
+}
+
+function InvoiceLedger({ invoices, projects, clients, readOnly, onRaise, onView, onEdit, onToggleStatus, onDelete }) {
+  const [q, setQ] = useState("");
+  const [fStatus, setFStatus] = useState("all");     // all | pending | partial | overdue | cleared
+  const [fClient, setFClient] = useState("all");     // client name
+  const [fProject, setFProject] = useState("all");   // project id
+  const [fAging, setFAging] = useState(null);
+  const [period, setPeriod] = useState("all");
+  const [sort, setSort] = useState("raised_desc");
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(10);
+  const [tdsOver, setTdsOver] = useState({});        // per-client TDS override (view only)
+  const [tdsExpOver, setTdsExpOver] = useState(null);
+  const [copied, setCopied] = useState(null);
+  const [showProjects, setShowProjects] = useState(true);
+  useEffect(() => { setPage(1); }, [q, fStatus, fClient, fProject, fAging, period, sort]);
+
+  const now = new Date();
+  const todayIso = isoDate(now);
+  const roots = invoices.filter(i => !i.parent_invoice_id);
+
+  // ── KPIs (same formulas as before) ──
+  const totalRaised = roots.reduce((a, i) => a + ilNum(i.amount), 0);
+  const totalTds = roots.reduce((a, i) => a + ilNum(i.tds_amount), 0);
+  const tdsDeducted = roots.filter(i => i.status === "cleared").reduce((a, i) => a + ilNum(i.tds_amount), 0);
+  const tdsExpected = roots.filter(i => i.status !== "cleared").reduce((a, i) => a + ilNum(i.tds_amount), 0);
+  const totalCleared = roots.filter(i => i.status === "cleared").reduce((a, i) => a + ilNum(i.amount) - ilNum(i.tds_amount), 0)
+    + roots.filter(i => i.status === "partial").reduce((a, i) => a + ilNum(i.payment_received), 0);
+  const totalPending = roots.reduce((a, i) => a + ilOutstanding(i), 0);
+  const collectPct = totalRaised - totalTds > 0 ? Math.min(100, Math.round((totalCleared / (totalRaised - totalTds)) * 100)) : 0;
+  const overdueRoots = roots.filter(i => (ilDaysPastDue(i, todayIso) || 0) > 0);
+  const overdueAmt = overdueRoots.reduce((a, i) => a + ilOutstanding(i), 0);
+  const dueSoon = roots.filter(i => { const d = ilDaysPastDue(i, todayIso); return d !== null && d <= 0 && d >= -7; });
+
+  // ── Aging ──
+  const aging = IL_AGING.map(b => {
+    const list = roots.filter(i => i.status !== "cleared" && b.test(ilDaysPastDue(i, todayIso)));
+    return { ...b, count: list.length, amount: list.reduce((a, i) => a + ilOutstanding(i), 0) };
+  });
+  const agingMax = Math.max(1, ...aging.map(a => a.amount));
+
+  // ── 6-month trend ──
+  const months = Array.from({ length: 6 }, (_, k) => { const d = new Date(now.getFullYear(), now.getMonth() - 5 + k, 1); return { key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, label: MONTH_NAMES[d.getMonth()].slice(0, 3), raised: 0, collected: 0 }; });
+  const mIdx = Object.fromEntries(months.map((m, i) => [m.key, i]));
+  roots.forEach(i => {
+    const r = mIdx[ilDay(i.raised_date).slice(0, 7)]; if (r !== undefined) months[r].raised += ilNum(i.amount);
+    const c = mIdx[ilDay(i.payment_received_date).slice(0, 7)];
+    if (c !== undefined) months[c].collected += i.payment_received != null ? ilNum(i.payment_received) : i.status === "cleared" ? ilNum(i.amount) - ilNum(i.tds_amount) : 0;
+  });
+  const trendMax = Math.max(1, ...months.flatMap(m => [m.raised, m.collected]));
+
+  // ── Per client ──
+  const clientMap = {};
+  roots.forEach(i => {
+    const key = i.client_name || "Unknown";
+    const c = (clientMap[key] = clientMap[key] || { name: key, raised: 0, cleared: 0, pending: 0, count: 0, tds: 0, overdue: 0 });
+    const amt = ilNum(i.amount), tds = ilNum(i.tds_amount);
+    c.raised += amt; c.tds += tds; c.count += 1;
+    if (i.status === "cleared") c.cleared += amt - tds;
+    else if (i.status === "partial") { c.cleared += ilNum(i.payment_received); c.pending += ilNum(i.balance_amount); }
+    else c.pending += amt;
+    if ((ilDaysPastDue(i, todayIso) || 0) > 0) c.overdue += 1;
+  });
+  const clientList = Object.values(clientMap).sort((a, b) => b.pending - a.pending || b.raised - a.raised);
+
+  // ── Active project budgets ──
+  const activeProjects = projects.filter(p => p.status === "active").map(p => {
+    const raised = invoices.filter(i => i.project_id === p.id && !i.parent_invoice_id).reduce((a, i) => a + ilNum(i.amount), 0);
+    const budget = ilNum(p.budget);
+    return { p, raised, budget, pct: budget > 0 ? (raised / budget) * 100 : 0, left: budget - raised };
+  }).sort((a, b) => b.left - a.left);
+
+  // ── Invoice list ──
+  const pStart = ilPeriodStart(period, now);
+  const isOverdue = i => (ilDaysPastDue(i, todayIso) || 0) > 0;
+  const statusCounts = { all: invoices.length, pending: 0, partial: 0, overdue: 0, cleared: 0 };
+  invoices.forEach(i => { statusCounts[i.status] = (statusCounts[i.status] || 0) + 1; if (isOverdue(i)) statusCounts.overdue += 1; });
+  const list = invoices.filter(i => {
+    if (fStatus === "overdue" ? !isOverdue(i) : fStatus !== "all" && i.status !== fStatus) return false;
+    if (fClient !== "all" && (i.client_name || "Unknown") !== fClient) return false;
+    if (fProject !== "all" && String(i.project_id) !== fProject) return false;
+    if (pStart && ilDay(i.raised_date) < pStart) return false;
+    if (fAging) { const b = IL_AGING.find(x => x.k === fAging); if (i.status === "cleared" || i.parent_invoice_id || !b.test(ilDaysPastDue(i, todayIso))) return false; }
+    if (q) {
+      const hay = `${i.invoice_number || ""} ${i.client_name || ""} ${i.project_name || ""} ${i.project_code || ""} ${ilTasks(i.task_details)}`.toLowerCase();
+      if (!hay.includes(q.toLowerCase())) return false;
+    }
+    return true;
+  });
+  const [sf, sd] = sort.split("_");
+  const sorted = [...list].sort((a, b) => {
+    let va, vb;
+    if (sf === "amount") { va = ilNum(a.amount); vb = ilNum(b.amount); }
+    else if (sf === "due") { va = ilDay(a.payment_due_date) || "9999"; vb = ilDay(b.payment_due_date) || "9999"; }
+    else if (sf === "client") { va = (a.client_name || "").toLowerCase(); vb = (b.client_name || "").toLowerCase(); }
+    else { va = ilDay(a.raised_date); vb = ilDay(b.raised_date); }
+    const r = va < vb ? -1 : va > vb ? 1 : 0;
+    return sd === "desc" ? -r : r;
+  });
+  const pageRows = sorted.slice((page - 1) * perPage, page * perPage);
+  const listTotal = list.reduce((a, i) => a + ilNum(i.amount), 0);
+  const listOutstanding = list.filter(i => !i.parent_invoice_id).reduce((a, i) => a + ilOutstanding(i), 0);
+  const activeFilters = [
+    fClient !== "all" && { l: `Client: ${fClient}`, clear: () => setFClient("all") },
+    fProject !== "all" && { l: `Project: ${(projects.find(p => String(p.id) === fProject) || {}).name || fProject}`, clear: () => setFProject("all") },
+    fAging && { l: `Overdue ${IL_AGING.find(x => x.k === fAging).label}`, clear: () => setFAging(null) },
+    period !== "all" && { l: { month: "This month", "30d": "Last 30 days", quarter: "This quarter", fy: "This financial year" }[period], clear: () => setPeriod("all") },
+    q && { l: `“${q}”`, clear: () => setQ("") },
+  ].filter(Boolean);
+  const clearAll = () => { setFClient("all"); setFProject("all"); setFAging(null); setPeriod("all"); setQ(""); setFStatus("all"); };
+  const scrollToList = () => setTimeout(() => document.getElementById("il-list")?.scrollIntoView({ behavior: "smooth", block: "start" }), 30);
+
+  function exportCSV() {
+    if (!sorted.length) { dialog.alert("No invoices to export."); return; }
+    const esc = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const head = ["Invoice #", "Client", "Project Code", "Project", "Task / Deliverables", "Subtotal", "TDS", "Total Raised", "Date Raised", "Payment Due", "Days Overdue", "Payment Received", "Received Date", "Balance", "Status"];
+    const rows = sorted.map(i => [esc(i.invoice_number), esc(i.client_name), esc(i.project_code), esc(i.project_name), esc(ilTasks(i.task_details)), i.subtotal ?? "", i.tds_amount ?? "", i.amount,
+      ilDay(i.raised_date), ilDay(i.payment_due_date), Math.max(0, ilDaysPastDue(i, todayIso) || 0) || "", i.payment_received ?? "", ilDay(i.payment_received_date), i.status === "partial" ? i.balance_amount ?? "" : "", i.status.toUpperCase()].join(","));
+    const url = URL.createObjectURL(new Blob([[head.join(","), ...rows].join("\n")], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a"); a.href = url; a.download = `invoices_${todayIso}.csv`;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  }
+  async function copyReminder(i) {
+    const due = ilOutstanding(i) || ilNum(i.amount);
+    const d = ilDaysPastDue(i, todayIso);
+    const text = `Dear ${i.client_name || "Sir/Madam"},\n\nThis is a gentle reminder that invoice ${i.invoice_number || ""} dated ${i.raised_date ? fmtD(i.raised_date) : ""} for ${i.project_name || "our services"} has an outstanding amount of ${fmt$(due)}${i.payment_due_date ? `, ${d > 0 ? `which was due on ${fmtD(i.payment_due_date)} (${d} day${d === 1 ? "" : "s"} overdue)` : `due on ${fmtD(i.payment_due_date)}`}` : ""}.\n\nKindly arrange the payment at the earliest. Please ignore this message if the payment has already been made.\n\nThank you,\nFascinate IT`;
+    try { await navigator.clipboard.writeText(text); setCopied(i.id); setTimeout(() => setCopied(c => (c === i.id ? null : c)), 1500); }
+    catch { dialog.alert(text, { title: "Payment reminder" }); }
+  }
+
+  const dueLabel = i => {
+    if (!i.payment_due_date) return null;
+    if (i.status === "cleared") return null;
+    const d = ilDaysPastDue(i, todayIso);
+    if (d > 0) return { t: `${d}d overdue`, c: C.red };
+    if (d === 0) return { t: "Due today", c: C.amber };
+    if (d >= -7) return { t: `Due in ${-d}d`, c: C.amber };
+    return { t: `Due in ${-d}d`, c: C.textMuted };
+  };
+
+  const kpi = (label, value, color, sub, extra) => (
+    <div className="il-kpi" style={{ "--c": color }}>
+      <span className="il-kpi-l">{label}</span>
+      <b className="il-kpi-v" style={{ color }}>{value}</b>
+      {sub && <small>{sub}</small>}
+      {extra}
+    </div>
+  );
+
+  return (
+    <>
+      <style>{`
+        .il { container-type: inline-size; container-name: il; }
+        .il-wrap { display: flex; flex-direction: column; gap: 18px; }
+        .il-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 10px 16px; border-radius: 12px; font-size: 13px; font-weight: 700; cursor: pointer; border: 1px solid transparent; font-family: inherit; white-space: nowrap; transition: transform .15s, border-color .15s; }
+        .il-btn:hover:not(:disabled) { transform: translateY(-1px); }
+        .il-btn-primary { background: ${C.accent}; color: #fff; box-shadow: 0 8px 22px ${C.accent}40; }
+        .il-btn-ghost { background: ${C.surface}; color: ${C.text}; border-color: ${C.border}; }
+        .il-btn-ghost:hover { border-color: ${C.accent}77; }
+        .il button:focus-visible, .il-row:focus-visible { outline: 2px solid ${C.accent}; outline-offset: 2px; }
+        .il-card { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 20px; padding: 18px; min-width: 0; }
+        .il-h { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+        .il-h b { font-size: 14.5px; font-weight: 800; color: ${C.text}; }
+        .il-h small { font-size: 12px; color: ${C.textMuted}; font-weight: 600; }
+        .il-h .il-sp { flex: 1; }
+        .il-link { background: none; border: none; color: ${C.accent}; font-size: 12.5px; font-weight: 700; cursor: pointer; font-family: inherit; padding: 2px 4px; }
+
+        .il-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+        .il-kpi { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 18px; padding: 16px; position: relative; overflow: hidden; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+        .il-kpi::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--c); }
+        .il-kpi::after { content: ""; position: absolute; top: -30px; right: -30px; width: 90px; height: 90px; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--c) 18%, transparent), transparent 70%); pointer-events: none; }
+        .il-kpi-l { font-size: 11.5px; color: ${C.textMuted}; font-weight: 700; }
+        .il-kpi-v { font-size: 22px; font-weight: 800; letter-spacing: -.5px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .il-kpi small { font-size: 11.5px; color: ${C.textMuted}; font-weight: 600; }
+        .il-kpi-split { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 4px; }
+        .il-kpi-split > div { background: ${C.surface}; border: 1px solid ${C.border}66; border-radius: 10px; padding: 6px 8px; min-width: 0; }
+        .il-kpi-split span { display: block; font-size: 10.5px; color: ${C.textMuted}; font-weight: 700; }
+        .il-kpi-ring { display: flex; align-items: center; gap: 12px; }
+        .il-ring { position: relative; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .il-ring b { position: absolute; font-size: 13px; font-weight: 800; color: ${C.text}; }
+        .il-tds-val { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-variant-numeric: tabular-nums; }
+        .il-mini-btn { background: none; border: none; color: ${C.textMuted}; cursor: pointer; font-size: 11px; padding: 0 2px; font-family: inherit; }
+        .il-mini-btn:hover { color: ${C.accent}; }
+        .il-tds-edit { display: inline-flex; align-items: center; gap: 3px; width: 100%; }
+        .il-tds-edit input { flex: 1; width: 0; min-width: 0; background: ${C.bg}; border: 1px solid ${C.accent}; border-radius: 6px; color: ${C.text}; padding: 3px 6px; font-size: 12px; outline: none; font-family: inherit; }
+        .il-tds-edit button { background: none; border: none; cursor: pointer; font-weight: 800; font-size: 12px; padding: 0 2px; }
+
+        .il-alert { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 12px 16px; border-radius: 14px; border: 1px solid ${C.red}44; background: ${C.red}10; color: ${C.text}; font-size: 13px; }
+        .il-alert b { color: ${C.red}; }
+        .il-alert span { flex: 1; min-width: 200px; }
+
+        .il-insights { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+        .il-age { display: flex; flex-direction: column; gap: 8px; }
+        .il-age-row { all: unset; box-sizing: border-box; cursor: pointer; display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 8px; border-radius: 10px; border: 1px solid transparent; }
+        .il-age-row:hover { background: ${C.surface}; }
+        .il-age-row.on { border-color: var(--c); background: color-mix(in srgb, var(--c) 10%, ${C.surface}); }
+        .il-age-row:disabled { cursor: default; opacity: .55; }
+        .il-age-l { font-size: 12.5px; font-weight: 700; color: ${C.textDim}; display: flex; align-items: center; gap: 6px; }
+        .il-age-l i { width: 8px; height: 8px; border-radius: 3px; background: var(--c); flex-shrink: 0; }
+        .il-age-track { height: 10px; border-radius: 6px; background: ${C.border}66; overflow: hidden; }
+        .il-age-track div { height: 100%; border-radius: 6px; background: var(--c); transition: width .5s ease; }
+        .il-age-v { text-align: right; font-size: 12.5px; font-weight: 800; color: ${C.text}; font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .il-age-v small { display: block; font-size: 10.5px; color: ${C.textMuted}; font-weight: 600; }
+        .il-trend { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; align-items: end; flex: 1; min-height: 150px; padding-top: 6px; }
+        .il-tcol { display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; min-width: 0; }
+        .il-tbars { display: flex; gap: 4px; align-items: flex-end; height: 100%; width: 100%; justify-content: center; }
+        .il-tbars div { width: min(18px, 40%); border-radius: 6px 6px 2px 2px; min-height: 2px; transition: height .5s ease; }
+        .il-tcol span { font-size: 11px; color: ${C.textMuted}; font-weight: 700; }
+        .il-legend { display: flex; gap: 14px; font-size: 11.5px; color: ${C.textMuted}; font-weight: 600; margin-top: 10px; flex-wrap: wrap; }
+        .il-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+
+        .il-clients { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+        .il-client { all: unset; box-sizing: border-box; cursor: pointer; background: ${C.surface}; border: 1px solid ${C.border}; border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 12px; min-width: 0; transition: border-color .15s, transform .15s; }
+        .il-client:hover { border-color: ${C.accent}66; transform: translateY(-1px); }
+        .il-client.on { border-color: ${C.accent}; box-shadow: 0 0 0 3px ${C.accentGlow}; }
+        .il-client-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
+        .il-cavi { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; flex-shrink: 0; }
+        .il-cname { flex: 1; min-width: 0; }
+        .il-cname b { display: block; font-size: 14px; color: ${C.text}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .il-cname small { font-size: 11.5px; color: ${C.textMuted}; font-weight: 600; }
+        .il-cstats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+        .il-cstats > div { background: ${C.card}; border-radius: 10px; padding: 7px 9px; min-width: 0; }
+        .il-cstats span { display: block; font-size: 10.5px; color: ${C.textMuted}; font-weight: 700; }
+        .il-cstats b { font-size: 13px; font-variant-numeric: tabular-nums; }
+        .il-stack { height: 6px; border-radius: 6px; background: ${C.amber}44; overflow: hidden; }
+        .il-stack div { height: 100%; background: ${C.green}; transition: width .5s; }
+        .il-cfoot { display: flex; justify-content: space-between; font-size: 11px; color: ${C.textMuted}; font-weight: 600; margin-top: -6px; }
+
+        .il-prj { display: flex; flex-direction: column; }
+        .il-prow { all: unset; box-sizing: border-box; cursor: pointer; display: grid; grid-template-columns: minmax(160px, 1.4fr) repeat(3, minmax(90px, .8fr)) minmax(140px, 1.2fr); gap: 12px; align-items: center; padding: 10px 8px; border-bottom: 1px solid ${C.border}44; border-radius: 10px; font-size: 13px; }
+        .il-prow:last-child { border-bottom: none; }
+        .il-prow:hover { background: ${C.surface}; }
+        .il-prow.on { background: ${C.accent}14; }
+        .il-prow .nm b { display: block; color: ${C.text}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .il-prow .nm small { color: ${C.accent}; font-weight: 700; font-size: 11px; }
+        .il-prow .num { font-weight: 800; font-variant-numeric: tabular-nums; color: ${C.text}; }
+        .il-prow .num small { display: block; font-size: 10.5px; color: ${C.textMuted}; font-weight: 700; }
+        .il-pbar { display: flex; flex-direction: column; gap: 4px; }
+        .il-pbar > div:first-child { display: flex; justify-content: space-between; font-size: 11px; color: ${C.textMuted}; font-weight: 700; }
+        .il-pbar-t { height: 6px; border-radius: 6px; background: ${C.border}; overflow: hidden; }
+        .il-pbar-t i { display: block; height: 100%; border-radius: 6px; }
+
+        .il-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        .il-search { flex: 1 1 220px; min-width: 0; background: ${C.surface}; border: 1px solid ${C.border}; border-radius: 12px; color: ${C.text}; padding: 10px 14px; font-size: 13px; outline: none; font-family: inherit; }
+        .il-select { background-color: ${C.surface}; border: 1px solid ${C.border}; border-radius: 12px; color: ${C.text}; padding: 10px 12px; font-size: 13px; outline: none; font-family: inherit; min-width: 0; max-width: 220px; }
+        .il-search:focus, .il-select:focus { border-color: ${C.accent}; }
+        .il-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+        .il-chip { --c: ${C.accent}; display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 999px; border: 1px solid ${C.border}; background: ${C.surface}; color: ${C.textDim}; font-size: 12.5px; font-weight: 700; cursor: pointer; font-family: inherit; flex-shrink: 0; }
+        .il-chip i { width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
+        .il-chip b { font-size: 11.5px; padding: 1px 7px; border-radius: 999px; background: ${C.border}; color: ${C.text}; }
+        .il-chip.on { border-color: var(--c); color: ${C.text}; background: color-mix(in srgb, var(--c) 14%, ${C.surface}); }
+        .il-chip.on b { background: var(--c); color: #fff; }
+        .il-active { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 12px; color: ${C.textMuted}; }
+        .il-active button.tag { display: inline-flex; gap: 6px; align-items: center; background: ${C.accent}14; color: ${C.text}; border: 1px solid ${C.accent}44; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; }
+
+        .il-list { padding: 0; overflow: hidden; scroll-margin-top: 90px; }
+        .il-list-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 16px 18px 12px; }
+        .il-row { display: grid; grid-template-columns: minmax(190px, 1.6fr) minmax(150px, 1.4fr) 110px 120px minmax(110px, .9fr) 120px 214px; gap: 12px; align-items: center; padding: 12px 18px; border-top: 1px solid ${C.border}44; border-left: 3px solid var(--sc, transparent); font-size: 13px; color: ${C.text}; }
+        .il-row:not(.head):hover { background: ${C.accentGlow}; }
+        .il-row.head { background: ${C.surface}; font-size: 11px; font-weight: 800; color: ${C.textMuted}; letter-spacing: .5px; text-transform: uppercase; padding: 9px 18px; border-left-color: transparent; }
+        .il-c { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+        .il-c > small.lbl { display: none; font-size: 10.5px; color: ${C.textMuted}; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; }
+        .il-inv { font-weight: 800; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .il-sub { font-size: 11.5px; color: ${C.textMuted}; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .il-cl { font-weight: 700; color: ${C.accent}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .il-amt { font-weight: 800; font-variant-numeric: tabular-nums; }
+        .il-pill { --c: ${C.amber}; display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 800; padding: 3px 9px; border-radius: 999px; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); border: 1px solid color-mix(in srgb, var(--c) 30%, transparent); white-space: nowrap; text-transform: capitalize; width: fit-content; }
+        .il-pill i { width: 6px; height: 6px; border-radius: 50%; background: var(--c); }
+        .il-acts { display: flex; gap: 5px; justify-content: flex-end; flex-wrap: nowrap; }
+        .il-insights .il-card { display: flex; flex-direction: column; }
+        .il-ib { width: 32px; height: 32px; border-radius: 9px; border: 1px solid ${C.border}; background: ${C.surface}; color: ${C.textDim}; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-family: inherit; flex-shrink: 0; }
+        .il-ib:hover { color: ${C.accent}; border-color: ${C.accent}77; }
+        .il-ib.danger:hover { color: ${C.red}; border-color: ${C.red}77; }
+        .il-clear { height: 32px; padding: 0 11px; border-radius: 9px; font-size: 12px; font-weight: 800; cursor: pointer; font-family: inherit; border: 1px solid ${C.green}55; background: ${C.green}18; color: ${C.green}; white-space: nowrap; }
+        .il-clear.rev { border-color: ${C.border}; background: ${C.surface}; color: ${C.textDim}; }
+        .il-empty { padding: 44px 20px; text-align: center; color: ${C.textMuted}; font-size: 13.5px; border-top: 1px solid ${C.border}44; }
+        .il-empty div { font-size: 30px; margin-bottom: 8px; }
+        .il-pager { border-top: 1px solid ${C.border}44; }
+
+        @container il (max-width: 1150px) {
+          .il-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+          .il-row { grid-template-columns: minmax(160px, 1.5fr) minmax(130px, 1.3fr) 110px minmax(100px, .9fr) 120px 214px; }
+          .il-row > :nth-child(3) { display: none; }
+        }
+        @container il (max-width: 900px) {
+          .il-insights { grid-template-columns: 1fr; }
+          .il-prow { grid-template-columns: minmax(0, 1.4fr) repeat(2, minmax(80px, .8fr)) minmax(110px, 1fr); }
+          .il-prow > :nth-child(3) { display: none; }
+          .il-row.head { display: none; }
+          .il-row, .il-row > :nth-child(3) { display: grid; }
+          .il-row { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "inv st" "cli cli" "amt rec" "act act"; padding: 14px 16px; gap: 10px; }
+          .il-row > :nth-child(1) { grid-area: inv; }
+          .il-row > :nth-child(2) { grid-area: cli; }
+          .il-row > :nth-child(3) { display: none; }
+          .il-row > :nth-child(4) { grid-area: amt; }
+          .il-row > :nth-child(5) { grid-area: rec; }
+          .il-row > :nth-child(6) { grid-area: st; justify-self: end; align-items: flex-end; }
+          .il-row > :nth-child(7) { grid-area: act; justify-content: flex-start; }
+          .il-c > small.lbl { display: block; }
+        }
+        @container il (max-width: 600px) {
+          .il-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+          .il-kpis > :first-child { grid-column: 1 / -1; }
+          .il-kpi-v { font-size: 19px; }
+          .il-card { padding: 14px; border-radius: 18px; }
+          .il-list { padding: 0; }
+          .il-age-row { grid-template-columns: 82px minmax(0, 1fr) auto; }
+          .il-trend { min-height: 120px; gap: 6px; }
+          .il-acts { flex-wrap: wrap; }
+          .il-clients { grid-template-columns: 1fr; }
+          .il-prow { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "nm left" "bar bar"; }
+          .il-prow > :nth-child(1) { grid-area: nm; }
+          .il-prow > :nth-child(2), .il-prow > :nth-child(3) { display: none; }
+          .il-prow > :nth-child(4) { grid-area: left; text-align: right; }
+          .il-prow > :nth-child(5) { grid-area: bar; }
+          .il-toolbar > * { flex: 1 1 calc(50% - 4px); max-width: none; }
+          .il-toolbar .il-search { flex-basis: 100%; }
+          .il-chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+          .il-list-head { padding: 14px; }
+          .il-list-head > div:last-child { width: 100%; }
+          .il-list-head > div:last-child .il-btn { flex: 1; }
+        }
+      `}</style>
+
+      <div className="il">
+        <div className="il-wrap">
+          {/* KPIs */}
+          <div className="il-kpis">
+            {kpi("Total raised", fmt$(totalRaised), C.accent, `${roots.length} invoice${roots.length === 1 ? "" : "s"}`)}
+            {kpi("Collected", fmt$(totalCleared), C.green, `${roots.filter(i => i.status === "cleared").length} cleared · ${roots.filter(i => i.status === "partial").length} partial`)}
+            {kpi("Outstanding", fmt$(totalPending), C.amber, overdueAmt > 0 ? <span style={{ color: C.red, fontWeight: 700 }}>{fmt$(overdueAmt)} overdue</span> : `${roots.filter(i => i.status !== "cleared").length} open`)}
+            {kpi("TDS (10%)", fmt$(totalTds), C.red, null, (
+              <div className="il-kpi-split">
+                <div><span>Deducted</span><b style={{ color: C.red, fontSize: 13 }}>{fmt$(tdsDeducted)}</b></div>
+                <div><span>Expected</span><IlTdsEdit value={tdsExpOver ?? tdsExpected} color={C.amber} onSave={setTdsExpOver} /></div>
+              </div>
+            ))}
+            <div className="il-kpi" style={{ "--c": C.purple }}>
+              <span className="il-kpi-l">Collection rate</span>
+              <div className="il-kpi-ring">
+                <span className="il-ring"><Ring pct={collectPct} color={collectPct >= 80 ? C.green : collectPct >= 50 ? C.accent : C.amber} size={58} stroke={6} /><b>{collectPct}%</b></span>
+                <small>of billed (excl. TDS) received</small>
+              </div>
+            </div>
+          </div>
+
+          {(overdueRoots.length > 0 || dueSoon.length > 0) && (
+            <div className="il-alert" role="status" style={!overdueRoots.length ? { borderColor: C.amber + "44", background: C.amber + "10" } : undefined}>
+              <span style={{ fontSize: 18, flex: "none", minWidth: 0 }}>{overdueRoots.length ? "⏰" : "📅"}</span>
+              <span>
+                {overdueRoots.length > 0 && <><b>{overdueRoots.length} invoice{overdueRoots.length === 1 ? " is" : "s are"} overdue</b> — {fmt$(overdueAmt)} to chase. </>}
+                {dueSoon.length > 0 && <><b style={{ color: C.amber }}>{dueSoon.length}</b> due in the next 7 days ({fmt$(dueSoon.reduce((a, i) => a + ilOutstanding(i), 0))}).</>}
+              </span>
+              <button className="il-btn il-btn-ghost" style={{ padding: "7px 12px" }} onClick={() => { clearAll(); setFStatus(overdueRoots.length ? "overdue" : "pending"); setSort("due_asc"); scrollToList(); }}>View {overdueRoots.length ? "overdue" : "upcoming"} →</button>
+            </div>
+          )}
+
+          {/* Insights */}
+          <div className="il-insights">
+            <div className="il-card">
+              <div className="il-h"><b>Receivables aging</b><small>Outstanding by days past due</small><span className="il-sp" />{fAging && <button className="il-link" onClick={() => setFAging(null)}>Clear</button>}</div>
+              <div className="il-age">
+                {aging.map(a => (
+                  <button key={a.k} className={`il-age-row${fAging === a.k ? " on" : ""}`} style={{ "--c": ilAgingColor(a.k) }} disabled={!a.count}
+                    onClick={() => { setFAging(fAging === a.k ? null : a.k); setFStatus("all"); scrollToList(); }} title={`Show ${a.label} invoices`}>
+                    <span className="il-age-l"><i />{a.label}</span>
+                    <span className="il-age-track"><div style={{ width: `${(a.amount / agingMax) * 100}%` }} /></span>
+                    <span className="il-age-v">{fmt$(a.amount)}<small>{a.count} inv</small></span>
+                  </button>
                 ))}
               </div>
             </div>
-            <div style={{ width: "100%", height: 300 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={budgetChartData} margin={{ top: 10, right: 20, left: 10, bottom: 5 }} barGap={3}>
-                  <XAxis dataKey="name" stroke={C.textMuted} fontSize={11} tickLine={false} axisLine={false} />
-                  <YAxis stroke={C.textMuted} fontSize={11} tickLine={false} axisLine={false} tickFormatter={tickFmt} />
-                  <Tooltip contentStyle={tooltipStyle} itemStyle={{ fontSize: 12, fontWeight: 700 }}
-                    formatter={(v, n) => [fmt$(v), n]}
-                    labelStyle={{ color: C.textDim, fontWeight: 700, fontSize: 12, marginBottom: 6 }}
-                    labelFormatter={(n, pl) => pl?.[0]?.payload?.fullName || n}
-                    cursor={{ fill: C.accentGlow }} />
-                  <Bar dataKey="Budget" fill={C.accent} radius={[5, 5, 0, 0]} barSize={22} />
-                  <Bar dataKey="Raised" fill={C.green} radius={[5, 5, 0, 0]} barSize={22} />
-                  <Bar dataKey="Burned" fill={C.amber} radius={[5, 5, 0, 0]} barSize={22} />
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="il-card">
+              <div className="il-h"><b>Billing vs collections</b><small>Last 6 months</small></div>
+              <div className="il-trend">
+                {months.map(m => (
+                  <div key={m.key} className="il-tcol" title={`${m.label}: raised ${fmt$(m.raised)} · collected ${fmt$(m.collected)}`}>
+                    <div className="il-tbars">
+                      <div style={{ height: `${(m.raised / trendMax) * 100}%`, background: C.accent }} />
+                      <div style={{ height: `${(m.collected / trendMax) * 100}%`, background: C.green }} />
+                    </div>
+                    <span>{m.label}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="il-legend">
+                <span><i style={{ background: C.accent }} />Raised {fmt$(months.reduce((a, m) => a + m.raised, 0))}</span>
+                <span><i style={{ background: C.green }} />Collected {fmt$(months.reduce((a, m) => a + m.collected, 0))}</span>
+              </div>
             </div>
           </div>
-        )}
 
-        {/* Row 2: Invoice Status — Project + Client side by side */}
-        {invoices.length > 0 && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-            {[
-              { title: "Invoice Status by Project", sub: "Raised · Cleared · Pending per project", data: projectInvData },
-              { title: "Invoice Status by Client", sub: "Raised · Cleared · Pending per client", data: clientInvData },
-            ].map(({ title, sub, data }) => (
-              <div key={title} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: "22px 22px", display: "flex", flexDirection: "column", gap: 14 }}>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{title}</div>
-                  <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>{sub}</div>
-                </div>
-                {data.length === 0
-                  ? <div style={{ padding: 32, textAlign: "center", color: C.textMuted, fontSize: 12 }}>No invoice data available</div>
-                  : <div style={{ width: "100%", height: 260 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={data} margin={{ top: 6, right: 12, left: 0, bottom: 4 }} barGap={2}>
-                        <XAxis dataKey="name" stroke={C.textMuted} fontSize={10} tickLine={false} axisLine={false} />
-                        <YAxis stroke={C.textMuted} fontSize={10} tickLine={false} axisLine={false} tickFormatter={tickFmt} />
-                        <Tooltip contentStyle={tooltipStyle} itemStyle={{ fontSize: 12, fontWeight: 700 }}
-                          formatter={(v, n) => [fmt$(v), n]}
-                          labelStyle={{ color: C.textDim, fontWeight: 700, fontSize: 12, marginBottom: 6 }}
-                          labelFormatter={(n, pl) => pl?.[0]?.payload?.fullName || n}
-                          cursor={{ fill: C.accentGlow }} />
-                        <Legend iconType="circle" wrapperStyle={{ fontSize: 11, color: C.text, paddingTop: 10 }} />
-                        <Bar dataKey="Raised" fill={C.accent} radius={[4, 4, 0, 0]} barSize={16} />
-                        <Bar dataKey="Cleared" fill={C.green} radius={[4, 4, 0, 0]} barSize={16} />
-                        <Bar dataKey="Pending" fill={C.amber} radius={[4, 4, 0, 0]} barSize={16} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                }
+          {/* Clients */}
+          {clientList.length > 0 && (
+            <div className="il-card">
+              <div className="il-h"><b>Clients</b><small>{clientList.length} billed · click a client to filter invoices</small><span className="il-sp" />{fClient !== "all" && <button className="il-link" onClick={() => setFClient("all")}>Show all</button>}</div>
+              <div className="il-clients">
+                {clientList.map((cl, idx) => {
+                  const net = cl.raised - cl.tds;
+                  const pct = net > 0 ? Math.min(100, Math.round((cl.cleared / net) * 100)) : 0;
+                  const col = PALETTE[idx % PALETTE.length];
+                  const hc = pct === 100 ? C.green : pct >= 60 ? C.accent : C.amber;
+                  return (
+                    <div key={cl.name} role="button" tabIndex={0} className={`il-client${fClient === cl.name ? " on" : ""}`}
+                      onClick={() => { setFClient(fClient === cl.name ? "all" : cl.name); scrollToList(); }}
+                      onKeyDown={e => { if (e.key === "Enter") { setFClient(fClient === cl.name ? "all" : cl.name); scrollToList(); } }}>
+                      <div className="il-client-top">
+                        <span className="il-cavi" style={{ background: col + "22", color: col, border: `1px solid ${col}55` }}>{mkAvi(cl.name)}</span>
+                        <span className="il-cname"><b>{cl.name}</b><small>{cl.count} invoice{cl.count === 1 ? "" : "s"}{cl.overdue ? <span style={{ color: C.red }}> · {cl.overdue} overdue</span> : ""}</small></span>
+                        <span className="il-ring"><Ring pct={pct} color={hc} size={42} stroke={4} /><b style={{ fontSize: 10.5 }}>{pct}%</b></span>
+                      </div>
+                      <div className="il-cstats">
+                        <div><span>Raised</span><b style={{ color: C.text }}>{fmt$(cl.raised)}</b></div>
+                        <div><span>Collected</span><b style={{ color: C.green }}>{fmt$(cl.cleared)}</b></div>
+                        <div><span>Pending</span><b style={{ color: cl.pending ? C.amber : C.textMuted }}>{fmt$(cl.pending)}</b></div>
+                        <div><span>TDS</span>{cl.tds > 0 ? <IlTdsEdit value={tdsOver[cl.name] ?? cl.tds} color={C.red} onSave={v => setTdsOver(o => ({ ...o, [cl.name]: v }))} /> : <b style={{ color: C.textMuted }}>—</b>}</div>
+                      </div>
+                      <div className="il-stack"><div style={{ width: `${pct}%` }} /></div>
+                      <div className="il-cfoot"><span>Collection progress</span><span style={{ color: hc, fontWeight: 800 }}>{pct}% collected</span></div>
+                    </div>
+                  );
+                })}
               </div>
-            ))}
+            </div>
+          )}
+
+          {/* Project budgets */}
+          {activeProjects.length > 0 && (
+            <div className="il-card">
+              <div className="il-h">
+                <b>Active project budgets</b><small>{activeProjects.length} active · {fmt$(activeProjects.reduce((a, x) => a + Math.max(0, x.left), 0))} left to invoice</small>
+                <span className="il-sp" />
+                {fProject !== "all" && <button className="il-link" onClick={() => setFProject("all")}>Show all</button>}
+                <button className="il-link" onClick={() => setShowProjects(s => !s)} aria-expanded={showProjects}>{showProjects ? "Hide" : "Show"}</button>
+              </div>
+              {showProjects && (
+                <div className="il-prj">
+                  {activeProjects.map(({ p, raised, budget, pct, left }) => {
+                    const over = left < 0;
+                    const bc = over ? C.red : pct >= 85 ? C.amber : C.accent;
+                    return (
+                      <button key={p.id} className={`il-prow${fProject === String(p.id) ? " on" : ""}`} onClick={() => { setFProject(fProject === String(p.id) ? "all" : String(p.id)); scrollToList(); }} title="Filter invoices by this project">
+                        <span className="nm"><b>{p.name}</b><small>{p.code}{p.client ? ` · ${p.client}` : ""}</small></span>
+                        <span className="num"><small>Budget</small>{fmt$(budget)}</span>
+                        <span className="num"><small>Invoiced</small><span style={{ color: C.green }}>{fmt$(raised)}</span></span>
+                        <span className="num"><small>{over ? "Over budget" : "Left to invoice"}</small><span style={{ color: over ? C.red : C.text }}>{fmt$(Math.abs(left))}</span></span>
+                        <span className="il-pbar">
+                          <div><span>Invoiced</span><span style={{ color: bc }}>{Math.round(pct)}%</span></div>
+                          <div className="il-pbar-t"><i style={{ width: `${Math.min(100, pct)}%`, background: bc }} /></div>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Invoices */}
+          <div id="il-list" className="il-card il-list">
+            <div className="il-list-head">
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>Invoices</div>
+                <div style={{ fontSize: 12, color: C.textMuted, fontWeight: 600, marginTop: 2 }}>{list.length} shown · {fmt$(listTotal)} raised · {fmt$(listOutstanding)} outstanding</div>
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button className="il-btn il-btn-ghost" onClick={exportCSV}>📥 Export</button>
+                {!readOnly && <button className="il-btn il-btn-primary" onClick={onRaise}>＋ Raise invoice</button>}
+              </div>
+            </div>
+            <div style={{ padding: "0 18px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
+              <div className="il-chips" role="tablist" aria-label="Filter by status">
+                {[["all", "All", C.accent], ["pending", "Pending", C.amber], ["partial", "Partial", "#f97316"], ["overdue", "Overdue", C.red], ["cleared", "Cleared", C.green]].map(([k, l, c]) => (
+                  <button key={k} role="tab" aria-selected={fStatus === k} className={`il-chip${fStatus === k ? " on" : ""}`} style={{ "--c": c }} onClick={() => setFStatus(k)}>
+                    {k !== "all" && <i />}{l}<b>{statusCounts[k] || 0}</b>
+                  </button>
+                ))}
+              </div>
+              <div className="il-toolbar">
+                <input className="il-search" placeholder="Search invoice #, client, project, task…" value={q} onChange={e => setQ(e.target.value)} aria-label="Search invoices" />
+                <select className="il-select" value={fClient} onChange={e => setFClient(e.target.value)} aria-label="Client">
+                  <option value="all">All clients</option>
+                  {Array.from(new Set([...clients.map(c => c.client_name), ...invoices.map(i => i.client_name || "Unknown")].filter(Boolean))).sort().map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+                <select className="il-select" value={fProject} onChange={e => setFProject(e.target.value)} aria-label="Project">
+                  <option value="all">All projects</option>
+                  {projects.map(p => <option key={p.id} value={String(p.id)}>{p.name}</option>)}
+                </select>
+                <select className="il-select" value={period} onChange={e => setPeriod(e.target.value)} aria-label="Raised in">
+                  <option value="all">Any date</option>
+                  <option value="month">This month</option>
+                  <option value="30d">Last 30 days</option>
+                  <option value="quarter">This quarter</option>
+                  <option value="fy">This financial year</option>
+                </select>
+                <select className="il-select" value={sort} onChange={e => setSort(e.target.value)} aria-label="Sort">
+                  <option value="raised_desc">Newest first</option>
+                  <option value="raised_asc">Oldest first</option>
+                  <option value="due_asc">Due date (soonest)</option>
+                  <option value="amount_desc">Amount (high → low)</option>
+                  <option value="amount_asc">Amount (low → high)</option>
+                  <option value="client_asc">Client A–Z</option>
+                </select>
+              </div>
+              {activeFilters.length > 0 && (
+                <div className="il-active">
+                  Filters:
+                  {activeFilters.map(f => <button key={f.l} className="tag" onClick={f.clear} aria-label={`Remove filter ${f.l}`}>{f.l} ✕</button>)}
+                  <button className="il-link" onClick={clearAll}>Clear all</button>
+                </div>
+              )}
+            </div>
+
+            <div className="il-row head">{["Invoice", "Client & project", "Raised", "Amount", "Received", "Status", ""].map((h, i) => <div key={i}>{h}</div>)}</div>
+            {pageRows.length === 0 ? (
+              <div className="il-empty"><div>{invoices.length ? "🔍" : "🧾"}</div>{invoices.length ? "No invoices match your filters." : "No invoices raised yet."}
+                {invoices.length > 0 && <div style={{ marginTop: 10 }}><button className="il-link" onClick={clearAll}>Clear filters</button></div>}</div>
+            ) : pageRows.map(i => {
+              const od = isOverdue(i);
+              const sc = ilStatusColor(i.status, od);
+              const due = dueLabel(i);
+              const tasks = ilTasks(i.task_details);
+              return (
+                <div key={i.id} className="il-row" style={{ "--sc": sc }}>
+                  <div className="il-c">
+                    <span className="il-inv" title={i.invoice_number}>{i.invoice_number || `#${i.id}`}</span>
+                    {i.parent_invoice_number && <span className="il-sub" style={{ color: "#f97316" }}>↳ Balance of {i.parent_invoice_number}</span>}
+                    <span className="il-sub" title={tasks}>{tasks || "—"}</span>
+                  </div>
+                  <div className="il-c">
+                    <span className="il-cl">{i.client_name || "—"}</span>
+                    <span className="il-sub">{i.project_code}{i.project_name ? ` · ${i.project_name}` : ""}</span>
+                    {i.vendor_invoice_url && <a href={`${window.location.origin}/api/receipts/${i.vendor_invoice_url}`} target="_blank" rel="noreferrer" className="il-sub" style={{ color: C.purple, textDecoration: "none" }}>📎 Partner invoice</a>}
+                  </div>
+                  <div className="il-c"><small className="lbl">Raised</small><span>{i.raised_date ? fmtD(i.raised_date) : "—"}</span>{i.payment_due_date && <span className="il-sub">Due {fmtD(i.payment_due_date)}</span>}</div>
+                  <div className="il-c"><small className="lbl">Amount</small><span className="il-amt">{fmt$(i.amount)}</span>{ilNum(i.tds_amount) > 0 && <span className="il-sub">TDS −{fmt$(i.tds_amount)}</span>}</div>
+                  <div className="il-c"><small className="lbl">Received</small>
+                    {i.payment_received != null || i.payment_received_date
+                      ? <><span className="il-amt" style={{ color: C.green }}>{i.payment_received != null ? fmt$(i.payment_received) : "—"}</span><span className="il-sub">{i.payment_received_date ? fmtD(i.payment_received_date) : ""}</span></>
+                      : <span className="il-sub">—</span>}
+                  </div>
+                  <div className="il-c" style={{ gap: 4 }}>
+                    <span className="il-pill" style={{ "--c": sc }}><i />{od ? "Overdue" : i.status}</span>
+                    {i.status === "partial" && i.balance_amount != null && <span className="il-sub" style={{ color: "#f97316" }}>Bal {fmt$(i.balance_amount)}</span>}
+                    {due && <span className="il-sub" style={{ color: due.c }}>{due.t}</span>}
+                  </div>
+                  <div className="il-acts">
+                    <button className="il-ib" onClick={() => onView(i)} title="Preview / print" aria-label={`Preview ${i.invoice_number}`}>👁</button>
+                    {i.status !== "cleared" && <button className="il-ib" onClick={() => copyReminder(i)} title="Copy payment reminder" aria-label="Copy payment reminder">{copied === i.id ? "✓" : "✉"}</button>}
+                    {!readOnly && <>
+                      <button className={`il-clear${i.status === "cleared" ? " rev" : ""}`} onClick={() => onToggleStatus(i)} title={i.status === "cleared" ? "Revert to pending" : "Record payment"}>{i.status === "cleared" ? "↺ Revert" : "₹ Record"}</button>
+                      <button className="il-ib" onClick={() => onEdit(i)} title="Edit" aria-label={`Edit ${i.invoice_number}`}>✎</button>
+                      <button className="il-ib danger" onClick={() => onDelete(i.id)} title="Delete" aria-label={`Delete ${i.invoice_number}`}>🗑</button>
+                    </>}
+                  </div>
+                </div>
+              );
+            })}
+            {sorted.length > 0 && <div className="il-pager"><PaginationControls page={page} setPage={setPage} perPage={perPage} setPerPage={setPerPage} total={sorted.length} /></div>}
           </div>
-        )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
 function ProjectManagement({ readOnly = false, currentUser }) {
-  const [tab, setTab] = useState("dashboard");
+  const [tab, setTabState] = useState(() => {
+    const t = localStorage.getItem("pp_pm_tab");
+    return ["dashboard", "invoices", "company_expenses", "clients", "projects"].includes(t) ? t : "dashboard";
+  });
+  const setTab = t => { setTabState(t); localStorage.setItem("pp_pm_tab", t); };
   const [invoices, setInvoices] = useState([]);
   const [projects, setProjects] = useState([]);
   const [clients, setClients] = useState([]);
@@ -1037,29 +1738,6 @@ function ProjectManagement({ readOnly = false, currentUser }) {
   const [clearModal, setClearModal] = useState(null);  // null | invoice object
   const [paymentDate, setPaymentDate] = useState("");
   const [paymentAmount, setPaymentAmount] = useState("");
-  const [tdsEditsTab, setTdsEditsTab] = useState({});     // { clientName: overrideAmount }
-  const [editingTdsTab, setEditingTdsTab] = useState(null);
-  const [tdsInputTab, setTdsInputTab] = useState("");
-  const [tdsExpectedOverrideTab, setTdsExpectedOverrideTab] = useState(null);
-  const [editingTdsExpectedTab, setEditingTdsExpectedTab] = useState(false);
-  const [tdsExpectedInputTab, setTdsExpectedInputTab] = useState("");
-
-  // List Filters
-  const [filterProject, setFilterProject] = useState("all");
-  const [filterClient, setFilterClient] = useState("all");
-  const [filterStatus, setFilterStatus] = useState("all");
-  // Sort
-  const [sortField, setSortField] = useState("raised_date");
-  const [sortDir, setSortDir] = useState("desc");
-  // Pagination
-  const [invPage, setInvPage] = useState(1);
-  const [invPerPage, setInvPerPage] = useState(10);
-
-  const handleSort = (field) => {
-    if (sortField === field) setSortDir(d => d === "asc" ? "desc" : "asc");
-    else { setSortField(field); setSortDir("asc"); }
-  };
-
   const load = useCallback(async () => {
     setLoading(true); setErr("");
     try {
@@ -1106,462 +1784,56 @@ function ProjectManagement({ readOnly = false, currentUser }) {
     } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
   }
 
-  const parseTaskNames = (rawStr) => {
-    try {
-      const parsed = JSON.parse(rawStr);
-      if (Array.isArray(parsed)) return parsed.map(p => p.description).join(", ");
-    } catch { }
-    return rawStr || "—";
-  };
-
-  function handleDownloadCSV(filteredInvoices) {
-    if (!filteredInvoices.length) { dialog.alert("No invoices to export."); return; }
-    const fmtCsvDate = d => {
-      if (!d) return "";
-      const dt = new Date(d);
-      if (isNaN(dt)) return d;
-      return dt.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }).replace(/ /g, "-");
-    };
-    const headers = ["Project Code", "Project Name", "Task / Deliverables", "Amount Raised (INR)", "Date Raised", "Payment Due Date", "Payment Received (INR)", "Payment Received Date", "Clearance Status"];
-    const rows = filteredInvoices.map(inv => [
-      inv.project_code,
-      `"${inv.project_name.replace(/"/g, '""')}"`,
-      `"${parseTaskNames(inv.task_details).replace(/"/g, '""')}"`,
-      inv.amount,
-      fmtCsvDate(inv.raised_date),
-      fmtCsvDate(inv.payment_due_date),
-      inv.payment_received != null ? inv.payment_received : "",
-      fmtCsvDate(inv.payment_received_date),
-      inv.status.toUpperCase()
-    ]);
-    const csvStr = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
-    const blob = new Blob([csvStr], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `invoices-export-${isoDate(new Date())}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  if (loading && tab === "invoices") return <Spinner />;
-  if (err && tab === "invoices") return <ErrBox msg={err} onRetry={load} />;
-
-  const activeProjects = projects.filter(p => p.status === "active");
-  const filteredInvoices = invoices.filter(i => {
-    if (filterProject !== "all" && i.project_id.toString() !== filterProject) return false;
-    if (filterClient !== "all" && i.client_id?.toString() !== filterClient) return false;
-    if (filterStatus !== "all" && i.status !== filterStatus) return false;
-    return true;
-  });
-
-  const sortedInvoices = [...filteredInvoices].sort((a, b) => {
-    let va, vb;
-    if (sortField === "raised_date" || sortField === "payment_due_date") {
-      va = new Date(a[sortField] || 0).getTime();
-      vb = new Date(b[sortField] || 0).getTime();
-    } else if (sortField === "amount") {
-      va = parseFloat(a.amount || 0);
-      vb = parseFloat(b.amount || 0);
-    } else if (sortField === "status") {
-      va = a.status || "";
-      vb = b.status || "";
-    } else {
-      va = a[sortField] || "";
-      vb = b[sortField] || "";
-    }
-    if (va < vb) return sortDir === "asc" ? -1 : 1;
-    if (va > vb) return sortDir === "asc" ? 1 : -1;
-    return 0;
-  });
-
-  const invTotalPages = Math.ceil(sortedInvoices.length / invPerPage) || 1;
-  const paginatedInvoices = sortedInvoices.slice((invPage - 1) * invPerPage, invPage * invPerPage);
+  // Only block on the first load so filters in the invoices view survive refreshes after an action
+  if (loading && tab === "invoices" && !invoices.length && !projects.length) return <Spinner />;
+  if (err && tab === "invoices" && !invoices.length) return <ErrBox msg={err} onRetry={load} />;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
-        <div><h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>Project Management & Ledger</h2>
-          <p style={{ margin: "4px 0 0", color: C.textMuted, fontSize: 13 }}>Monitor client budgets & track company expenses or invoices</p></div>
+      <style>{`
+        .pm-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+        .pm-title { margin: 0; font-size: clamp(22px, 2.4vw, 26px); font-weight: 800; color: ${C.text}; letter-spacing: -.5px; display: flex; align-items: center; gap: 10px; }
+        .pm-title i { font-style: normal; width: 38px; height: 38px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; font-size: 18px; background: linear-gradient(135deg, ${C.accent}33, ${C.purple}33); border: 1px solid ${C.accent}44; flex-shrink: 0; }
+        .pm-sub { margin: 6px 0 0; color: ${C.textMuted}; font-size: 13px; }
+        .pm-tabs { display: flex; gap: 4px; padding: 4px; background: ${C.surface}; border: 1px solid ${C.border}; border-radius: 14px; overflow-x: auto; scrollbar-width: none; max-width: 100%; width: fit-content; }
+        .pm-tabs::-webkit-scrollbar { display: none; }
+        .pm-tab { display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px; border-radius: 10px; border: 1px solid transparent; background: transparent; color: ${C.textMuted}; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; white-space: nowrap; flex-shrink: 0; transition: color .15s, background .15s; }
+        .pm-tab:hover { color: ${C.text}; }
+        .pm-tab.on { background: ${C.card}; color: ${C.text}; border-color: ${C.border}; box-shadow: 0 2px 10px rgba(0,0,0,.25); }
+        .pm-tab b { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: ${C.border}; color: ${C.textDim}; }
+        .pm-tab.on b { background: ${C.accent}; color: #fff; }
+        .pm-tab:focus-visible { outline: 2px solid ${C.accent}; outline-offset: 2px; }
+        @media (max-width: 640px) { .pm-tabs { width: 100%; } .pm-tab { padding: 9px 12px; } }
+      `}</style>
+      <div className="pm-head">
+        <div>
+          <h2 className="pm-title"><i>📊</i>Project Management & Ledger</h2>
+          <p className="pm-sub">Projects, client budgets, invoices and company spend in one place</p>
+        </div>
       </div>
 
-      <div style={{ display: "flex", gap: 4, background: C.surface, padding: 4, borderRadius: 10, width: "fit-content", overflowX: "auto" }}>
-        {["dashboard", "invoices", "company_expenses", "clients", "projects"].map(t => (
-          <button key={t} onClick={() => setTab(t)} style={{
-            background: tab === t ? C.card : "transparent", color: tab === t ? C.text : C.textMuted,
-            border: tab === t ? `1px solid ${C.border}` : "1px solid transparent",
-            borderRadius: 8, padding: "6px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", textTransform: "capitalize"
-          }}>{t === "dashboard" ? "Dashboard" : t === "company_expenses" ? "Company Expenses" : t === "clients" ? "Clients" : t === "projects" ? "Projects" : "Client Budgets & Invoiced"}</button>
+      <div className="pm-tabs" role="tablist" aria-label="Ledger sections">
+        {[
+          ["dashboard", "📈", "Dashboard"],
+          ["projects", "📁", "Projects", projects.length],
+          ["invoices", "🧾", "Client Budgets & Invoices", invoices.filter(i => !i.parent_invoice_id && i.status !== "cleared").length || null],
+          ["company_expenses", "💳", "Company Expenses"],
+          ["clients", "🏢", "Clients", clients.length],
+        ].map(([t, ic, l, n]) => (
+          <button key={t} role="tab" aria-selected={tab === t} className={`pm-tab${tab === t ? " on" : ""}`} onClick={() => setTab(t)}
+            title={t === "invoices" && n ? `${n} invoice${n === 1 ? "" : "s"} awaiting payment` : undefined}>
+            <span aria-hidden>{ic}</span>{l}{n ? <b>{n}</b> : null}
+          </button>
         ))}
       </div>
 
-      {tab === "dashboard" && <ProjectDashboard projects={projects} invoices={invoices} />}
+      {tab === "dashboard" && <ProjectDashboard projects={projects} invoices={invoices} clients={clients} onOpen={setTab} />}
 
-      {tab === "invoices" && (() => {
-        // ── Per-client aggregates for this tab ────────────────────────────
-        const clientMap = {};
-        invoices.forEach(inv => {
-          if (inv.parent_invoice_id) return; // BAL invoices tracked via balance_amount on parent
-          const key = inv.client_name || "Unknown";
-          if (!clientMap[key]) clientMap[key] = { name: key, raised: 0, cleared: 0, pending: 0, count: 0, tds: 0 };
-          const amt = parseFloat(inv.amount || 0);
-          const tds = parseFloat(inv.tds_amount || 0);
-          clientMap[key].raised += amt;
-          clientMap[key].tds += tds;
-          clientMap[key].count += 1;
-          if (inv.status === "cleared") {
-            clientMap[key].cleared += amt - tds; // full settled value (BAL payments included via invoice amount)
-          } else if (inv.status === "partial") {
-            clientMap[key].cleared += parseFloat(inv.payment_received || 0);
-            clientMap[key].pending += parseFloat(inv.balance_amount || 0);
-          } else {
-            clientMap[key].pending += amt;
-          }
-        });
-        const clientList = Object.values(clientMap).sort((a, b) => b.raised - a.raised);
-
-        // ── Global KPI aggregates ─────────────────────────────────────────
-        const rootInvList = invoices.filter(i => !i.parent_invoice_id);
-        const totalRaised = rootInvList.reduce((a, i) => a + parseFloat(i.amount || 0), 0);
-        const totalTdsList = rootInvList.reduce((a, i) => a + parseFloat(i.tds_amount || 0), 0);
-        const tdsDeducted = rootInvList.filter(i => i.status === "cleared").reduce((a, i) => a + parseFloat(i.tds_amount || 0), 0);
-        const tdsExpected = rootInvList.filter(i => i.status !== "cleared").reduce((a, i) => a + parseFloat(i.tds_amount || 0), 0);
-        const totalCleared = rootInvList.filter(i => i.status === "cleared").reduce((a, i) => a + (parseFloat(i.amount || 0) - parseFloat(i.tds_amount || 0)), 0)
-          + rootInvList.filter(i => i.status === "partial").reduce((a, i) => a + parseFloat(i.payment_received || 0), 0);
-        const totalPending = rootInvList.filter(i => i.status === "partial").reduce((a, i) => a + parseFloat(i.balance_amount || 0), 0)
-          + rootInvList.filter(i => i.status === "pending").reduce((a, i) => a + parseFloat(i.amount || 0), 0);
-        const collectPct = (totalRaised - totalTdsList) > 0 ? Math.min(Math.round((totalCleared / (totalRaised - totalTdsList)) * 100), 100) : 0;
-
-        return (
-          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-
-            {/* ── Row 1: Global KPI strip ──────────────────────────────────── */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
-              {[
-                { label: "Total Raised", value: fmt$(totalRaised), color: C.accent, sub: `${rootInvList.length} invoices` },
-                { label: "Total Cleared", value: fmt$(totalCleared), color: C.green, sub: `${rootInvList.filter(i => i.status === "cleared").length} invoices` },
-                { label: "Total Pending", value: fmt$(totalPending), color: C.amber, sub: `${rootInvList.filter(i => i.status !== "cleared").length} outstanding` },
-              ].map(k => (
-                <div key={k.label} style={{ background: `linear-gradient(135deg, ${C.surface}, ${C.card})`, border: `1px solid ${k.color}33`, borderLeft: `3px solid ${k.color}`, borderRadius: 14, padding: "18px 20px", position: "relative", overflow: "hidden" }}>
-                  <div style={{ position: "absolute", top: -16, right: -16, width: 70, height: 70, borderRadius: "50%", background: `radial-gradient(circle, ${k.color}15 0%, transparent 70%)`, pointerEvents: "none" }} />
-                  <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .6 }}>{k.label}</div>
-                  <div style={{ fontSize: 26, fontWeight: 900, color: k.color, marginTop: 8, letterSpacing: -.5 }}>{k.value}</div>
-                  <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4 }}>{k.sub}</div>
-                </div>
-              ))}
-              {/* TDS card */}
-              {totalTdsList > 0 && (
-                <div style={{ background: `linear-gradient(135deg, ${C.surface}, ${C.card})`, border: `1px solid ${C.red}33`, borderLeft: `3px solid ${C.red}`, borderRadius: 14, padding: "18px 20px", position: "relative", overflow: "hidden" }}>
-                  <div style={{ position: "absolute", top: -16, right: -16, width: 70, height: 70, borderRadius: "50%", background: `radial-gradient(circle, ${C.red}15 0%, transparent 70%)`, pointerEvents: "none" }} />
-                  <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .6 }}>Total TDS (10%)</div>
-                  <div style={{ fontSize: 26, fontWeight: 900, color: C.red, marginTop: 8, letterSpacing: -.5 }}>{fmt$(totalTdsList)}</div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5, marginTop: 6 }}>
-                    <div style={{ background: C.red + "12", borderRadius: 6, padding: "4px 8px", border: `1px solid ${C.red}28` }}>
-                      <div style={{ fontSize: 9, color: C.red, fontWeight: 700, textTransform: "uppercase" }}>Deducted</div>
-                      <div style={{ fontSize: 11, fontWeight: 800, color: C.red, marginTop: 1 }}>{fmt$(tdsDeducted)}</div>
-                    </div>
-                    <div style={{ background: C.amber + "12", borderRadius: 6, padding: "4px 8px", border: `1px solid ${C.amber}28` }}>
-                      <div style={{ fontSize: 9, color: C.amber, fontWeight: 700, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 4 }}>
-                        Expected
-                        {!editingTdsExpectedTab && (
-                          <span title="Enter expected TDS" style={{ cursor: "pointer", opacity: 0.65, fontSize: 9 }}
-                            onClick={() => { setEditingTdsExpectedTab(true); setTdsExpectedInputTab(String(tdsExpectedOverrideTab ?? tdsExpected)); }}>✏</span>
-                        )}
-                      </div>
-                      {editingTdsExpectedTab ? (
-                        <div style={{ display: "flex", alignItems: "center", gap: 3, marginTop: 2 }}>
-                          <input type="number" value={tdsExpectedInputTab} onChange={e => setTdsExpectedInputTab(e.target.value)} autoFocus
-                            onKeyDown={e => { if (e.key === "Enter") { setTdsExpectedOverrideTab(parseFloat(tdsExpectedInputTab) || 0); setEditingTdsExpectedTab(false); } if (e.key === "Escape") setEditingTdsExpectedTab(false); }}
-                            style={{ flex: 1, width: 0, background: C.bg, border: `1px solid ${C.amber}`, borderRadius: 4, color: C.text, padding: "2px 4px", fontSize: 11, outline: "none", textAlign: "center" }} />
-                          <span style={{ cursor: "pointer", color: C.green, fontWeight: 900, fontSize: 12 }} onClick={() => { setTdsExpectedOverrideTab(parseFloat(tdsExpectedInputTab) || 0); setEditingTdsExpectedTab(false); }}>✓</span>
-                          <span style={{ cursor: "pointer", color: C.red, fontWeight: 900, fontSize: 12 }} onClick={() => setEditingTdsExpectedTab(false)}>✕</span>
-                        </div>
-                      ) : (
-                        <div style={{ fontSize: 11, fontWeight: 800, color: C.amber, marginTop: 1 }}>{fmt$(tdsExpectedOverrideTab ?? tdsExpected)}</div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-              {/* Collection Rate ring card */}
-              <div style={{ background: `linear-gradient(135deg, ${C.surface}, ${C.card})`, border: `1px solid ${C.purple}33`, borderLeft: `3px solid ${C.purple}`, borderRadius: 14, padding: "18px 20px", display: "flex", alignItems: "center", gap: 14 }}>
-                <div style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-                  <Ring pct={collectPct} color={collectPct >= 80 ? C.green : collectPct >= 50 ? C.accent : C.amber} size={60} stroke={5} />
-                  <div style={{ position: "absolute", fontSize: 12, fontWeight: 900, color: C.text }}>{collectPct}%</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .6 }}>Collection Rate</div>
-                  <div style={{ fontSize: 13, color: C.textDim, marginTop: 4 }}>
-                    <span style={{ color: C.green, fontWeight: 700 }}>{rootInvList.filter(i => i.status === "cleared").length}</span> cleared /&nbsp;
-                    <span style={{ color: C.amber, fontWeight: 700 }}>{rootInvList.filter(i => i.status !== "cleared").length}</span> pending
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* ── Row 2: Client Invoice Overview KPI Cards ─────────────────── */}
-            {clientList.length > 0 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{ width: 3, height: 18, background: `linear-gradient(180deg, ${C.accent}, ${C.purple})`, borderRadius: 2 }} />
-                  <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Client Invoice Overview</span>
-                  <span style={{ background: C.accent + "1a", color: C.accent, borderRadius: 20, padding: "2px 10px", fontSize: 10, fontWeight: 700 }}>{clientList.length} clients</span>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14 }}>
-                  {clientList.map((cl, idx) => {
-                    const netRaised = cl.raised - cl.tds;
-                    const pct = netRaised > 0 ? Math.min(Math.round((cl.cleared / netRaised) * 100), 100) : 0;
-                    const col = PALETTE[idx % PALETTE.length];
-                    const hColor = pct === 100 ? C.green : pct >= 60 ? C.accent : C.amber;
-                    const initials = cl.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
-                    return (
-                      <div key={cl.name} style={{ background: `linear-gradient(145deg, ${C.surface}, ${C.card})`, border: `1px solid ${hColor}33`, borderRadius: 16, padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14, position: "relative", overflow: "hidden" }}>
-                        <div style={{ position: "absolute", top: -40, right: -40, width: 120, height: 120, borderRadius: "50%", background: `radial-gradient(circle, ${col}12 0%, transparent 70%)`, pointerEvents: "none" }} />
-                        {/* Header */}
-                        <div style={{ display: "flex", alignItems: "center", gap: 12, zIndex: 1 }}>
-                          <div style={{ width: 44, height: 44, borderRadius: 12, background: `linear-gradient(135deg, ${col}33, ${col}15)`, border: `1.5px solid ${col}55`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 900, color: col, flexShrink: 0 }}>{initials}</div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 14, fontWeight: 700, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{cl.name}</div>
-                            <div style={{ fontSize: 11, color: C.textMuted, marginTop: 1 }}>{cl.count} invoice{cl.count !== 1 ? "s" : ""}</div>
-                          </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                            <Ring pct={pct} color={hColor} size={40} stroke={4} />
-                            <span style={{ fontSize: 13, fontWeight: 800, color: hColor }}>{pct}%</span>
-                          </div>
-                        </div>
-                        {/* stat chips */}
-                        <div style={{ display: "grid", gridTemplateColumns: cl.tds > 0 ? "1fr 1fr" : "1fr 1fr 1fr", gap: 7, zIndex: 1 }}>
-                          <div style={{ background: C.bg, borderRadius: 9, padding: "8px", border: `1px solid ${C.border}`, textAlign: "center" }}>
-                            <div style={{ fontSize: 9, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>Raised</div>
-                            <div style={{ fontSize: 12, fontWeight: 800, color: C.text, marginTop: 3 }}>{fmt$(cl.raised)}</div>
-                          </div>
-                          {cl.tds > 0 && (
-                            <div style={{ background: C.red + "0e", borderRadius: 9, padding: "8px", border: `1px solid ${C.red}2a`, textAlign: "center" }}>
-                              <div style={{ fontSize: 9, color: C.red, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5, display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
-                                TDS (10%)
-                                {editingTdsTab !== cl.name && (
-                                  <span title="Edit expected TDS" style={{ cursor: "pointer", opacity: 0.6, fontSize: 9 }} onClick={() => { setEditingTdsTab(cl.name); setTdsInputTab(String(tdsEditsTab[cl.name] ?? cl.tds)); }}>✏</span>
-                                )}
-                              </div>
-                              {editingTdsTab === cl.name ? (
-                                <div style={{ display: "flex", alignItems: "center", gap: 3, marginTop: 3 }}>
-                                  <input type="number" value={tdsInputTab} onChange={e => setTdsInputTab(e.target.value)} autoFocus
-                                    onKeyDown={e => { if (e.key === "Enter") { setTdsEditsTab(p => ({ ...p, [cl.name]: parseFloat(tdsInputTab) || 0 })); setEditingTdsTab(null); } if (e.key === "Escape") setEditingTdsTab(null); }}
-                                    style={{ flex: 1, width: 0, background: C.bg, border: `1px solid ${C.red}`, borderRadius: 4, color: C.text, padding: "2px 4px", fontSize: 11, outline: "none", textAlign: "center" }} />
-                                  <span style={{ cursor: "pointer", color: C.green, fontWeight: 900, fontSize: 12 }} onClick={() => { setTdsEditsTab(p => ({ ...p, [cl.name]: parseFloat(tdsInputTab) || 0 })); setEditingTdsTab(null); }}>✓</span>
-                                  <span style={{ cursor: "pointer", color: C.red, fontWeight: 900, fontSize: 12 }} onClick={() => setEditingTdsTab(null)}>✕</span>
-                                </div>
-                              ) : (
-                                <div style={{ fontSize: 12, fontWeight: 800, color: C.red, marginTop: 3 }}>{fmt$(tdsEditsTab[cl.name] ?? cl.tds)}</div>
-                              )}
-                            </div>
-                          )}
-                          <div style={{ background: C.green + "0e", borderRadius: 9, padding: "8px", border: `1px solid ${C.green}2a`, textAlign: "center" }}>
-                            <div style={{ fontSize: 9, color: C.green, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>Cleared</div>
-                            <div style={{ fontSize: 12, fontWeight: 800, color: C.green, marginTop: 3 }}>{fmt$(cl.cleared)}</div>
-                          </div>
-                          <div style={{ background: C.amber + "0e", borderRadius: 9, padding: "8px", border: `1px solid ${C.amber}2a`, textAlign: "center" }}>
-                            <div style={{ fontSize: 9, color: C.amber, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>Pending</div>
-                            <div style={{ fontSize: 12, fontWeight: 800, color: C.amber, marginTop: 3 }}>{fmt$(cl.pending)}</div>
-                          </div>
-                        </div>
-                        {/* Stacked bar */}
-                        <div style={{ zIndex: 1 }}>
-                          <div style={{ height: 6, borderRadius: 6, background: C.border, overflow: "hidden", display: "flex" }}>
-                            <div style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${hColor === C.green ? C.green : C.accent}, ${C.green})`, transition: "width .4s ease" }} />
-                            <div style={{ flex: 1, background: C.amber + "55" }} />
-                          </div>
-                          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5, fontSize: 10, color: C.textMuted }}>
-                            <span>Clearance progress</span>
-                            <span style={{ fontWeight: 700, color: hColor }}>{pct}% cleared</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* ── Row 3: Project Budget Cards ──────────────────────────────── */}
-            {activeProjects.length > 0 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{ width: 3, height: 18, background: `linear-gradient(180deg, ${C.amber}, ${C.accent})`, borderRadius: 2 }} />
-                  <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Active Project Budgets</span>
-                  <span style={{ background: C.amber + "1a", color: C.amber, borderRadius: 20, padding: "2px 10px", fontSize: 10, fontWeight: 700 }}>{activeProjects.length} active</span>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14 }}>
-                  {activeProjects.map((p, idx) => {
-                    const projectInvoices = invoices.filter(i => i.project_id === p.id);
-                    const raised = projectInvoices.reduce((a, i) => a + parseFloat(i.amount || 0), 0);
-                    const budget = parseFloat(p.budget || 0);
-                    const utilPct = budget > 0 ? Math.min(Math.round((raised / budget) * 100), 999) : 0;
-                    const isOver = raised > budget;
-                    const col = PALETTE[idx % PALETTE.length];
-                    return (
-                      <div key={p.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, overflow: "hidden" }}>
-                        {/* Colour strip header */}
-                        <div style={{ background: `linear-gradient(90deg, ${col}2a, ${col}08)`, borderBottom: `1px solid ${col}22`, padding: "12px 18px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <div>
-                            <div style={{ fontSize: 14, fontWeight: 800, color: C.text }}>{p.name}</div>
-                            <div style={{ fontSize: 11, color: col, fontWeight: 600, marginTop: 2 }}>{p.code}</div>
-                          </div>
-                          <div style={{ textAlign: "right" }}>
-                            <div style={{ fontSize: 10, color: C.textMuted }}>Pending to raise</div>
-                            <div style={{ fontSize: 13, fontWeight: 800, color: isOver ? C.red : C.text }}>{fmt$(budget - raised)}</div>
-                          </div>
-                        </div>
-                        {/* Body */}
-                        <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
-                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                            <div style={{ background: C.surface, borderRadius: 8, padding: "8px 12px" }}>
-                              <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: .4 }}>Budget</div>
-                              <div style={{ fontSize: 14, fontWeight: 800, color: C.accent, marginTop: 3 }}>{fmt$(budget)}</div>
-                            </div>
-                            <div style={{ background: C.green + "0e", borderRadius: 8, padding: "8px 12px", border: `1px solid ${utilPct > 95 ? C.amber + "55" : "transparent"}` }}>
-                              <div style={{ fontSize: 10, color: C.green, fontWeight: 700, textTransform: "uppercase", letterSpacing: .4 }}>Raised</div>
-                              <div style={{ fontSize: 14, fontWeight: 800, color: isOver ? C.red : C.green, marginTop: 3 }}>{fmt$(raised)}</div>
-                            </div>
-                          </div>
-                          <div>
-                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5, fontSize: 11 }}>
-                              <span style={{ color: C.textMuted }}>Budget utilization</span>
-                              <span style={{ fontWeight: 700, color: isOver ? C.red : utilPct >= 85 ? C.amber : C.green }}>{utilPct}%</span>
-                            </div>
-                            <div style={{ height: 6, borderRadius: 6, background: C.border, overflow: "hidden" }}>
-                              <div style={{ width: `${Math.min(utilPct, 100)}%`, height: "100%", background: isOver ? C.red : utilPct >= 85 ? `linear-gradient(90deg, ${C.amber}, ${C.red})` : `linear-gradient(90deg, ${C.accent}, ${C.green})`, borderRadius: 6, transition: "width .35s ease" }} />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* ── Row 4: Invoice Table ──────────────────────────────────────── */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                <div style={{ width: 3, height: 18, background: `linear-gradient(180deg, ${C.green}, ${C.accent})`, borderRadius: 2 }} />
-                <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Raised Invoices</span>
-                <div style={{ flex: 1 }} />
-                <select value={filterClient} onChange={e => { setFilterClient(e.target.value); setInvPage(1); }}
-                  style={{ padding: "7px 11px", borderRadius: 8, background: C.surface, border: `1px solid ${C.border}`, color: filterClient !== "all" ? C.text : C.textMuted, fontSize: 12, outline: "none", cursor: "pointer" }}>
-                  <option value="all">All Clients</option>
-                  {clients.map(c => <option key={c.id} value={c.id}>{c.client_name}</option>)}
-                </select>
-                <select value={filterProject} onChange={e => { setFilterProject(e.target.value); setInvPage(1); }}
-                  style={{ padding: "7px 11px", borderRadius: 8, background: C.surface, border: `1px solid ${C.border}`, color: filterProject !== "all" ? C.text : C.textMuted, fontSize: 12, outline: "none", cursor: "pointer" }}>
-                  <option value="all">All Projects</option>
-                  {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-                <select value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setInvPage(1); }}
-                  style={{ padding: "7px 11px", borderRadius: 8, background: C.surface, border: `1px solid ${C.border}`, color: filterStatus !== "all" ? C.text : C.textMuted, fontSize: 12, outline: "none", cursor: "pointer" }}>
-                  <option value="all">All Statuses</option>
-                  <option value="pending">Pending</option>
-                  <option value="partial">Partial</option>
-                  <option value="cleared">Cleared</option>
-                </select>
-                <Btn small variant="ghost" onClick={() => handleDownloadCSV(filteredInvoices)}>⬇ Export CSV</Btn>
-                {!readOnly && <Btn small onClick={() => setModal(true)}>+ Raise Invoice</Btn>}
-              </div>
-
-              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, overflow: "hidden" }}>
-                {filteredInvoices.length === 0 ? (
-                  <div style={{ padding: 48, textAlign: "center", color: C.textMuted, fontSize: 13 }}>No invoices match your filters.</div>
-                ) : (
-                  <div className="resp-table-wrap">
-                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                      <thead>
-                        <tr style={{ background: C.card, borderBottom: `1px solid ${C.border}` }}>
-                          <Th>Project & Client</Th>
-                          <Th>Task / Deliverables</Th>
-                          <Th>Subtotal</Th>
-                          <Th>TDS (10%)</Th>
-                          <Th>Total Raised</Th>
-                          <Th>Date Raised</Th>
-                          <Th>Payment Due</Th>
-                          <Th>Payment Received</Th>
-                          <Th>Status</Th>
-                          {!readOnly && <Th>Actions</Th>}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {paginatedInvoices.map((inv, rowIdx) => (
-                          <tr key={inv.id} style={{ borderBottom: `1px solid ${C.border}`, background: rowIdx % 2 === 0 ? "transparent" : C.card + "44" }}>
-                            <Td>
-                              <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{inv.invoice_number}</div>
-                              {inv.parent_invoice_number && (
-                                <div style={{ fontSize: 10, color: "#f97316", marginTop: 1 }}>↳ Balance of {inv.parent_invoice_number}</div>
-                              )}
-                              <div style={{ fontSize: 12, fontWeight: 700, color: C.accent, marginTop: 2 }}>{inv.client_name || inv.project_name}</div>
-                              <div style={{ fontSize: 10, color: C.textMuted }}>{inv.project_code}</div>
-                              {inv.vendor_invoice_url && (
-                                <a href={`${window.location.origin}/api/receipts/${inv.vendor_invoice_url}`} target="_blank" rel="noreferrer"
-                                  style={{ fontSize: 10, color: C.purple, fontWeight: 600, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 3, marginTop: 3 }}>
-                                  📎 Partner Invoice
-                                </a>
-                              )}
-                            </Td>
-                            <Td>
-                              <div style={{ fontSize: 12, color: C.textMuted, maxWidth: 180, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={parseTaskNames(inv.task_details)}>{parseTaskNames(inv.task_details)}</div>
-                            </Td>
-                            <Td><div style={{ fontSize: 12, color: C.textDim }}>{inv.subtotal ? fmt$(inv.subtotal) : "—"}</div></Td>
-                            <Td>
-                              {inv.tds_amount
-                                ? <div><div style={{ fontSize: 12, fontWeight: 700, color: C.amber }}>− {fmt$(inv.tds_amount)}</div><div style={{ fontSize: 10, color: C.textMuted }}>@10%</div></div>
-                                : <span style={{ fontSize: 11, color: C.textMuted }}>—</span>}
-                            </Td>
-                            <Td>
-                              <div style={{ fontSize: 13, fontWeight: 800, color: C.text }}>{fmt$(inv.amount)}</div>
-                              {inv.tds_amount && <div style={{ fontSize: 10, color: C.textMuted }}>excl. TDS: {fmt$(parseFloat(inv.amount || 0) - parseFloat(inv.tds_amount || 0))}</div>}
-                            </Td>
-                            <Td><div style={{ fontSize: 12, color: C.textMuted }}>{fmtD(inv.raised_date)}</div></Td>
-                            <Td><div style={{ fontSize: 12, color: inv.payment_due_date && new Date(inv.payment_due_date) < new Date() && inv.status !== "cleared" ? C.red : C.textMuted }}>{inv.payment_due_date ? fmtD(inv.payment_due_date) : "—"}</div></Td>
-                            <Td>
-                              {inv.payment_received_date || inv.payment_received
-                                ? <div>
-                                  <div style={{ fontSize: 12, fontWeight: 700, color: C.green }}>{inv.payment_received != null ? fmt$(inv.payment_received) : "—"}</div>
-                                  <div style={{ fontSize: 10, color: C.textMuted }}>{inv.payment_received_date ? fmtD(inv.payment_received_date) : ""}</div>
-                                </div>
-                                : <span style={{ fontSize: 11, color: C.textMuted }}>—</span>}
-                            </Td>
-                            <Td>
-                              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                                <Badge color={inv.status === "cleared" ? C.green : inv.status === "partial" ? "#f97316" : C.amber}>{inv.status}</Badge>
-                                {inv.status === "partial" && inv.balance_amount != null && (
-                                  <div style={{ fontSize: 10, color: "#f97316", fontWeight: 600 }}>Bal: {fmt$(inv.balance_amount)}</div>
-                                )}
-                              </div>
-                            </Td>
-                            {!readOnly && (
-                              <Td>
-                                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                                  <Btn small variant="ghost" onClick={() => setViewInvoice(inv)}>👁</Btn>
-                                  <Btn small variant={inv.status === "cleared" ? "ghost" : "success"} onClick={() => handleToggleStatus(inv)}>
-                                    {inv.status === "cleared" ? "Revert" : "Clear"}
-                                  </Btn>
-                                  <Btn small variant="ghost" onClick={() => { setEditInvoice(inv); setModal("edit"); }}>✏</Btn>
-                                  <Btn small variant="danger" onClick={() => handleDelete(inv.id)}>🗑</Btn>
-                                </div>
-                              </Td>
-                            )}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-
-                {/* Pagination Controls */}
-                <PaginationControls page={invPage} setPage={setInvPage} perPage={invPerPage} setPerPage={setInvPerPage} total={sortedInvoices.length} />
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+      {tab === "invoices" && (
+        <InvoiceLedger invoices={invoices} projects={projects} clients={clients} readOnly={readOnly}
+          onRaise={() => setModal(true)} onView={setViewInvoice} onEdit={inv => { setEditInvoice(inv); setModal("edit"); }}
+          onToggleStatus={handleToggleStatus} onDelete={handleDelete} />
+      )}
 
       {clearModal && (() => {
         const raisedAmt = parseFloat(clearModal.amount || 0);
@@ -1706,12 +1978,12 @@ function ProjectManagement({ readOnly = false, currentUser }) {
       )}
 
       {tab === "company_expenses" && (
-        <CompanyExpenses modal={modal} setModal={setModal} currentUser={currentUser} projects={projects} />
+        <CompanyExpenses currentUser={currentUser} projects={projects} />
       )}
 
       {tab === "clients" && <AdminClients />}
 
-      {tab === "projects" && <Projects readOnly={readOnly} />}
+      {tab === "projects" && <Projects readOnly={readOnly} invoices={invoices} clients={clients} onChanged={load} />}
 
       {viewInvoice && (
         <Modal title="Invoice Preview" onClose={() => setViewInvoice(null)} maxWidth="100%">
@@ -1743,518 +2015,638 @@ function ProjectManagement({ readOnly = false, currentUser }) {
   );
 }
 
-function CompanyExpenses({ modal, setModal, currentUser, projects }) {
+// ── Company expenses helpers (module-level) ──
+const CX_STATUSES = ["pending", "cleared", "sent to auditing"];
+const cxMeta = s => ({
+  pending: { label: "Pending", color: C.amber, icon: "⏳" },
+  cleared: { label: "Cleared", color: C.green, icon: "✅" },
+  "sent to auditing": { label: "Sent to auditing", color: C.purple, icon: "📁" },
+}[s] || { label: s || "—", color: C.textMuted, icon: "•" });
+const cxNum = v => parseFloat(v || 0) || 0;
+const cxTotal = e => cxNum(e.amount) + cxNum(e.gst_amount);
+const cxDay = d => (d ? String(d).slice(0, 10) : "");
+const cxDmy = d => { const s = cxDay(d); if (!s) return "—"; const [y, m, dd] = s.split("-"); return `${dd} ${MONTH_NAMES[+m - 1].slice(0, 3)} ${y}`; };
+const cxMonthLabel = ym => { const [y, m] = ym.split("-"); return `${MONTH_NAMES[+m - 1].slice(0, 3)} ${y}`; };
+const cxAgeDays = (d, todayIso) => { const s = cxDay(d); if (!s) return 0; return Math.max(0, Math.round((new Date(todayIso + "T00:00:00") - new Date(s + "T00:00:00")) / 86400000)); };
+const cxIsCompany = payer => /\bFIT\b|fascinate|company|corporate/i.test(payer || "");
+
+function CxModal({ init, payers, purposes, onClose, onSave }) {
+  const isEdit = !!init.id;
+  const [f, setF] = useState(() => ({
+    expenseDate: cxDay(init.expense_date) || isoDate(new Date()), purpose: init.purpose || "", amount: init.amount != null && init.amount !== "" ? String(cxNum(init.amount)) : "",
+    paidBy: init.paid_by || "", itrType: init.itr_type || "", taxType: init.tax_type || "", gstAmount: cxNum(init.gst_amount) ? String(cxNum(init.gst_amount)) : "", status: init.status || "pending",
+  }));
+  const [touched, setTouched] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+  const set = (k, v) => setF(x => ({ ...x, [k]: v }));
+  const errs = {};
+  if (!f.expenseDate) errs.expenseDate = "Pick the expense date";
+  else if (f.expenseDate > isoDate(new Date())) errs.expenseDate = "Date can't be in the future";
+  if (!f.purpose.trim()) errs.purpose = "What was this for?";
+  if (!f.paidBy.trim()) errs.paidBy = "Who paid?";
+  if (f.amount === "" || isNaN(+f.amount) || +f.amount <= 0) errs.amount = "Enter the net amount";
+  if (f.gstAmount !== "" && (isNaN(+f.gstAmount) || +f.gstAmount < 0)) errs.gstAmount = "Invalid GST";
+  const total = (+f.amount || 0) + (+f.gstAmount || 0);
+  const gstPct = +f.amount > 0 && +f.gstAmount > 0 ? Math.round((+f.gstAmount / +f.amount) * 1000) / 10 : 0;
+
+  useEffect(() => {
+    const h = ev => { if (ev.key === "Escape") onClose(); };
+    window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h);
+  }, [onClose]);
+
+  async function submit() {
+    setTouched(true);
+    if (Object.keys(errs).length) return;
+    setSaving(true); setErr("");
+    const res = await onSave({ ...f, purpose: f.purpose.trim(), paidBy: f.paidBy.trim(), amount: +f.amount, gstAmount: +f.gstAmount || 0 });
+    if (res !== true) { setErr(res || "Could not save"); setSaving(false); }
+  }
+  const E = k => touched && errs[k] ? <div className="prm-err">{errs[k]}</div> : null;
+  const cls = k => `prm-input${touched && errs[k] ? " err" : ""}`;
+  return (
+    <div className="prm-backdrop" onMouseDown={onClose}>
+      <div className="prm" role="dialog" aria-modal="true" aria-label={isEdit ? "Edit expense" : "Add expense"} onMouseDown={e => e.stopPropagation()}>
+        <div className="prm-head">
+          <div>
+            <div className="prm-title">{isEdit ? "Edit expense" : init.__dup ? "Duplicate expense" : "Add company expense"}</div>
+            <div className="prm-sub">{init.__dup ? `Copied from “${init.purpose}” — check the date and amount` : "Net amount + GST make up the total"}</div>
+          </div>
+          <button className="prj-icon-btn" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+        <div className="prm-body">
+          {err && <div className="prm-err full" role="alert">⚠ {err}</div>}
+          <label className="prm-field">
+            <span className="prm-lbl">Expense date *</span>
+            <input className={cls("expenseDate")} type="date" max={isoDate(new Date())} value={f.expenseDate} onChange={e => set("expenseDate", e.target.value)} />
+            {E("expenseDate")}
+          </label>
+          <label className="prm-field">
+            <span className="prm-lbl">Paid by *</span>
+            <input className={cls("paidBy")} list="cx-payers" value={f.paidBy} onChange={e => set("paidBy", e.target.value)} placeholder="FIT, corporate card or a person" />
+            <datalist id="cx-payers">{payers.map(p => <option key={p} value={p} />)}</datalist>
+            {E("paidBy")}
+          </label>
+          <label className="prm-field full">
+            <span className="prm-lbl">Purpose *</span>
+            <input className={cls("purpose")} list="cx-purposes" value={f.purpose} onChange={e => set("purpose", e.target.value)} placeholder="e.g. AWS hosting, office supplies" autoFocus={!isEdit} />
+            <datalist id="cx-purposes">{purposes.map(p => <option key={p} value={p} />)}</datalist>
+            {E("purpose")}
+          </label>
+          <label className="prm-field">
+            <span className="prm-lbl">Net amount (₹) *</span>
+            <input className={cls("amount")} type="number" min="0" step="0.01" inputMode="decimal" value={f.amount} onChange={e => set("amount", e.target.value)} placeholder="0" />
+            {E("amount")}
+          </label>
+          <label className="prm-field">
+            <span className="prm-lbl">GST (₹){gstPct ? <span style={{ color: C.textMuted, fontWeight: 600 }}> · {gstPct}%</span> : null}</span>
+            <input className={cls("gstAmount")} type="number" min="0" step="0.01" inputMode="decimal" value={f.gstAmount} onChange={e => set("gstAmount", e.target.value)} placeholder="0" />
+            {E("gstAmount")}
+          </label>
+          <div className="prm-field full">
+            <div className="cx-gst">
+              <span>Quick GST</span>
+              {[0, 5, 12, 18, 28].map(r => (
+                <button key={r} type="button" className={gstPct === r || (r === 0 && !+f.gstAmount) ? "on" : ""} disabled={!(+f.amount > 0)}
+                  onClick={() => set("gstAmount", r ? String(Math.round(+f.amount * r) / 100) : "")}>{r}%</button>
+              ))}
+            </div>
+          </div>
+          <div className="prm-preview full" style={{ "--c": C.accent }}>
+            <div><span>Total</span><b>{fmt$(total)}</b></div>
+          </div>
+          <label className="prm-field">
+            <span className="prm-lbl">ITR type</span>
+            <input className="prm-input" value={f.itrType} onChange={e => set("itrType", e.target.value)} placeholder="e.g. ITR-4" />
+          </label>
+          <label className="prm-field">
+            <span className="prm-lbl">Tax type</span>
+            <input className="prm-input" list="cx-tax" value={f.taxType} onChange={e => set("taxType", e.target.value)} placeholder="e.g. CGST + SGST, IGST" />
+            <datalist id="cx-tax">{["CGST + SGST", "IGST", "Exempt", "TDS"].map(t => <option key={t} value={t} />)}</datalist>
+          </label>
+          <div className="prm-field full">
+            <span className="prm-lbl">Status</span>
+            <div className="prm-seg" role="radiogroup" aria-label="Status">
+              {CX_STATUSES.map(s => { const m = cxMeta(s); return <button key={s} type="button" role="radio" aria-checked={f.status === s} className={f.status === s ? "on" : ""} style={{ "--c": m.color }} onClick={() => set("status", s)}><i />{m.label}</button>; })}
+            </div>
+          </div>
+        </div>
+        <div className="prm-foot">
+          <span className="prm-kbd">Esc to close</span>
+          <div className="prm-foot-acts">
+            <button className="prj-btn prj-btn-ghost" onClick={onClose} disabled={saving}>Cancel</button>
+            <button className="prj-btn prj-btn-primary" onClick={submit} disabled={saving}>{saving ? "Saving…" : isEdit ? "Save changes" : "Add expense"}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CxDateModal({ title, sub, confirmLabel, onClose, onConfirm }) {
+  const [d, setD] = useState(isoDate(new Date()));
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    const h = ev => { if (ev.key === "Escape") onClose(); };
+    window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h);
+  }, [onClose]);
+  const yest = (() => { const x = new Date(); x.setDate(x.getDate() - 1); return isoDate(x); })();
+  return (
+    <div className="prm-backdrop" onMouseDown={onClose}>
+      <div className="prm" style={{ maxWidth: 420 }} role="dialog" aria-modal="true" aria-label={title} onMouseDown={e => e.stopPropagation()}>
+        <div className="prm-head">
+          <div><div className="prm-title">{title}</div><div className="prm-sub">{sub}</div></div>
+          <button className="prj-icon-btn" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+        <div className="prm-body" style={{ gridTemplateColumns: "1fr" }}>
+          <label className="prm-field">
+            <span className="prm-lbl">Cleared / paid on</span>
+            <input className="prm-input" type="date" max={isoDate(new Date())} value={d} onChange={e => setD(e.target.value)} autoFocus />
+          </label>
+          <div className="cx-gst">
+            <span>Quick pick</span>
+            <button type="button" className={d === isoDate(new Date()) ? "on" : ""} onClick={() => setD(isoDate(new Date()))}>Today</button>
+            <button type="button" className={d === yest ? "on" : ""} onClick={() => setD(yest)}>Yesterday</button>
+          </div>
+        </div>
+        <div className="prm-foot">
+          <span />
+          <div className="prm-foot-acts">
+            <button className="prj-btn prj-btn-ghost" onClick={onClose} disabled={busy}>Cancel</button>
+            <button className="prj-btn prj-btn-primary" style={{ background: C.green, boxShadow: `0 8px 22px ${C.green}40` }} disabled={busy || !d}
+              onClick={async () => { setBusy(true); const ok = await onConfirm(d); if (!ok) setBusy(false); }}>{busy ? "Saving…" : confirmLabel}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CompanyExpenses({ currentUser, projects }) {
   const [expenses, setExpenses] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [editObj, setEditObj] = useState(null);
-  const [filterMonth, setFilterMonth] = useState("all");
-  const [filterClearedMonth, setFilterClearedMonth] = useState("all");
-  const [filterStatus, setFilterStatus] = useState("all");
-  const [filterPayer, setFilterPayer] = useState("all");
-  const [searchPurpose, setSearchPurpose] = useState("");
-  const [chartOffset, setChartOffset] = useState(0);
-  const [clearModal, setClearModal] = useState(null);
-  const [showPayerBreakdown, setShowPayerBreakdown] = useState(false);
-  // Pagination
-  const [expPage, setExpPage] = useState(1);
-  const [expPerPage, setExpPerPage] = useState(10);
+  const [form, setForm] = useState(null);           // null | {} new | expense (edit) | {...,__dup}
+  const [genFor, setGenFor] = useState(null);       // expense to turn into an employee claim
+  const [genSaving, setGenSaving] = useState(false);
+  const [clearFor, setClearFor] = useState(null);   // array of expenses to clear
+  const [sel, setSel] = useState(() => new Set());
+  const [q, setQ] = useState("");
+  const [fStatus, setFStatus] = useState("all");
+  const [fPayer, setFPayer] = useState("all");
+  const [fMonth, setFMonth] = useState("all");
+  const [fCleared, setFCleared] = useState("all");
+  const [sort, setSort] = useState("date_desc");
+  const [range, setRange] = useState(6);
+  const [chartEnd, setChartEnd] = useState(null);   // "YYYY-MM" of the last month shown; null = current month
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(10);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { setPage(1); setSel(new Set()); }, [q, fStatus, fPayer, fMonth, fCleared, sort]);
 
-  const initForm = { expenseDate: "", purpose: "", amount: "", paidBy: "", itrType: "", taxType: "", gstAmount: "", status: "pending" };
-  const [form, setForm] = useState({ ...initForm });
-
-  const load = useCallback(async () => {
-    setLoading(true); setErr("");
+  const load = async () => {
+    setErr("");
     try {
-      const [exps, emps] = await Promise.all([api.getCompanyExpenses(), api.getEmployees()]);
-      setExpenses(exps);
-      setEmployees(emps);
-    }
-    catch (e) { setErr(e.message); }
-    finally { setLoading(false); }
-  }, []);
-  useEffect(() => { load(); }, [load]);
-
-  useEffect(() => {
-    if (modal === "editExpense" && editObj) {
-      setForm({ ...editObj, expenseDate: editObj.expense_date, itrType: editObj.itr_type || "", taxType: editObj.tax_type || "", gstAmount: editObj.gst_amount || "", paidBy: editObj.paid_by });
-    } else if (modal === "newExpense") {
-      setForm({ ...initForm });
-    }
-  }, [modal, editObj]);
-
-  async function handleSave(e) {
-    if (e) e.preventDefault();
-    setSaving(true); setErr("");
-    try {
-      if (modal === "editExpense" && editObj) {
-        await api.updateCompanyExpense(editObj.id, form);
-      } else {
-        await api.createCompanyExpense(form);
-      }
-      setModal(false); setEditObj(null);
-      await load();
-    } catch (ex) { setErr(ex.message); }
-    finally { setSaving(false); }
-  }
-
-  async function handleDelete(id) {
-    if (!await dialog.confirm("Are you sure you want to delete this expense?", { dtype: "warning" })) return;
-    try {
-      await api.deleteCompanyExpense(id);
-      await load();
-    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
-  }
-
-  async function handleToggleStatus(id, newStatus, clearedDate) {
-    try {
-      await api.updateCompanyExpenseStatus(id, newStatus, clearedDate || null);
-      await load();
-    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
-  }
-
-  function handleDownloadCSV() {
-    if (!filteredList || !filteredList.length) { dialog.alert("No company expenses to export."); return; }
-    const headers = ["Expense Date", "Purpose", "Amount (INR)", "GST Amount (INR)", "Total Amount (INR)", "Paid By", "ITR Type", "Tax Type", "Status", "Cleared Date"];
-    const rows = filteredList.map(e => {
-      const [yr, mo, da] = (e.expense_date || "").split("-");
-      const fmtDate = yr && mo && da ? `${da}-${mo}-${yr}` : e.expense_date;
-      const [cyr, cmo, cda] = (e.cleared_date || "").split("-");
-      const fmtCleared = cyr && cmo && cda ? `${cda}-${cmo}-${cyr}` : (e.cleared_date || "");
-      const total = (parseFloat(e.amount) || 0) + (parseFloat(e.gst_amount) || 0);
-      return [
-        fmtDate,
-        `"${(e.purpose || "").replace(/"/g, '""')}"`,
-        e.amount,
-        e.gst_amount || 0,
-        total.toFixed(2),
-        `"${(e.paid_by || "").replace(/"/g, '""')}"`,
-        e.itr_type || "",
-        e.tax_type || "",
-        e.status.toUpperCase(),
-        fmtCleared
-      ];
-    });
-    const totalAmount = filteredList.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
-    const totalGst = filteredList.reduce((sum, e) => sum + (parseFloat(e.gst_amount) || 0), 0);
-    const grandTotal = totalAmount + totalGst;
-    const totalRow = ["", "TOTAL", totalAmount.toFixed(2), totalGst.toFixed(2), grandTotal.toFixed(2), "", "", "", "", ""];
-    const csvStr = [headers.join(","), ...rows.map(r => r.join(",")), totalRow.join(",")].join("\n");
-    const blob = new Blob([csvStr], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `company-expenses-export-${isoDate(new Date())}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
+      const [exps, emps] = await Promise.all([api.getCompanyExpenses(), api.getEmployees().catch(() => [])]);
+      setExpenses(exps || []); setEmployees(emps || []);
+    } catch (e) { setErr(e.message); } finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, []);
 
   if (loading) return <Spinner />;
+  if (err && !expenses.length) return <ErrBox msg={err} onRetry={load} />;
 
-  // ── Derived data ──────────────────────────────────────────────────────────
-  const expTotal = e => (parseFloat(e.amount) || 0) + (parseFloat(e.gst_amount) || 0);
-  const totalAll = expenses.reduce((s, e) => s + expTotal(e), 0);
-  const totalPend = expenses.filter(e => e.status === "pending").reduce((s, e) => s + expTotal(e), 0);
-  const totalClr = expenses.filter(e => e.status === "cleared").reduce((s, e) => s + expTotal(e), 0);
-  const totalAudit = expenses.filter(e => e.status === "sent to auditing").reduce((s, e) => s + expTotal(e), 0);
+  const todayIso = isoDate(new Date());
+  const thisYm = todayIso.slice(0, 7);
+  const lastYm = (() => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return isoDate(d).slice(0, 7); })();
+  const sumOf = list => list.reduce((s, e) => s + cxTotal(e), 0);
+  const byStatus = s => expenses.filter(e => e.status === s);
+  const totalAll = sumOf(expenses);
+  const thisMonth = sumOf(expenses.filter(e => cxDay(e.expense_date).startsWith(thisYm)));
+  const lastMonth = sumOf(expenses.filter(e => cxDay(e.expense_date).startsWith(lastYm)));
+  const mom = lastMonth ? Math.round(((thisMonth - lastMonth) / lastMonth) * 100) : null;
+  const pend = byStatus("pending");
+  const oldestPending = pend.reduce((m, e) => Math.max(m, cxAgeDays(e.expense_date, todayIso)), 0);
+  const gstTotal = expenses.reduce((s, e) => s + cxNum(e.gst_amount), 0);
+  const owed = pend.filter(e => !cxIsCompany(e.paid_by));
 
-  const payerOptions = Array.from(new Set(expenses.map(e => e.paid_by).filter(Boolean))).sort();
-  const monthOptions = Array.from(new Set(expenses.map(e => e.expense_date?.slice(0, 7)).filter(Boolean))).sort().reverse();
-  const clearedMonthOptions = Array.from(new Set(expenses.filter(e => e.cleared_date).map(e => e.cleared_date?.slice(0, 7)).filter(Boolean))).sort().reverse();
+  const payers = Array.from(new Set(expenses.map(e => e.paid_by).filter(Boolean))).sort();
+  const purposes = Array.from(new Set(expenses.map(e => e.purpose).filter(Boolean))).sort().slice(0, 200);
+  const months = Array.from(new Set(expenses.map(e => cxDay(e.expense_date).slice(0, 7)).filter(Boolean))).sort().reverse();
+  const clearedMonths = Array.from(new Set(expenses.map(e => cxDay(e.cleared_date).slice(0, 7)).filter(Boolean))).sort().reverse();
 
-  const filteredList = expenses.filter(e => {
-    if (filterStatus !== "all" && e.status !== filterStatus) return false;
-    if (filterMonth !== "all" && !e.expense_date?.startsWith(filterMonth)) return false;
-    if (filterClearedMonth !== "all" && !e.cleared_date?.startsWith(filterClearedMonth)) return false;
-    if (filterPayer !== "all" && e.paid_by !== filterPayer) return false;
-    if (searchPurpose && !e.purpose?.toLowerCase().includes(searchPurpose.toLowerCase())) return false;
-    return true;
+  // chart window
+  const latestYm = months[0] || thisYm;
+  const endYm = chartEnd || thisYm;
+  const chartMonths = Array.from({ length: range }, (_, i) => {
+    const [y, m] = endYm.split("-").map(Number);
+    const d = new Date(y, m - 1 - (range - 1 - i), 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   });
-  const filteredTotal = filteredList.reduce((s, e) => s + expTotal(e), 0);
-
-  const expTotalPages = Math.ceil(filteredList.length / expPerPage) || 1;
-  const paginatedExpenses = filteredList.slice((expPage - 1) * expPerPage, expPage * expPerPage);
-
-  // Monthly chart data (pending + cleared split)
-  const last6Months = [];
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(); d.setMonth(d.getMonth() - i - chartOffset * 6);
-    last6Months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
-  }
-  const chartData = last6Months.map(m => {
-    const inMonth = expenses.filter(e => e.expense_date?.startsWith(m));
-    return {
-      name: new Date(m + "-01T12:00:00").toLocaleDateString("en-US", { month: "short", year: "2-digit" }),
-      pending: inMonth.filter(e => e.status === "pending").reduce((s, e) => s + expTotal(e), 0),
-      cleared: inMonth.filter(e => e.status === "cleared").reduce((s, e) => s + expTotal(e), 0),
-      auditing: inMonth.filter(e => e.status === "sent to auditing").reduce((s, e) => s + expTotal(e), 0),
-    };
+  const chartData = chartMonths.map(ym => {
+    const inM = expenses.filter(e => cxDay(e.expense_date).startsWith(ym));
+    return { ym, name: cxMonthLabel(ym).replace(/ (\d\d)(\d\d)$/, " ’$2"), pending: sumOf(inM.filter(e => e.status === "pending")), cleared: sumOf(inM.filter(e => e.status === "cleared")), auditing: sumOf(inM.filter(e => e.status === "sent to auditing")) };
   });
+  const chartTotal = chartData.reduce((s, d) => s + d.pending + d.cleared + d.auditing, 0);
+  const shiftChart = n => { const [y, m] = endYm.split("-").map(Number); const d = new Date(y, m - 1 + n, 1); const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; setChartEnd(ym >= thisYm ? null : ym); };
 
-  // Per-payer breakdown
-  const payerBreakdown = payerOptions.map(p => {
+  const payerRows = payers.map(p => {
     const rows = expenses.filter(e => e.paid_by === p);
-    return {
-      payer: p,
-      total: rows.reduce((s, e) => s + expTotal(e), 0),
-      pending: rows.filter(e => e.status === "pending").reduce((s, e) => s + expTotal(e), 0),
-      cleared: rows.filter(e => e.status === "cleared").reduce((s, e) => s + expTotal(e), 0),
-      count: rows.length,
-    };
+    return { p, total: sumOf(rows), pending: sumOf(rows.filter(e => e.status === "pending")), count: rows.length, company: cxIsCompany(p) };
   }).sort((a, b) => b.total - a.total);
 
-  const selStyle = { background: C.surface, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: "7px 12px", outline: "none", fontSize: 13 };
+  // list
+  const list = expenses.filter(e => {
+    if (fStatus !== "all" && e.status !== fStatus) return false;
+    if (fPayer !== "all" && e.paid_by !== fPayer) return false;
+    if (fMonth !== "all" && !cxDay(e.expense_date).startsWith(fMonth)) return false;
+    if (fCleared !== "all" && !cxDay(e.cleared_date).startsWith(fCleared)) return false;
+    if (q && !`${e.purpose || ""} ${e.paid_by || ""} ${e.itr_type || ""} ${e.tax_type || ""}`.toLowerCase().includes(q.toLowerCase())) return false;
+    return true;
+  });
+  const [sf, sd] = sort.split("_");
+  const sorted = [...list].sort((a, b) => {
+    const va = sf === "amount" ? cxTotal(a) : sf === "payer" ? (a.paid_by || "").toLowerCase() : cxDay(a.expense_date) + String(a.id).padStart(8, "0");
+    const vb = sf === "amount" ? cxTotal(b) : sf === "payer" ? (b.paid_by || "").toLowerCase() : cxDay(b.expense_date) + String(b.id).padStart(8, "0");
+    const r = va < vb ? -1 : va > vb ? 1 : 0;
+    return sd === "desc" ? -r : r;
+  });
+  const pageRows = sorted.slice((page - 1) * perPage, page * perPage);
+  const listNet = list.reduce((s, e) => s + cxNum(e.amount), 0), listGst = list.reduce((s, e) => s + cxNum(e.gst_amount), 0);
+  const counts = expenses.reduce((a, e) => { a[e.status] = (a[e.status] || 0) + 1; return a; }, {});
+  const anyFilter = fStatus !== "all" || fPayer !== "all" || fMonth !== "all" || fCleared !== "all" || q;
+  const clearFilters = () => { setFStatus("all"); setFPayer("all"); setFMonth("all"); setFCleared("all"); setQ(""); };
+
+  const selected = sorted.filter(e => sel.has(e.id));
+  const selPending = selected.filter(e => e.status === "pending");
+  const selCleared = selected.filter(e => e.status === "cleared");
+  const pageAllSel = pageRows.length > 0 && pageRows.every(e => sel.has(e.id));
+  const toggle = id => setSel(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const togglePage = () => setSel(s => { const n = new Set(s); pageRows.forEach(e => pageAllSel ? n.delete(e.id) : n.add(e.id)); return n; });
+
+  const errAlert = e => dialog.alert(e.message, { title: "Error", dtype: "error" });
+  async function save(f) {
+    try {
+      if (form && form.id) await api.updateCompanyExpense(form.id, f);
+      else await api.createCompanyExpense(f);
+      setForm(null); await load(); return true;
+    } catch (e) { return e.message; }
+  }
+  async function del(e) {
+    if (!await dialog.confirm(`Delete “${e.purpose}” (${fmt$(cxTotal(e))})? This can't be undone.`, { title: "Delete expense", dtype: "warning" })) return;
+    try { await api.deleteCompanyExpense(e.id); await load(); } catch (x) { errAlert(x); }
+  }
+  async function markCleared(list, date) {
+    let ok = 0; const failed = [];
+    for (const e of list) { try { await api.updateCompanyExpenseStatus(e.id, "cleared", date); ok++; } catch (x) { failed.push(`${e.purpose}: ${x.message}`); } }
+    await load(); setSel(new Set());
+    if (failed.length) dialog.alert(`${ok} cleared, ${failed.length} failed:\n${failed.slice(0, 5).join("\n")}`, { title: "Some updates failed", dtype: "warning" });
+    setClearFor(null); return true;
+  }
+  async function sendToAudit(list) {
+    if (!list.length) return;
+    if (!await dialog.confirm(`Send ${list.length} cleared expense${list.length === 1 ? "" : "s"} (${fmt$(sumOf(list))}) to auditing? They can't be edited afterwards.`, { title: "Send to auditing", dtype: "info" })) return;
+    setBusy(true);
+    let ok = 0; const failed = [];
+    for (const e of list) { try { await api.updateCompanyExpenseStatus(e.id, "sent to auditing"); ok++; } catch (x) { failed.push(`${e.purpose}: ${x.message}`); } }
+    await load(); setSel(new Set()); setBusy(false);
+    if (failed.length) dialog.alert(`${ok} sent, ${failed.length} failed:\n${failed.slice(0, 5).join("\n")}`, { title: "Some updates failed", dtype: "warning" });
+  }
+  function exportCSV() {
+    const rows = selected.length ? selected : sorted;
+    if (!rows.length) { dialog.alert("No company expenses to export."); return; }
+    const esc = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const head = ["Expense Date", "Purpose", "Amount (INR)", "GST Amount (INR)", "Total Amount (INR)", "Paid By", "ITR Type", "Tax Type", "Status", "Cleared Date"];
+    const body = rows.map(e => [cxDay(e.expense_date), esc(e.purpose), cxNum(e.amount).toFixed(2), cxNum(e.gst_amount).toFixed(2), cxTotal(e).toFixed(2), esc(e.paid_by), esc(e.itr_type), esc(e.tax_type), e.status.toUpperCase(), cxDay(e.cleared_date)].join(","));
+    const n = rows.reduce((s, e) => s + cxNum(e.amount), 0), g = rows.reduce((s, e) => s + cxNum(e.gst_amount), 0);
+    const csv = [head.join(","), ...body, ["", "TOTAL", n.toFixed(2), g.toFixed(2), (n + g).toFixed(2), "", "", "", "", ""].join(",")].join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a"); a.href = url; a.download = `company-expenses-${todayIso}.csv`;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  }
+
+  const Pill = ({ s }) => { const m = cxMeta(s); return <span className="il-pill" style={{ "--c": m.color }}><i />{m.label}</span>; };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+    <>
+      <style>{`
+${pmSharedCss()}
+        .cx { container-type: inline-size; container-name: cx; }
+        .cx-wrap { display: flex; flex-direction: column; gap: 18px; }
+        .cx-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+        .cx-kpi { all: unset; box-sizing: border-box; background: ${C.card}; border: 1px solid ${C.border}; border-radius: 18px; padding: 16px; position: relative; overflow: hidden; min-width: 0; display: flex; flex-direction: column; gap: 4px; cursor: pointer; transition: border-color .15s, transform .15s; }
+        .cx-kpi:hover { transform: translateY(-1px); border-color: color-mix(in srgb, var(--c) 50%, ${C.border}); }
+        .cx-kpi.on { border-color: var(--c); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 18%, transparent); }
+        .cx-kpi::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--c); }
+        .cx-kpi span { font-size: 11.5px; color: ${C.textMuted}; font-weight: 700; display: flex; gap: 6px; align-items: center; }
+        .cx-kpi b { font-size: 22px; font-weight: 800; letter-spacing: -.5px; color: var(--c); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .cx-kpi small { font-size: 11.5px; color: ${C.textMuted}; font-weight: 600; }
+        .cx-alert { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 12px 16px; border-radius: 14px; border: 1px solid ${C.amber}44; background: ${C.amber}10; color: ${C.text}; font-size: 13px; }
+        .cx-alert span { flex: 1; min-width: 200px; }
+        .cx-insights { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(280px, 1fr); gap: 16px; }
+        .cx-card { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 20px; padding: 18px; min-width: 0; }
+        .cx-h { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+        .cx-h b { font-size: 14.5px; font-weight: 800; color: ${C.text}; }
+        .cx-h small { font-size: 12px; color: ${C.textMuted}; font-weight: 600; }
+        .cx-sp { flex: 1; }
+        .cx-nav { display: inline-flex; align-items: center; gap: 4px; }
+        .cx-nav button, .cx-seg button { height: 32px; min-width: 32px; padding: 0 10px; border-radius: 9px; border: 1px solid ${C.border}; background: ${C.surface}; color: ${C.textDim}; font-size: 12.5px; font-weight: 700; cursor: pointer; font-family: inherit; }
+        .cx-nav button:disabled { opacity: .4; cursor: default; }
+        .cx-seg { display: inline-flex; gap: 4px; }
+        .cx-seg button.on { background: ${C.accent}; border-color: ${C.accent}; color: #fff; }
+        .cx-chart-empty { height: 230px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: ${C.textMuted}; font-size: 13px; text-align: center; }
+        .cx-payers { display: flex; flex-direction: column; gap: 6px; max-height: 270px; overflow-y: auto; }
+        .cx-payer { all: unset; box-sizing: border-box; cursor: pointer; display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-radius: 12px; border: 1px solid transparent; }
+        .cx-payer:hover { background: ${C.surface}; }
+        .cx-payer.on { border-color: ${C.accent}; background: ${C.accent}10; }
+        .cx-payer-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
+        .cx-avi { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 800; flex-shrink: 0; }
+        .cx-payer-n { flex: 1; min-width: 0; }
+        .cx-payer-n b { display: block; font-size: 13px; color: ${C.text}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .cx-payer-n small { font-size: 11px; color: ${C.textMuted}; font-weight: 600; }
+        .cx-payer-v { text-align: right; font-size: 13px; font-weight: 800; color: ${C.text}; font-variant-numeric: tabular-nums; }
+        .cx-payer-v small { display: block; font-size: 10.5px; font-weight: 700; }
+        .cx-bar { height: 5px; border-radius: 4px; background: ${C.border}66; overflow: hidden; display: flex; }
+        .cx-bar i { display: block; height: 100%; }
 
-      {/* ── Row 1: KPI Strip ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 14 }}>
-        {[
-          { label: "Total All-Time", value: totalAll, color: C.accent, icon: "💰", sub: `${expenses.length} records` },
-          { label: "Pending", value: totalPend, color: C.amber, icon: "⏳", sub: `${expenses.filter(e => e.status === "pending").length} entries` },
-          { label: "Cleared", value: totalClr, color: C.green, icon: "✅", sub: `${expenses.filter(e => e.status === "cleared").length} entries` },
-          { label: "Sent to Auditing", value: totalAudit, color: C.purple, icon: "📁", sub: `${expenses.filter(e => e.status === "sent to auditing").length} entries` },
-        ].map((kpi, i) => (
-          <div key={i} style={{
-            background: C.card, border: `1px solid ${C.border}`, borderRadius: 14,
-            borderLeft: `3px solid ${kpi.color}`, padding: "16px 20px",
-            boxShadow: `0 0 18px ${kpi.color}10`,
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-              <span style={{ fontSize: 18 }}>{kpi.icon}</span>
-              <span style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, letterSpacing: .6, textTransform: "uppercase" }}>{kpi.label}</span>
-            </div>
-            <div style={{ fontSize: 26, fontWeight: 800, color: kpi.color, lineHeight: 1, marginBottom: 4 }}>{fmt$(kpi.value)}</div>
-            <div style={{ fontSize: 11, color: C.textMuted }}>{kpi.sub}</div>
-          </div>
-        ))}
-      </div>
+        .cx-list { padding: 0; overflow: hidden; }
+        .cx-list-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 16px 18px 12px; }
+        .cx-tools { padding: 0 18px 14px; display: flex; flex-direction: column; gap: 10px; }
+        .cx-bulk { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px 18px; background: ${C.accent}12; border-top: 1px solid ${C.accent}33; border-bottom: 1px solid ${C.accent}33; font-size: 13px; font-weight: 700; color: ${C.text}; }
+        .cx-row { display: grid; grid-template-columns: 28px 96px minmax(150px, 1.5fr) minmax(120px, 1fr) 100px 90px 110px minmax(90px, .7fr) 140px 200px; gap: 12px; align-items: center; padding: 11px 18px; border-top: 1px solid ${C.border}44; border-left: 3px solid var(--sc, transparent); font-size: 13px; color: ${C.text}; }
+        .cx-row:not(.head):hover { background: ${C.accentGlow}; }
+        .cx-row.picked { background: ${C.accent}10; }
+        .cx-row.head { background: ${C.surface}; font-size: 11px; font-weight: 800; color: ${C.textMuted}; letter-spacing: .5px; text-transform: uppercase; padding: 9px 18px; border-left-color: transparent; }
+        .cx-row input[type=checkbox] { width: 16px; height: 16px; accent-color: ${C.accent}; cursor: pointer; margin: 0; }
+        .cx-c { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+        .cx-c > small.lbl { display: none; font-size: 10.5px; color: ${C.textMuted}; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; }
+        .cx-purpose { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .cx-sub { font-size: 11.5px; color: ${C.textMuted}; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .cx-amt { font-weight: 800; font-variant-numeric: tabular-nums; }
+        .cx-who { display: flex; align-items: center; gap: 8px; min-width: 0; }
+        .cx-who span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; color: ${C.textDim}; }
+        .cx-acts { display: flex; gap: 5px; justify-content: flex-end; flex-wrap: nowrap; }
+        .cx-act { height: 32px; padding: 0 10px; border-radius: 9px; font-size: 12px; font-weight: 800; cursor: pointer; font-family: inherit; border: 1px solid ${C.border}; background: ${C.surface}; color: ${C.textDim}; white-space: nowrap; }
+        .cx-act.ok { border-color: ${C.green}55; background: ${C.green}18; color: ${C.green}; }
+        .cx-act.au { border-color: ${C.purple}55; background: ${C.purple}18; color: ${C.purple}; }
+        .cx-foot { display: flex; gap: 18px; flex-wrap: wrap; padding: 12px 18px; border-top: 1px solid ${C.border}; background: ${C.surface}; font-size: 12px; color: ${C.textMuted}; font-weight: 600; }
+        .cx-foot b { color: ${C.text}; font-variant-numeric: tabular-nums; }
+        .cx-gst { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 12px; color: ${C.textMuted}; font-weight: 700; }
+        .cx-gst button { padding: 5px 11px; border-radius: 999px; border: 1px solid ${C.border}; background: ${C.surface}; color: ${C.textDim}; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; }
+        .cx-gst button.on { border-color: ${C.accent}; color: ${C.text}; background: ${C.accent}1c; }
+        .cx-gst button:disabled { opacity: .45; cursor: default; }
 
-      {/* ── Row 2: Monthly Chart + Payer Summary ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: 16 }}>
+        @container cx (max-width: 1150px) {
+          .cx-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+          .cx-row { grid-template-columns: 28px 88px minmax(120px, 1.4fr) minmax(100px, 1fr) 88px 76px 96px 128px 156px; gap: 10px; }
+          .cx-row > :nth-child(8) { display: none; }
+          .cx-acts { flex-wrap: wrap; }
+        }
+        @container cx (max-width: 900px) {
+          .cx-insights { grid-template-columns: 1fr; }
+          .cx-row.head { display: none; }
+          .cx-row, .cx-row > :nth-child(8) { display: grid; }
+          .cx-row { grid-template-columns: 24px repeat(3, minmax(0, 1fr)); grid-template-areas: "ck pur pur st" ". dt who who" ". net gst amt" ". tax tax tax" ". act act act"; padding: 14px 16px; gap: 8px 12px; }
+          .cx-row > :nth-child(1) { grid-area: ck; align-self: start; padding-top: 2px; }
+          .cx-row > :nth-child(2) { grid-area: dt; }
+          .cx-row > :nth-child(3) { grid-area: pur; }
+          .cx-row > :nth-child(4) { grid-area: who; }
+          .cx-row > :nth-child(5) { grid-area: net; }
+          .cx-row > :nth-child(6) { grid-area: gst; }
+          .cx-row > :nth-child(7) { grid-area: amt; }
+          .cx-row > :nth-child(8) { grid-area: tax; }
+          .cx-row > :nth-child(9) { grid-area: st; justify-self: end; align-items: flex-end; }
+          .cx-row > :nth-child(10) { grid-area: act; justify-content: flex-start; flex-wrap: wrap; }
+          .cx-c > small.lbl { display: block; }
+        }
+        @container cx (max-width: 600px) {
+          .cx-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+          .cx-kpis > :first-child { grid-column: 1 / -1; }
+          .cx-kpi b { font-size: 19px; }
+          .cx-card { padding: 14px; border-radius: 18px; }
+          .cx-list { padding: 0; }
+          .cx-list-head, .cx-tools, .cx-bulk { padding-left: 14px; padding-right: 14px; }
+          .cx-list-head > div:last-child { width: 100%; }
+          .cx-list-head > div:last-child .il-btn { flex: 1; }
+          .cx-tools .il-toolbar > * { flex: 1 1 calc(50% - 4px); max-width: none; }
+          .cx-tools .il-search { flex-basis: 100%; }
+          .cx-tools .il-chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+          .cx-h .cx-sp { flex-basis: 100%; height: 0; }
+        }
+      `}</style>
 
-        {/* Monthly Trend Chart */}
-        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "20px 24px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
-            <div>
-              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: C.text }}>Monthly Expense Trend</h3>
-              <p style={{ margin: "2px 0 0", fontSize: 12, color: C.textMuted }}>Pending, Cleared & Auditing breakdown per month</p>
-            </div>
-            <div style={{ display: "flex", gap: 6 }}>
-              <Btn variant="ghost" small onClick={() => setChartOffset(o => o + 1)}>← Prev</Btn>
-              <Btn variant="ghost" small onClick={() => setChartOffset(o => Math.max(0, o - 1))} disabled={chartOffset === 0}>Next →</Btn>
-            </div>
-          </div>
-          <div style={{ width: "100%", height: 240 }}>
-            <ResponsiveContainer>
-              <BarChart data={chartData} barCategoryGap="30%">
-                <XAxis dataKey="name" stroke={C.border} tick={{ fill: C.textMuted, fontSize: 11 }} />
-                <YAxis stroke={C.border} tick={{ fill: C.textMuted, fontSize: 11 }} tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`} width={52} />
-                <Tooltip contentStyle={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text }}
-                  formatter={(v, n) => [fmt$(v), n.charAt(0).toUpperCase() + n.slice(1)]} />
-                <Legend wrapperStyle={{ fontSize: 12, color: C.textMuted }} />
-                <Bar dataKey="pending" name="Pending" stackId="a" fill={C.amber} radius={[0, 0, 0, 0]} />
-                <Bar dataKey="cleared" name="Cleared" stackId="a" fill={C.green} radius={[0, 0, 0, 0]} />
-                <Bar dataKey="auditing" name="Auditing" stackId="a" fill={C.purple} radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Payer Breakdown Panel */}
-        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "20px 24px", display: "flex", flexDirection: "column", gap: 12, overflow: "hidden" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
-              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: C.text }}>By Payer</h3>
-              <p style={{ margin: "2px 0 0", fontSize: 12, color: C.textMuted }}>Spend breakdown per payer</p>
-            </div>
-            <button onClick={() => setShowPayerBreakdown(v => !v)} style={{ background: "none", border: "none", color: C.accent, fontSize: 12, cursor: "pointer", fontWeight: 600 }}>
-              {showPayerBreakdown ? "Show Less" : "Show All"}
+      <div className="cx">
+        <div className="cx-wrap">
+          <div className="cx-kpis">
+            <button className={`cx-kpi${fStatus === "all" ? " on" : ""}`} style={{ "--c": C.accent }} onClick={() => setFStatus("all")}>
+              <span>💰 Total spend</span><b>{fmt$(totalAll)}</b>
+              <small>{fmt$(thisMonth)} this month{mom !== null && <span style={{ color: mom > 0 ? C.red : C.green }}> · {mom > 0 ? "▲" : "▼"} {Math.abs(mom)}% vs last</span>}</small>
             </button>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, overflowY: "auto", maxHeight: showPayerBreakdown ? 320 : 210 }}>
-            {payerBreakdown.length === 0 && <div style={{ fontSize: 13, color: C.textMuted, padding: "20px 0", textAlign: "center" }}>No data yet.</div>}
-            {(showPayerBreakdown ? payerBreakdown : payerBreakdown.slice(0, 4)).map((p, i) => {
-              const pct = totalAll > 0 ? (p.total / totalAll) * 100 : 0;
+            {CX_STATUSES.map(s => {
+              const m = cxMeta(s), l = byStatus(s);
               return (
-                <div key={p.payer} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <div style={{ width: 28, height: 28, borderRadius: "50%", background: `${PALETTE[i % PALETTE.length]}22`, border: `1px solid ${PALETTE[i % PALETTE.length]}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, color: PALETTE[i % PALETTE.length] }}>
-                        {mkAvi(p.payer)}
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{p.payer}</div>
-                        <div style={{ fontSize: 10, color: C.textMuted }}>{p.count} entries</div>
-                      </div>
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{fmt$(p.total)}</div>
-                      <div style={{ fontSize: 10, color: C.textMuted }}>{pct.toFixed(1)}%</div>
-                    </div>
-                  </div>
-                  <div style={{ height: 4, background: C.surface, borderRadius: 2, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${pct}%`, background: PALETTE[i % PALETTE.length], borderRadius: 2, transition: "width .4s ease" }} />
+                <button key={s} className={`cx-kpi${fStatus === s ? " on" : ""}`} style={{ "--c": m.color }} onClick={() => setFStatus(fStatus === s ? "all" : s)} title={`Show ${m.label.toLowerCase()} expenses`}>
+                  <span>{m.icon} {m.label}</span><b>{fmt$(sumOf(l))}</b>
+                  <small>{l.length} entr{l.length === 1 ? "y" : "ies"}{s === "pending" && oldestPending > 0 ? ` · oldest ${oldestPending}d` : ""}</small>
+                </button>
+              );
+            })}
+            <div className="cx-kpi" style={{ "--c": C.textDim, cursor: "default" }}>
+              <span>🧾 GST paid</span><b style={{ color: C.text }}>{fmt$(gstTotal)}</b>
+              <small>Possible input tax credit</small>
+            </div>
+          </div>
+
+          {owed.length > 0 && (
+            <div className="cx-alert" role="status">
+              <b style={{ fontSize: 18 }}>💸</b>
+              <span><b>{fmt$(sumOf(owed))}</b> paid personally by {Array.from(new Set(owed.map(e => e.paid_by))).slice(0, 3).join(", ")}{new Set(owed.map(e => e.paid_by)).size > 3 ? " and others" : ""} is still pending reimbursement ({owed.length} entr{owed.length === 1 ? "y" : "ies"}).</span>
+              <button className="il-btn il-btn-ghost" style={{ padding: "7px 12px" }} onClick={() => { clearFilters(); setFStatus("pending"); setSort("date_asc"); }}>Review →</button>
+            </div>
+          )}
+
+          <div className="cx-insights">
+            <div className="cx-card">
+              <div className="cx-h">
+                <b>Monthly spend</b><small>{cxMonthLabel(chartMonths[0])} – {cxMonthLabel(chartMonths[chartMonths.length - 1])} · {fmt$(chartTotal)}</small>
+                <span className="cx-sp" />
+                <div className="cx-seg">{[6, 12].map(n => <button key={n} className={range === n ? "on" : ""} onClick={() => setRange(n)}>{n}M</button>)}</div>
+                <div className="cx-nav">
+                  <button onClick={() => shiftChart(-range)} aria-label="Earlier months">‹</button>
+                  <button onClick={() => shiftChart(range)} disabled={!chartEnd} aria-label="Later months">›</button>
+                </div>
+              </div>
+              {chartTotal === 0 ? (
+                <div className="cx-chart-empty">
+                  <div style={{ fontSize: 28 }}>📭</div>
+                  No expenses in this period.
+                  {expenses.length > 0 && latestYm !== endYm && <button className="il-btn il-btn-ghost" style={{ padding: "7px 12px" }} onClick={() => setChartEnd(latestYm >= thisYm ? null : latestYm)}>Jump to {cxMonthLabel(latestYm)}</button>}
+                </div>
+              ) : (
+                <div style={{ width: "100%", height: 230 }}>
+                  <ResponsiveContainer>
+                    <BarChart data={chartData} barCategoryGap="28%" onClick={s => { const ym = s?.activePayload?.[0]?.payload?.ym; if (ym) setFMonth(fMonth === ym ? "all" : ym); }}>
+                      <XAxis dataKey="name" stroke={C.border} tick={{ fill: C.textMuted, fontSize: 11 }} tickLine={false} />
+                      <YAxis stroke={C.border} tick={{ fill: C.textMuted, fontSize: 11 }} tickLine={false} axisLine={false} width={48} tickFormatter={v => v >= 100000 ? `₹${(v / 100000).toFixed(1)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`} />
+                      <Tooltip cursor={{ fill: C.accentGlow }} contentStyle={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 12 }} formatter={(v, n) => [fmt$(v), n]} />
+                      <Bar dataKey="pending" name="Pending" stackId="a" fill={C.amber} cursor="pointer" />
+                      <Bar dataKey="cleared" name="Cleared" stackId="a" fill={C.green} cursor="pointer" />
+                      <Bar dataKey="auditing" name="Sent to auditing" stackId="a" fill={C.purple} radius={[6, 6, 0, 0]} cursor="pointer" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+              <div className="il-legend">
+                {CX_STATUSES.map(s => <span key={s}><i style={{ background: cxMeta(s).color }} />{cxMeta(s).label}</span>)}
+                <span style={{ marginLeft: "auto" }}>Click a bar to filter that month</span>
+              </div>
+            </div>
+
+            <div className="cx-card">
+              <div className="cx-h"><b>By payer</b><small>{payerRows.length} payer{payerRows.length === 1 ? "" : "s"}</small><span className="cx-sp" />{fPayer !== "all" && <button className="il-link" onClick={() => setFPayer("all")}>Show all</button>}</div>
+              {payerRows.length === 0 ? <div className="cx-chart-empty" style={{ height: 120 }}>No data yet.</div> : (
+                <div className="cx-payers">
+                  {payerRows.map((r, i) => {
+                    const col = PALETTE[i % PALETTE.length];
+                    const pct = totalAll ? (r.total / totalAll) * 100 : 0;
+                    return (
+                      <button key={r.p} className={`cx-payer${fPayer === r.p ? " on" : ""}`} onClick={() => setFPayer(fPayer === r.p ? "all" : r.p)} title={`Filter by ${r.p}`}>
+                        <span className="cx-payer-top">
+                          <span className="cx-avi" style={{ background: col + "22", color: col, border: `1px solid ${col}55` }}>{mkAvi(r.p)}</span>
+                          <span className="cx-payer-n"><b>{r.p}</b><small>{r.count} entr{r.count === 1 ? "y" : "ies"} · {r.company ? "Company" : "Personal"}</small></span>
+                          <span className="cx-payer-v">{fmt$(r.total)}<small style={{ color: r.pending ? C.amber : C.textMuted }}>{r.pending ? `${fmt$(r.pending)} pending` : `${pct.toFixed(1)}%`}</small></span>
+                        </span>
+                        <span className="cx-bar"><i style={{ width: `${totalAll ? ((r.total - r.pending) / totalAll) * 100 : 0}%`, background: col }} /><i style={{ width: `${totalAll ? (r.pending / totalAll) * 100 : 0}%`, background: C.amber }} /></span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="cx-card cx-list">
+            <div className="cx-list-head">
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>Expense ledger</div>
+                <div style={{ fontSize: 12, color: C.textMuted, fontWeight: 600, marginTop: 2 }}>{list.length} of {expenses.length} records · {fmt$(listNet + listGst)}</div>
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button className="il-btn il-btn-ghost" onClick={exportCSV}>📥 Export{selected.length ? ` (${selected.length})` : ""}</button>
+                <button className="il-btn il-btn-primary" onClick={() => setForm({})}>＋ Add expense</button>
+              </div>
+            </div>
+            <div className="cx-tools">
+              <div className="il-chips" role="tablist" aria-label="Filter by status">
+                {[["all", "All", C.accent, expenses.length], ...CX_STATUSES.map(s => [s, cxMeta(s).label, cxMeta(s).color, counts[s] || 0])].map(([k, l, c, n]) => (
+                  <button key={k} role="tab" aria-selected={fStatus === k} className={`il-chip${fStatus === k ? " on" : ""}`} style={{ "--c": c }} onClick={() => setFStatus(k)}>{k !== "all" && <i />}{l}<b>{n}</b></button>
+                ))}
+              </div>
+              <div className="il-toolbar">
+                <input className="il-search" placeholder="Search purpose, payer, tax type…" value={q} onChange={e => setQ(e.target.value)} aria-label="Search expenses" />
+                <select className="il-select" value={fPayer} onChange={e => setFPayer(e.target.value)} aria-label="Payer">
+                  <option value="all">All payers</option>{payers.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+                <select className="il-select" value={fMonth} onChange={e => setFMonth(e.target.value)} aria-label="Expense month">
+                  <option value="all">Any month</option>{months.map(m => <option key={m} value={m}>{cxMonthLabel(m)}</option>)}
+                </select>
+                <select className="il-select" value={fCleared} onChange={e => setFCleared(e.target.value)} aria-label="Cleared month">
+                  <option value="all">Any cleared month</option>{clearedMonths.map(m => <option key={m} value={m}>Cleared {cxMonthLabel(m)}</option>)}
+                </select>
+                <select className="il-select" value={sort} onChange={e => setSort(e.target.value)} aria-label="Sort">
+                  <option value="date_desc">Newest first</option>
+                  <option value="date_asc">Oldest first</option>
+                  <option value="amount_desc">Amount (high → low)</option>
+                  <option value="amount_asc">Amount (low → high)</option>
+                  <option value="payer_asc">Payer A–Z</option>
+                </select>
+              </div>
+              {anyFilter && <div className="il-active">Filtered view · <button className="il-link" onClick={clearFilters}>Clear all filters</button></div>}
+            </div>
+
+            {selected.length > 0 && (
+              <div className="cx-bulk" role="region" aria-label="Bulk actions">
+                <span>{selected.length} selected · {fmt$(sumOf(selected))}</span>
+                <span className="cx-sp" />
+                {selPending.length > 0 && <button className="cx-act ok" disabled={busy} onClick={() => setClearFor(selPending)}>✓ Mark {selPending.length} cleared</button>}
+                {selCleared.length > 0 && <button className="cx-act au" disabled={busy} onClick={() => sendToAudit(selCleared)}>📁 Send {selCleared.length} to auditing</button>}
+                <button className="cx-act" onClick={() => setSel(new Set())}>Deselect</button>
+              </div>
+            )}
+
+            <div className="cx-row head">
+              <div><input type="checkbox" checked={pageAllSel} onChange={togglePage} aria-label="Select all on this page" /></div>
+              {["Date", "Purpose", "Paid by", "Net amount", "GST", "Total", "ITR / Tax", "Status", ""].map((h, i) => <div key={i}>{h}</div>)}
+            </div>
+            {pageRows.length === 0 ? (
+              <div className="il-empty"><div>{expenses.length ? "🔍" : "🧾"}</div>{expenses.length ? "No expenses match your filters." : "No company expenses recorded yet."}
+                {anyFilter && <div style={{ marginTop: 10 }}><button className="il-link" onClick={clearFilters}>Clear filters</button></div>}</div>
+            ) : pageRows.map(e => {
+              const m = cxMeta(e.status);
+              const age = e.status === "pending" ? cxAgeDays(e.expense_date, todayIso) : 0;
+              const locked = e.status === "sent to auditing";
+              return (
+                <div key={e.id} className={`cx-row${sel.has(e.id) ? " picked" : ""}`} style={{ "--sc": m.color }}>
+                  <div><input type="checkbox" checked={sel.has(e.id)} onChange={() => toggle(e.id)} aria-label={`Select ${e.purpose}`} /></div>
+                  <div className="cx-c"><small className="lbl">Date</small><span style={{ fontWeight: 700, whiteSpace: "nowrap" }}>{cxDmy(e.expense_date)}</span>{age > 30 && <span className="cx-sub" style={{ color: age > 60 ? C.red : C.amber }}>pending {age}d</span>}</div>
+                  <div className="cx-c"><span className="cx-purpose" title={e.purpose}>{e.purpose}</span>{cxNum(e.gst_amount) > 0 && cxNum(e.amount) > 0 && <span className="cx-sub">GST {Math.round((cxNum(e.gst_amount) / cxNum(e.amount)) * 1000) / 10}%</span>}</div>
+                  <div className="cx-c"><small className="lbl">Paid by</small><span className="cx-who"><span className="cx-avi" style={{ width: 24, height: 24, fontSize: 9, background: C.accent + "22", color: C.accent }}>{mkAvi(e.paid_by)}</span><span>{e.paid_by}</span></span></div>
+                  <div className="cx-c"><small className="lbl">Net amount</small><span className="cx-amt">{fmt$(e.amount)}</span></div>
+                  <div className="cx-c"><small className="lbl">GST</small><span className="cx-amt" style={{ color: cxNum(e.gst_amount) ? C.accent : C.textMuted, fontWeight: cxNum(e.gst_amount) ? 800 : 600 }}>{cxNum(e.gst_amount) ? fmt$(e.gst_amount) : "—"}</span></div>
+                  <div className="cx-c"><small className="lbl">Total</small><span className="cx-amt" style={{ color: m.color }}>{fmt$(cxTotal(e))}</span></div>
+                  <div className="cx-c"><small className="lbl">ITR / Tax</small><span>{e.itr_type || "—"}</span>{e.tax_type && <span className="cx-sub" style={{ color: C.accent }}>{e.tax_type}</span>}</div>
+                  <div className="cx-c" style={{ gap: 4 }}><Pill s={e.status} />{e.cleared_date && <span className="cx-sub">Cleared {cxDmy(e.cleared_date)}</span>}</div>
+                  <div className="cx-acts">
+                    {e.status === "pending" && <button className="cx-act ok" onClick={() => setClearFor([e])} title="Mark as cleared">✓ Clear</button>}
+                    {e.status === "cleared" && <button className="cx-act au" onClick={() => sendToAudit([e])} title="Send to auditing">→ Audit</button>}
+                    {!cxIsCompany(e.paid_by) && !locked && <button className="il-ib" onClick={() => setGenFor(e)} title="Create an employee expense claim from this" aria-label="Generate employee claim">🧾</button>}
+                    <button className="il-ib" onClick={() => setForm({ ...e, id: undefined, expense_date: todayIso, status: "pending", __dup: true })} title="Duplicate (e.g. recurring bill)" aria-label={`Duplicate ${e.purpose}`}>⧉</button>
+                    {!locked && <>
+                      <button className="il-ib" onClick={() => setForm(e)} title="Edit" aria-label={`Edit ${e.purpose}`}>✎</button>
+                      <button className="il-ib danger" onClick={() => del(e)} title="Delete" aria-label={`Delete ${e.purpose}`}>🗑</button>
+                    </>}
                   </div>
                 </div>
               );
             })}
+            {list.length > 0 && (
+              <div className="cx-foot">
+                <span>Net <b>{fmt$(listNet)}</b></span>
+                <span>GST <b style={{ color: C.accent }}>{fmt$(listGst)}</b></span>
+                <span>Total <b style={{ color: C.green }}>{fmt$(listNet + listGst)}</b></span>
+              </div>
+            )}
+            {sorted.length > 0 && <div className="il-pager"><PaginationControls page={page} setPage={setPage} perPage={perPage} setPerPage={setPerPage} total={sorted.length} /></div>}
           </div>
         </div>
       </div>
 
-      {/* ── Row 3: Expense Ledger Table ── */}
-      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, overflow: "hidden" }}>
-
-        {/* Table header / filter bar */}
-        <div style={{ padding: "18px 24px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
-          <div>
-            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: C.text }}>Expense Ledger</h3>
-            <p style={{ margin: "2px 0 0", fontSize: 12, color: C.textMuted }}>
-              {filteredList.length} records · {fmt$(filteredTotal)} total
-            </p>
-          </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-            <Btn variant="outline" small onClick={handleDownloadCSV} disabled={!filteredList.length}>⬇ Export CSV</Btn>
-            <Btn small onClick={() => setModal("newExpense")}>+ Add Expense</Btn>
-          </div>
-        </div>
-
-        {/* Filter strip */}
-        <div style={{ padding: "12px 24px", borderBottom: `1px solid ${C.border}`, background: C.surface, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-          <div style={{ position: "relative", flex: 1, minWidth: 160 }}>
-            <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: C.textMuted, fontSize: 13, pointerEvents: "none" }}>🔍</span>
-            <input value={searchPurpose} onChange={e => { setSearchPurpose(e.target.value); setExpPage(1); }} placeholder="Search purpose…"
-              style={{ ...selStyle, padding: "7px 10px 7px 30px", width: "100%", boxSizing: "border-box" }} />
-          </div>
-          <select value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setExpPage(1); }} style={selStyle}>
-            <option value="all">All Statuses</option>
-            <option value="pending">Pending</option>
-            <option value="cleared">Cleared</option>
-            <option value="sent to auditing">Sent to Auditing</option>
-          </select>
-          <select value={filterPayer} onChange={e => { setFilterPayer(e.target.value); setExpPage(1); }} style={selStyle}>
-            <option value="all">All Payers</option>
-            {payerOptions.map(p => <option key={p} value={p}>{p}</option>)}
-          </select>
-          <select value={filterMonth} onChange={e => { setFilterMonth(e.target.value); setExpPage(1); }} style={selStyle}>
-            <option value="all">All Months</option>
-            {monthOptions.map(m => <option key={m} value={m}>{new Date(m + "-01T12:00:00").toLocaleDateString("en-US", { month: "short", year: "numeric" })}</option>)}
-          </select>
-          <select value={filterClearedMonth} onChange={e => { setFilterClearedMonth(e.target.value); setExpPage(1); }} style={selStyle}>
-            <option value="all">All Cleared Months</option>
-            {clearedMonthOptions.map(m => <option key={m} value={m}>{new Date(m + "-01T12:00:00").toLocaleDateString("en-US", { month: "short", year: "numeric" })}</option>)}
-          </select>
-          {(filterStatus !== "all" || filterPayer !== "all" || filterMonth !== "all" || filterClearedMonth !== "all" || searchPurpose) && (
-            <Btn variant="ghost" small onClick={() => { setFilterStatus("all"); setFilterPayer("all"); setFilterMonth("all"); setFilterClearedMonth("all"); setSearchPurpose(""); setExpPage(1); }}>✕ Clear</Btn>
-          )}
-        </div>
-
-        {err && <div style={{ margin: "12px 24px", background: C.red + "18", color: C.red, padding: "10px 14px", borderRadius: 8, fontSize: 13, border: `1px solid ${C.red}44` }}>⚠ {err}</div>}
-
-        {!filteredList.length ? (
-          <div style={{ padding: "50px 20px", textAlign: "center", color: C.textMuted }}>
-            {searchPurpose || filterStatus !== "all" || filterPayer !== "all" || filterMonth !== "all"
-              ? "No expenses match your filters."
-              : "No company expenses recorded yet."}
-          </div>
-        ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ background: C.surface }}>
-                  <Th>Date</Th>
-                  <Th>Purpose</Th>
-                  <Th>Net Amount</Th>
-                  <Th>GST</Th>
-                  <Th>Total</Th>
-                  <Th>Paid By</Th>
-                  <Th>ITR / Tax</Th>
-                  <Th>Status</Th>
-                  <Th>Cleared Date</Th>
-                  <Th>Actions</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedExpenses.map((exp, idx) => {
-                  const [yr, mo, da] = (exp.expense_date || "").split("-");
-                  const fmtDmy = yr && mo && da ? `${da}-${mo}-${yr}` : exp.expense_date;
-                  const total = expTotal(exp);
-                  const statusColor = exp.status === "cleared" ? C.green : exp.status === "sent to auditing" ? C.purple : C.amber;
-                  return (
-                    <tr key={exp.id} style={{ borderBottom: `1px solid ${C.border}22`, background: idx % 2 === 0 ? "transparent" : C.surface + "44" }}>
-                      <Td>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: C.text, whiteSpace: "nowrap" }}>{fmtDmy}</div>
-                      </Td>
-                      <Td>
-                        <div style={{ fontSize: 13, color: C.text, maxWidth: 220, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{exp.purpose}</div>
-                      </Td>
-                      <Td><div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{fmt$(exp.amount)}</div></Td>
-                      <Td><div style={{ fontSize: 12, color: C.textMuted }}>{exp.gst_amount ? fmt$(exp.gst_amount) : "—"}</div></Td>
-                      <Td>
-                        <div style={{ fontSize: 13, fontWeight: 800, color: statusColor }}>{fmt$(total)}</div>
-                      </Td>
-                      <Td>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <div style={{ width: 24, height: 24, borderRadius: "50%", background: `${C.accent}22`, border: `1px solid ${C.accent}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800, color: C.accent, flexShrink: 0 }}>
-                            {mkAvi(exp.paid_by)}
-                          </div>
-                          <span style={{ fontSize: 12, color: C.textDim }}>{exp.paid_by}</span>
-                        </div>
-                      </Td>
-                      <Td>
-                        <div style={{ fontSize: 12, color: C.text }}>{exp.itr_type || "—"}</div>
-                        {exp.tax_type && <div style={{ fontSize: 11, color: C.accent, marginTop: 2 }}>{exp.tax_type}</div>}
-                      </Td>
-                      <Td>
-                        <Badge color={statusColor}>{exp.status}</Badge>
-                      </Td>
-                      <Td>
-                        {exp.cleared_date
-                          ? <div style={{ fontSize: 12, fontWeight: 600, color: C.green, whiteSpace: "nowrap" }}>{(() => { const [cy, cm, cd] = exp.cleared_date.split("T")[0].split("-"); return `${cd}-${cm}-${cy}`; })()}</div>
-                          : <div style={{ fontSize: 13, color: C.textMuted }}>—</div>
-                        }
-                      </Td>
-                      <Td>
-                        <div style={{ display: "flex", gap: 5, flexWrap: "nowrap" }}>
-                          {(!exp.paid_by?.toUpperCase().includes("FIT") && exp.status !== "sent to auditing") && (
-                            <Btn small variant="outline" onClick={() => { setEditObj(exp); setModal("generateExpense"); }}>Gen Exp</Btn>
-                          )}
-                          {exp.status === "pending" && (
-                            <Btn small variant="success" onClick={() => setClearModal({ id: exp.id, clearedDate: isoDate(new Date()) })}>Clear</Btn>
-                          )}
-                          {exp.status === "cleared" && (
-                            <Btn small style={{ background: C.purple, color: "#fff", border: "none", padding: "4px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer", fontWeight: 600 }} onClick={() => handleToggleStatus(exp.id, "sent to auditing")}>→ Audit</Btn>
-                          )}
-                          {exp.status !== "sent to auditing" && (
-                            <>
-                              <Btn small variant="ghost" onClick={() => { setEditObj(exp); setModal("editExpense"); }}>✏</Btn>
-                              <Btn small variant="danger" onClick={() => handleDelete(exp.id)}>🗑</Btn>
-                            </>
-                          )}
-                        </div>
-                      </Td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* Footer totals row */}
-        {filteredList.length > 0 && (
-          <div style={{ borderTop: `1px solid ${C.border}`, padding: "12px 24px", background: C.surface, display: "flex", gap: 24, flexWrap: "wrap" }}>
-            <div style={{ fontSize: 12, color: C.textMuted }}>Showing <strong style={{ color: C.text }}>{filteredList.length}</strong> of {expenses.length} records</div>
-            <div style={{ fontSize: 12, color: C.textMuted }}>Net: <strong style={{ color: C.text }}>{fmt$(filteredList.reduce((s, e) => s + (parseFloat(e.amount) || 0), 0))}</strong></div>
-            <div style={{ fontSize: 12, color: C.textMuted }}>GST: <strong style={{ color: C.accent }}>{fmt$(filteredList.reduce((s, e) => s + (parseFloat(e.gst_amount) || 0), 0))}</strong></div>
-            <div style={{ fontSize: 12, color: C.textMuted }}>Total: <strong style={{ color: C.green }}>{fmt$(filteredTotal)}</strong></div>
-          </div>
-        )}
-
-        {/* Pagination Controls */}
-        <PaginationControls page={expPage} setPage={setExpPage} perPage={expPerPage} setPerPage={setExpPerPage} total={filteredList.length} />
-      </div>
-
-      {clearModal && (
-        <Modal title="Mark as Cleared" onClose={() => setClearModal(null)} maxWidth={360}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <div style={{ fontSize: 13, color: C.textMuted }}>Select the date this expense was cleared / paid.</div>
-            <div>
-              <label style={{ fontSize: 12, color: C.textMuted, fontWeight: 600, display: "block", marginBottom: 6 }}>Cleared Date *</label>
-              <input type="date" value={clearModal.clearedDate}
-                onChange={e => setClearModal(m => ({ ...m, clearedDate: e.target.value }))}
-                style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, padding: "8px 12px", fontSize: 13, width: "100%" }} />
-            </div>
-          </div>
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 20 }}>
-            <Btn variant="ghost" onClick={() => setClearModal(null)}>Cancel</Btn>
-            <Btn variant="success" onClick={async () => {
-              try {
-                await handleToggleStatus(clearModal.id, "cleared", clearModal.clearedDate || null);
-                setClearModal(null);
-              } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
-            }}>Confirm Cleared</Btn>
-          </div>
-        </Modal>
+      {form && <CxModal key={form.id || (form.__dup ? `dup-${form.purpose}` : "new")} init={form} payers={payers} purposes={purposes} onClose={() => setForm(null)} onSave={save} />}
+      {clearFor && (
+        <CxDateModal title={clearFor.length === 1 ? "Mark as cleared" : `Clear ${clearFor.length} expenses`}
+          sub={clearFor.length === 1 ? `${clearFor[0].purpose} · ${fmt$(cxTotal(clearFor[0]))}` : `${fmt$(sumOf(clearFor))} in total`}
+          confirmLabel="✓ Confirm cleared" onClose={() => setClearFor(null)} onConfirm={d => markCleared(clearFor, d)} />
       )}
-
-      {modal === "generateExpense" && editObj && (
-        <Modal title="Generate Employee Expense" onClose={() => { setModal(false); setEditObj(null); }}>
+      {genFor && (
+        <Modal title="Generate employee expense claim" onClose={() => setGenFor(null)}>
           <ExpenseForm
-            init={{
-              title: editObj.purpose || "",
-              amount: editObj.amount || "",
-              category: "Other",
-              projectId: "",
-              description: `Auto-generated from Company Expense ID ${editObj.id} (Paid by: ${editObj.paid_by})`
-            }}
-            projects={projects}
-            employees={employees}
-            saving={saving}
-            onCancel={() => { setModal(false); setEditObj(null); }}
-            onSave={async (f) => {
-              setSaving(true);
+            init={{ title: genFor.purpose || "", amount: genFor.amount || "", category: "Other", projectId: "", description: `Auto-generated from Company Expense ID ${genFor.id} (Paid by: ${genFor.paid_by})` }}
+            projects={projects} employees={employees} saving={genSaving}
+            onCancel={() => setGenFor(null)}
+            onSave={async f => {
+              setGenSaving(true);
               try {
                 await api.createExpense({ ...f, employeeId: f.employeeId || currentUser.employee_id });
-                setModal(false);
-                setEditObj(null);
-                dialog.alert("Employee expense drafted & submitted for approval!", { title: "Success", dtype: "success" });
-              } catch (ex) { dialog.alert(ex.message, { title: "Error", dtype: "error" }); }
-              finally { setSaving(false); }
+                setGenFor(null);
+                dialog.alert("Employee expense claim created and submitted for approval.", { title: "Claim created", dtype: "success" });
+              } catch (x) { errAlert(x); } finally { setGenSaving(false); }
             }}
-            btnLabel="Generate & Submit"
+            btnLabel="Generate & submit"
           />
         </Modal>
       )}
-
-      {(modal === "newExpense" || modal === "editExpense") && (
-        <Modal title={modal === "newExpense" ? "Add Company Expense" : "Edit Expense"} onClose={() => { setModal(false); setEditObj(null); }}>
-          <form onSubmit={handleSave} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {err && <div style={{ color: C.red, fontSize: 13 }}>⚠ {err}</div>}
-
-            <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <Inp label="Expense Date *" type="date" value={form.expenseDate} onChange={v => setForm({ ...form, expenseDate: v })} required />
-              <Inp label="Paid By *" value={form.paidBy} onChange={v => setForm({ ...form, paidBy: v })} placeholder="e.g. Corporate Card, Arjun" required />
-            </div>
-
-            <Inp label="Purpose *" value={form.purpose} onChange={v => setForm({ ...form, purpose: v })} placeholder="e.g. AWS Hosting, Office Supplies" required />
-
-            <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <Inp label="Net Amount *" type="number" step="0.01" value={form.amount} onChange={v => setForm({ ...form, amount: v })} required />
-              <Inp label="GST Amount" type="number" step="0.01" value={form.gstAmount} onChange={v => setForm({ ...form, gstAmount: v })} />
-            </div>
-
-            <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <Inp label="ITR Type" value={form.itrType} onChange={v => setForm({ ...form, itrType: v })} placeholder="e.g. ITR-4" />
-              <Inp label="Tax Type" value={form.taxType} onChange={v => setForm({ ...form, taxType: v })} placeholder="e.g. CGST, IGST" />
-            </div>
-
-            <div>
-              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.textMuted, marginBottom: 6, textTransform: "uppercase" }}>Clearance Status</label>
-              <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} style={{
-                width: "100%", padding: "8px 12px", borderRadius: 8, border: `1px solid ${C.border}`,
-                background: C.surface, color: C.text, fontSize: 14, outline: "none"
-              }}>
-                <option value="pending">Pending</option>
-                <option value="cleared">Cleared</option>
-                <option value="sent to auditing">Sent to Auditing</option>
-              </select>
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
-              <Btn type="button" variant="ghost" onClick={() => { setModal(false); setEditObj(null); }}>Cancel</Btn>
-              <Btn type="submit" disabled={saving || !form.expenseDate || !form.amount || !form.purpose || !form.paidBy}>
-                {saving ? "Saving…" : (modal === "newExpense" ? "Create Expense" : "Save Changes")}
-              </Btn>
-            </div>
-          </form>
-        </Modal>
-      )}
-    </div>
+    </>
   );
 }
 
@@ -2858,365 +3250,566 @@ function LoginPage({ onLogin }) {
   );
 }
 
-// ── TooltipCard: stat card with optional hover tooltip list ─────────────────
-function TooltipCard({ s, tooltipLines }) {
-  const [show, setShow] = useState(false);
-  return (
-    <div
-      style={{ position: "relative" }}
-      onMouseEnter={() => setShow(true)}
-      onMouseLeave={() => setShow(false)}
-    >
-      <Card style={{ display: "flex", gap: 14, alignItems: "flex-start", cursor: tooltipLines ? "pointer" : "default" }}>
-        <div style={{ fontSize: 24 }}>{s.icon}</div>
-        <div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: s.color, letterSpacing: -.5 }}>{s.value}</div>
-          <div style={{ fontSize: 12, color: C.text, fontWeight: 600, marginTop: 2 }}>{s.label}</div>
-          <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{s.sub}</div>
-        </div>
-      </Card>
-      {tooltipLines && show && (
-        <div style={{
-          position: "absolute", top: "calc(100% + 10px)", left: 0, zIndex: 999
-        }}>
-          {/* Pointer (Arrow) */}
-          <div style={{
-            position: "absolute", top: -6, left: 32,
-            width: 14, height: 14, background: "#2a2d3e",
-            borderLeft: `1px solid ${C.border}`, borderTop: `1px solid ${C.border}`,
-            transform: "rotate(45deg)", zIndex: 1
-          }} />
-          {/* Tooltip Body */}
-          <div style={{
-            position: "relative", zIndex: 2,
-            background: "#2a2d3e", border: `1px solid ${C.border}`, borderRadius: 10,
-            boxShadow: "0 10px 40px rgba(0,0,0,0.6)", padding: "12px 16px",
-            minWidth: 240, maxWidth: 320, maxHeight: 260, overflowY: "auto",
-          }}>
-            {tooltipLines.length === 0
-              ? <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)" }}>None</div>
-              : tooltipLines.map((line, i) => (
-                <div key={i} style={{ fontSize: 13, color: "#ffffff", fontWeight: 500, padding: "5px 0", borderBottom: i < tooltipLines.length - 1 ? "1px solid rgba(255,255,255,0.08)" : "none" }}>
-                  {line}
-                </div>
-              ))
-            }
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── KpiCard: modern stat card with icon, value, optional bar & tooltip ──────
-function KpiCard({ item }) {
-  const [show, setShow] = useState(false);
-  const barPct = item.bar ? (item.bar.value / (item.bar.max || 1)) : 0;
-  return (
-    // Outer wrapper owns hover — tooltip is a DOM sibling of the card div, not nested inside it.
-    // This prevents onMouseLeave from firing when the mouse moves into the tooltip.
-    <div
-      style={{ position: "relative" }}
-      onMouseEnter={() => item.tooltipLines && setShow(true)}
-      onMouseLeave={() => setShow(false)}
-    >
-      <div className="ov-kpi-card">
-        <div className="ov-card-glow" style={{ background: item.color }} />
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <div style={{
-            width: 42, height: 42, borderRadius: 10,
-            background: item.color + "22", border: `1px solid ${item.color}33`,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 20, flexShrink: 0,
-          }}>{item.icon}</div>
-          {item.bar && (
-            <span style={{
-              fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 20,
-              background: barPct > 0.85 ? C.red + "22" : C.amber + "22",
-              color: barPct > 0.85 ? C.red : C.amber,
-              border: `1px solid ${barPct > 0.85 ? C.red : C.amber}44`,
-            }}>{(barPct * 100).toFixed(0)}%</span>
-          )}
-          {item.tooltipLines && !item.bar && (
-            <span style={{ fontSize: 10, color: C.textMuted, padding: "3px 7px", borderRadius: 20, background: C.surface, border: `1px solid ${C.border}` }}>
-              {item.tooltipLines.length} ↑
-            </span>
-          )}
-        </div>
-        <div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: item.color, letterSpacing: -0.5, lineHeight: 1.2 }}>{item.value}</div>
-          <div style={{ fontSize: 13, color: C.text, fontWeight: 600, marginTop: 4 }}>{item.label}</div>
-          <div style={{ fontSize: 11, color: C.textMuted, marginTop: 3 }}>{item.sub}</div>
-        </div>
-        {item.bar && <ProgressBar value={item.bar.value} max={item.bar.max} color={item.color} />}
-      </div>
-
-      {show && item.tooltipLines && item.tooltipLines.length > 0 && (
-        <div style={{ position: "absolute", top: "calc(100% + 10px)", left: 0, zIndex: 999 }}>
-          {/* Arrow */}
-          <div style={{
-            position: "absolute", top: -6, left: 22,
-            width: 14, height: 14, background: "#2a2d3e",
-            borderLeft: `1px solid ${C.border}`, borderTop: `1px solid ${C.border}`,
-            transform: "rotate(45deg)", zIndex: 1,
-          }} />
-          {/* Body */}
-          <div style={{
-            position: "relative", zIndex: 2,
-            background: "#2a2d3e", border: `1px solid ${C.border}`, borderRadius: 10,
-            boxShadow: "0 10px 40px rgba(0,0,0,0.6)", padding: "12px 16px",
-            minWidth: 240, maxWidth: 320, maxHeight: 260, overflowY: "auto",
-          }}>
-            {item.tooltipLines.map((line, i) => (
-              <div key={i} style={{
-                fontSize: 13, color: "#fff", fontWeight: 500, padding: "5px 0",
-                borderBottom: i < item.tooltipLines.length - 1 ? "1px solid rgba(255,255,255,0.08)" : "none",
-              }}>{line}</div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ════════════════════════════════════════════════════════
 // DASHBOARD
 // ════════════════════════════════════════════════════════
-function Dashboard() {
-  const [data, setData] = useState(null);
-  const [clients, setClients] = useState([]);
+function Dashboard({ navFn = () => {}, currentUser }) {
+  const [d, setD] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [err, setErr] = useState("");
-  const load = useCallback(async () => {
-    setLoading(true); setErr("");
-    try {
-      const [d, cls] = await Promise.all([api.getDashboard(), api.getClients()]);
-      setData(d); setClients(cls);
-    } catch (e) { setErr(e.message); }
-    finally { setLoading(false); }
-  });
+  const [stamp, setStamp] = useState(null);
+  const [cfRange, setCfRange] = useState(6);
+
+  const load = async silent => {
+    silent ? setRefreshing(true) : setLoading(true);
+    setErr("");
+    const calls = {
+      dash: api.getDashboard(), invoices: api.getInvoices(), employees: api.getEmployees(), timesheets: api.getTimesheets({ status: "pending" }),
+      leaves: api.getLeaves(), claims: api.getExpenses(), payslips: api.getPayslips(), subs: api.getSubscriptions(), onboarding: api.getOnboardingRecords(),
+      assets: api.getAssets(), companyExp: api.getCompanyExpenses(), clients: api.getClients(),
+    };
+    const keys = Object.keys(calls);
+    const res = await Promise.allSettled(keys.map(k => calls[k]));
+    const out = {};
+    keys.forEach((k, i) => { out[k] = res[i].status === "fulfilled" ? res[i].value : null; });
+    if (!out.dash && !out.invoices && !out.employees) setErr((res[0].reason && res[0].reason.message) || "Could not load the overview");
+    setD(out); setStamp(new Date()); setLoading(false); setRefreshing(false);
+  };
   useEffect(() => { load(); }, []);
+
   if (loading) return <Spinner />;
-  if (err) return <ErrBox msg={err} onRetry={load} />;
+  if (err && !d) return <ErrBox msg={err} onRetry={() => load()} />;
 
-  const {
-    projects = [],
-    total_budget = 0, active_budget = 0, inactive_budget = 0,
-    total_burned = 0,
-    total_company_expenses = 0, total_claims_expenses = 0,
-    pending_timesheets = 0, pending_leaves = 0,
-    invoice_total_raised = 0, invoice_cleared = 0, invoice_pending = 0,
-    pending_invoices = [],
-  } = data || {};
+  const go = page => navFn(page);
+  const now = new Date();
+  const today = new Date(now); today.setHours(0, 0, 0, 0);
+  const todayIso = isoDate(now);
+  const day = x => (x ? String(x).slice(0, 10) : "");
+  const num = v => parseFloat(v || 0) || 0;
+  const arr = v => (Array.isArray(v) ? v : []);
+  const plus = n => { const x = new Date(today); x.setDate(x.getDate() + n); return isoDate(x); };
+  const minus = n => plus(-n);
 
-  const total_burned_all = total_burned + total_company_expenses + total_claims_expenses;
-  const burnPct = total_budget ? ((total_burned_all / total_budget) * 100).toFixed(1) : 0;
-  const remainingBudget = Math.max(0, total_budget - total_burned_all);
-  const collectionRate = invoice_total_raised ? ((invoice_cleared / invoice_total_raised) * 100).toFixed(1) : 0;
+  // ── Finance ──
+  const dash = d.dash || {};
+  const projects = arr(dash.projects).length ? arr(dash.projects) : [];
+  const roots = arr(d.invoices).filter(i => !i.parent_invoice_id);
+  const billed = roots.reduce((a, i) => a + num(i.amount), 0);
+  const collected = roots.reduce((a, i) => a + (i.status === "cleared" ? num(i.amount) - num(i.tds_amount) : i.status === "partial" ? num(i.payment_received) : 0), 0);
+  const netBillable = roots.reduce((a, i) => a + num(i.amount) - num(i.tds_amount), 0);
+  const collectRate = netBillable > 0 ? Math.min(100, Math.round((collected / netBillable) * 100)) : 0;
+  const outstanding = roots.reduce((a, i) => a + ilOutstanding(i), 0);
+  const overdueInv = roots.filter(i => (ilDaysPastDue(i, todayIso) || 0) > 0).sort((a, b) => (ilDaysPastDue(b, todayIso) || 0) - (ilDaysPastDue(a, todayIso) || 0));
+  const overdueAmt = overdueInv.reduce((a, i) => a + ilOutstanding(i), 0);
+  const tdsTotal = roots.reduce((a, i) => a + num(i.tds_amount), 0);
 
-  const inactiveProjects = projects.filter(p => p.status !== "active");
+  const totalBudget = num(dash.total_budget), activeBudget = num(dash.active_budget);
+  const burnTs = num(dash.total_burned), burnCo = num(dash.total_company_expenses), burnCl = num(dash.total_claims_expenses);
+  const burnAll = burnTs + burnCo + burnCl;
+  const burnPct = totalBudget ? (burnAll / totalBudget) * 100 : 0;
+  const pRows = projects.map(p => ({ p, k: prjCompute(p, today) }));
+  const activeP = pRows.filter(r => r.p.status === "active");
+  const attnP = pRows.filter(r => r.k.attention);
 
-  const budgetCards = [
-    { label: "Total Budget", value: fmt$(total_budget), sub: `${projects.length} projects total`, icon: "💰", color: C.accent },
-    { label: "Active Budget", value: fmt$(active_budget), sub: `${projects.filter(p => p.status === "active").length} active projects`, icon: "🚀", color: C.green, tooltipLines: projects.filter(p => p.status === "active").map(p => `🚀 ${p.name} — ${fmt$(p.budget)}`) },
-    { label: "Inactive Budget", value: fmt$(inactive_budget), sub: `${inactiveProjects.length} inactive projects`, icon: "📦", color: C.textMuted, tooltipLines: inactiveProjects.map(p => `📦 ${p.name} (${p.status}) — ${fmt$(p.budget)}`) },
-    { label: "Budget Burned", value: fmt$(total_burned_all), sub: `${burnPct}% of total utilized`, icon: "🔥", color: C.amber, bar: { value: total_burned_all, max: total_budget }, tooltipLines: [`🕐 Project Timesheets — ${fmt$(total_burned)}`, `🏢 Company Expenses — ${fmt$(total_company_expenses)}`, `💳 Claims Expenses — ${fmt$(total_claims_expenses)}`] },
-    { label: "Remaining Budget", value: fmt$(remainingBudget), sub: `${(100 - +burnPct).toFixed(1)}% still available`, icon: "💎", color: "#06B6D4" },
-  ];
+  const coExp = arr(d.companyExp);
+  const thisYm = todayIso.slice(0, 7);
+  const coThisMonth = coExp.filter(e => day(e.expense_date).startsWith(thisYm)).reduce((a, e) => a + cxTotal(e), 0);
+  const coPending = coExp.filter(e => e.status === "pending");
 
-  const invoiceCards = [
-    { label: "Total Invoiced", value: fmt$(invoice_total_raised), sub: "All raised invoices", icon: "🧾", color: C.purple },
-    { label: "Collected", value: fmt$(invoice_cleared), sub: `${collectionRate}% collection rate`, icon: "✅", color: C.green },
-    { label: "Outstanding", value: fmt$(invoice_pending), sub: `${pending_invoices.length} invoices pending`, icon: "⏳", color: C.red, tooltipLines: pending_invoices.map(inv => `${inv.client_name}${inv.invoice_number ? ` · ${inv.invoice_number}` : ""} — ${fmt$(inv.amount)}`) },
-    { label: "Pending Reviews", value: pending_timesheets + pending_leaves, sub: `${pending_timesheets} timesheets · ${pending_leaves} leaves`, icon: "🕐", color: C.purple },
-  ];
+  // ── People ──
+  const emps = arr(d.employees);
+  const joiners = emps.filter(e => day(e.joining_date) && day(e.joining_date) >= minus(30) && day(e.joining_date) <= todayIso);
+  const groups = Object.values(emps.reduce((m, e) => { const k = e.group_name || "Unassigned"; (m[k] = m[k] || { k, n: 0, c: e.group_color }).n += 1; return m; }, {})).sort((a, b) => b.n - a.n);
+  const nextOcc = iso => {
+    if (!iso) return null;
+    const [, m, dd] = day(iso).split("-").map(Number);
+    let x = new Date(today.getFullYear(), m - 1, dd);
+    if (x < today) x = new Date(today.getFullYear() + 1, m - 1, dd);
+    return Math.round((x - today) / 86400000);
+  };
+  const celebrations = [
+    ...emps.filter(e => e.dob).map(e => ({ e, kind: "🎂", label: "Birthday", inDays: nextOcc(e.dob) })),
+    ...emps.filter(e => e.joining_date && day(e.joining_date) < minus(300)).map(e => {
+      const yrs = today.getFullYear() - +day(e.joining_date).slice(0, 4) + (nextOcc(e.joining_date) > 0 && new Date(today.getFullYear(), +day(e.joining_date).slice(5, 7) - 1, +day(e.joining_date).slice(8, 10)) < today ? 1 : 0);
+      return { e, kind: "🎉", label: `${Math.max(1, yrs)} yr${yrs === 1 ? "" : "s"} at FIT`, inDays: nextOcc(e.joining_date) };
+    }),
+  ].filter(c => c.inDays !== null && c.inDays <= 14).sort((a, b) => a.inDays - b.inDays);
 
-  const SectionLabel = ({ text }) => (
-    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      <span style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, letterSpacing: 1.2, textTransform: "uppercase", whiteSpace: "nowrap" }}>{text}</span>
-      <div style={{ flex: 1, height: 1, background: C.border }} />
-    </div>
+  // ── Approvals ──
+  const tsPending = arr(d.timesheets).filter(t => t.status === "pending");
+  const tsPeople = new Set(tsPending.map(t => t.employee_id)).size;
+  const tsHours = tsPending.reduce((a, t) => a + num(t.hours), 0);
+  const leaves = arr(d.leaves);
+  const lvPending = leaves.filter(l => l.status === "pending").sort((a, b) => day(a.start_date).localeCompare(day(b.start_date)));
+  const onLeave = leaves.filter(l => l.status === "approved" && day(l.start_date) <= todayIso && day(l.end_date) >= todayIso);
+  const upcomingLeave = leaves.filter(l => l.status === "approved" && day(l.start_date) > todayIso && day(l.start_date) <= plus(7));
+  const claims = arr(d.claims);
+  const clPending = claims.filter(c => c.status === "pending");
+  const clToPay = claims.filter(c => c.status === "approved");
+  const slips = arr(d.payslips);
+  const slipReq = slips.filter(s => s.download_requested && !s.is_approved);
+  const approvalsTotal = tsPending.length + lvPending.length + clPending.length + slipReq.length;
+
+  // ── Payroll ──
+  const lastRun = slips.reduce((m, s) => { const k = s.year * 100 + s.month; return k > m ? k : m; }, 0);
+  const runSlips = lastRun ? slips.filter(s => s.year * 100 + s.month === lastRun) : [];
+  const runNet = runSlips.reduce((a, s) => a + num(s.net_pay), 0);
+  const runLabel = lastRun ? `${MONTH_NAMES[(lastRun % 100) - 1]} ${Math.floor(lastRun / 100)}` : null;
+  const curKey = now.getFullYear() * 100 + now.getMonth() + 1;
+  const prevKey = now.getMonth() === 0 ? (now.getFullYear() - 1) * 100 + 12 : curKey - 1;
+  const payrollDue = lastRun && lastRun < prevKey;
+
+  // ── Operations ──
+  const subs = arr(d.subs);
+  const subExpired = subs.filter(s => day(s.expire_date) && day(s.expire_date) < todayIso);
+  const subDue = subs.filter(s => day(s.expire_date) >= todayIso && day(s.expire_date) <= plus(30)).sort((a, b) => day(a.expire_date).localeCompare(day(b.expire_date)));
+  const subActive = subs.filter(s => day(s.expire_date) >= todayIso);
+  const subCost = subActive.reduce((a, s) => a + num(s.amount), 0);
+  const obOpen = arr(d.onboarding).filter(o => o.status !== "completed");
+  const obSteps = o => ["laptop_issued", "id_card_issued", "email_created", "system_access", "induction_done"].filter(k => +o[k]).length;
+  const assets = arr(d.assets);
+  const assetBy = s => assets.filter(a => a.status === s).length;
+  const assetValue = assets.filter(a => a.status !== "retired").reduce((a, x) => a + num(x.purchase_cost), 0);
+  const clients = arr(d.clients);
+
+  // ── Charts ──
+  const claimsAll = arr(d.claims);
+  const months = Array.from({ length: cfRange }, (_, k) => {
+    const x = new Date(now.getFullYear(), now.getMonth() - (cfRange - 1) + k, 1);
+    return { key: `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}`, name: `${MONTH_NAMES[x.getMonth()].slice(0, 3)}${cfRange > 6 ? ` ’${String(x.getFullYear()).slice(2)}` : ""}`, billed: 0, collected: 0, spend: 0 };
+  });
+  const mIdx = Object.fromEntries(months.map((m, i) => [m.key, i]));
+  roots.forEach(i => {
+    const r = mIdx[day(i.raised_date).slice(0, 7)]; if (r !== undefined) months[r].billed += num(i.amount);
+    const c = mIdx[day(i.payment_received_date).slice(0, 7)];
+    if (c !== undefined) months[c].collected += i.payment_received != null ? num(i.payment_received) : i.status === "cleared" ? num(i.amount) - num(i.tds_amount) : 0;
+  });
+  coExp.forEach(e => { const x = mIdx[day(e.expense_date).slice(0, 7)]; if (x !== undefined) months[x].spend += cxTotal(e); });
+  claimsAll.filter(c => c.status === "approved" || c.status === "paid").forEach(c => { const x = mIdx[day(c.submitted_at).slice(0, 7)]; if (x !== undefined) months[x].spend += num(c.amount); });
+  const cfHas = months.some(m => m.billed || m.collected || m.spend);
+  const cfNet = months.reduce((a, m) => a + m.collected - m.spend, 0);
+
+  const agingData = IL_AGING.map(b => {
+    const list = roots.filter(i => i.status !== "cleared" && b.test(ilDaysPastDue(i, todayIso)));
+    return { name: b.label, value: list.reduce((a, i) => a + ilOutstanding(i), 0), count: list.length, color: ilAgingColor(b.k) };
+  }).filter(x => x.value > 0);
+
+  const invByProject = roots.reduce((m, i) => { if (i.project_id != null) m[i.project_id] = (m[i.project_id] || 0) + num(i.amount); return m; }, {});
+  const projChart = pRows.filter(r => r.p.status === "active" || r.p.status === "on-hold" || r.k.attention)
+    .sort((a, b) => b.k.budget - a.k.budget).slice(0, 8)
+    .map(({ p, k }) => ({ name: p.name.length > 18 ? p.name.slice(0, 17) + "…" : p.name, full: p.name, budget: k.budget, burned: Math.round(k.burned), invoiced: invByProject[p.id] || 0, color: k.health.color }));
+
+  const burnData = [
+    { name: "Timesheets", value: burnTs, color: C.accent },
+    { name: "Company expenses", value: burnCo, color: C.purple },
+    { name: "Expense claims", value: burnCl, color: C.amber },
+    { name: "Remaining", value: Math.max(0, totalBudget - burnAll), color: C.textMuted + "40" },
+  ].filter(x => x.value > 0);
+  const tick = v => v >= 10000000 ? `₹${(v / 10000000).toFixed(1)}Cr` : v >= 100000 ? `₹${(v / 100000).toFixed(1)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`;
+  const tipStyle = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 12, boxShadow: "0 10px 30px rgba(0,0,0,.4)" };
+
+  // ── Alerts strip ──
+  const alerts = [
+    approvalsTotal && { ic: "📥", t: `${approvalsTotal} awaiting approval`, tone: C.amber, page: "attendance" },
+    overdueInv.length && { ic: "⏰", t: `${overdueInv.length} overdue invoice${overdueInv.length === 1 ? "" : "s"} · ${fmt$(overdueAmt)}`, tone: C.red, page: "project_management" },
+    attnP.length && { ic: "🔥", t: `${attnP.length} project${attnP.length === 1 ? "" : "s"} need attention`, tone: C.red, page: "project_management" },
+    subExpired.length && { ic: "⛔", t: `${subExpired.length} subscription${subExpired.length === 1 ? "" : "s"} expired`, tone: C.red, page: "subscriptions" },
+    subDue.length && { ic: "🔁", t: `${subDue.length} renewal${subDue.length === 1 ? "" : "s"} in 30 days`, tone: C.amber, page: "subscriptions" },
+    payrollDue && { ic: "💸", t: `Payroll for ${MONTH_NAMES[(prevKey % 100) - 1]} not run yet`, tone: C.amber, page: "payslips" },
+    onLeave.length && { ic: "🌴", t: `${onLeave.length} on leave today`, tone: C.accent, page: "attendance" },
+    celebrations.filter(c => c.inDays === 0).length && { ic: "🎂", t: `${celebrations.filter(c => c.inDays === 0).length} celebration${celebrations.filter(c => c.inDays === 0).length === 1 ? "" : "s"} today`, tone: C.purple, page: "people" },
+  ].filter(Boolean);
+
+  const hour = now.getHours();
+  const greet = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const name = (currentUser && (currentUser.emp_name || currentUser.username)) || "Admin";
+  const when = n => n === 0 ? "Today" : n === 1 ? "Tomorrow" : `In ${n} days`;
+
+  const Card = ({ title, sub, page, link = "Open", children, style }) => (
+    <section className="ov-card" style={style}>
+      <div className="ov-h">
+        <div><b>{title}</b>{sub && <small>{sub}</small>}</div>
+        {page && <button className="il-link" onClick={() => go(page)}>{link} →</button>}
+      </div>
+      {children}
+    </section>
+  );
+  const Kpi = ({ page, icon, label, value, color, sub, bar }) => (
+    <button className="ov-kpi" style={{ "--c": color }} onClick={() => go(page)}>
+      <span className="ov-kpi-top"><span className="ov-kpi-ic">{icon}</span><span>{label}</span><span className="ov-kpi-go">›</span></span>
+      <b>{value}</b>
+      {sub && <small>{sub}</small>}
+      {bar != null && <span className="ov-kpi-bar"><i style={{ width: `${Math.min(100, bar)}%` }} /></span>}
+    </button>
+  );
+  const QRow = ({ ic, label, count, detail, page, tone }) => (
+    <button className="ov-q" onClick={() => go(page)} disabled={!count} style={{ "--t": tone }}>
+      <span className="ov-q-ic">{ic}</span>
+      <span className="ov-q-b"><b>{label}</b><small>{detail}</small></span>
+      <span className={`ov-q-n${count ? "" : " zero"}`}>{count || "✓"}</span>
+    </button>
   );
 
   return (
     <>
       <style>{`
-        .ov-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
-        .ov-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-        .ov-kpi-card {
-          position: relative; background: ${C.card}; border: 1px solid ${C.border};
-          border-radius: 14px; padding: 20px; display: flex; flex-direction: column;
-          gap: 14px; transition: transform .2s, box-shadow .2s; overflow: visible;
+${pmSharedCss()}
+        .ov { container-type: inline-size; container-name: ov; }
+        .ov-wrap { display: flex; flex-direction: column; gap: 18px; }
+        .ov-hero { position: relative; overflow: hidden; border-radius: 22px; border: 1px solid ${C.border}; padding: 22px 24px; background: radial-gradient(120% 160% at 0% 0%, ${C.accent}26, transparent 55%), radial-gradient(100% 140% at 100% 0%, ${C.purple}22, transparent 55%), ${C.card}; display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+        .ov-hero h2 { margin: 0; font-size: clamp(22px, 2.6vw, 28px); font-weight: 800; color: ${C.text}; letter-spacing: -.5px; }
+        .ov-hero p { margin: 6px 0 0; color: ${C.textMuted}; font-size: 13px; font-weight: 600; }
+        .ov-hero-acts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .ov-stamp { font-size: 12px; color: ${C.textMuted}; font-weight: 600; }
+        .ov-alerts { display: flex; gap: 8px; flex-wrap: wrap; }
+        .ov-alert { --t: ${C.accent}; display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--t) 40%, ${C.border}); background: color-mix(in srgb, var(--t) 12%, ${C.surface}); color: ${C.text}; font-size: 12.5px; font-weight: 700; cursor: pointer; font-family: inherit; white-space: nowrap; transition: transform .15s; }
+        .ov-alert:hover { transform: translateY(-1px); border-color: var(--t); }
+        .ov-allclear { font-size: 13px; color: ${C.green}; font-weight: 700; padding: 6px 2px; }
+        .ov-sec { display: flex; align-items: center; gap: 10px; font-size: 11.5px; font-weight: 800; color: ${C.textMuted}; letter-spacing: 1px; text-transform: uppercase; }
+        .ov-sec::after { content: ""; flex: 1; height: 1px; background: ${C.border}; }
+        .ov-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+        .ov-kpi { all: unset; box-sizing: border-box; cursor: pointer; position: relative; overflow: hidden; background: ${C.card}; border: 1px solid ${C.border}; border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 6px; min-width: 0; transition: transform .15s, border-color .15s, box-shadow .15s; }
+        .ov-kpi::after { content: ""; position: absolute; top: -40px; right: -40px; width: 120px; height: 120px; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--c) 22%, transparent), transparent 70%); pointer-events: none; }
+        .ov-kpi:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--c) 50%, ${C.border}); box-shadow: 0 14px 34px -18px color-mix(in srgb, var(--c) 60%, #000); }
+        .ov-kpi:focus-visible { outline: 2px solid ${C.accent}; outline-offset: 2px; }
+        .ov-kpi-top { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; color: ${C.textMuted}; }
+        .ov-kpi-ic { width: 30px; height: 30px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--c) 16%, ${C.surface}); font-size: 15px; flex-shrink: 0; }
+        .ov-kpi-go { margin-left: auto; color: ${C.textMuted}; font-size: 16px; }
+        .ov-kpi b { font-size: 23px; font-weight: 800; color: var(--c); letter-spacing: -.5px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ov-kpi small { font-size: 12px; color: ${C.textMuted}; font-weight: 600; }
+        .ov-kpi-bar { height: 5px; border-radius: 4px; background: ${C.border}; overflow: hidden; margin-top: 2px; }
+        .ov-kpi-bar i { display: block; height: 100%; background: var(--c); border-radius: 4px; }
+        .ov-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+        .ov-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .ov-card { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 20px; padding: 18px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+        .ov-h { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+        .ov-h b { display: block; font-size: 14.5px; font-weight: 800; color: ${C.text}; }
+        .ov-h small { display: block; font-size: 12px; color: ${C.textMuted}; font-weight: 600; margin-top: 2px; }
+        .ov-q { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; background: ${C.surface}; border: 1px solid ${C.border}66; transition: border-color .15s, transform .15s; }
+        .ov-q:hover:not(:disabled) { transform: translateX(2px); border-color: color-mix(in srgb, var(--t) 50%, ${C.border}); }
+        .ov-q:disabled { cursor: default; opacity: .7; }
+        .ov-q-ic { width: 34px; height: 34px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--t) 14%, ${C.card}); flex-shrink: 0; }
+        .ov-q-b { flex: 1; min-width: 0; }
+        .ov-q-b b { display: block; font-size: 13px; color: ${C.text}; font-weight: 800; }
+        .ov-q-b small { display: block; font-size: 11.5px; color: ${C.textMuted}; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ov-q-n { min-width: 30px; height: 26px; padding: 0 8px; border-radius: 999px; background: var(--t); color: #fff; font-size: 12.5px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; }
+        .ov-q-n.zero { background: ${C.green}22; color: ${C.green}; }
+        .ov-list { display: flex; flex-direction: column; }
+        .ov-li { display: flex; gap: 10px; align-items: center; padding: 8px 4px; border-bottom: 1px solid ${C.border}44; min-width: 0; }
+        .ov-li:last-child { border-bottom: none; }
+        .ov-li-n { flex: 1; min-width: 0; }
+        .ov-li-n b { display: block; font-size: 13px; color: ${C.text}; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ov-li-n small { display: block; font-size: 11.5px; color: ${C.textMuted}; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ov-li-v { font-size: 12.5px; font-weight: 800; color: ${C.text}; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+        .ov-li-v small { display: block; font-size: 11px; font-weight: 700; color: ${C.textMuted}; }
+        .ov-avi { width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 800; flex-shrink: 0; }
+        .ov-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+        .ov-stats > div { background: ${C.surface}; border: 1px solid ${C.border}66; border-radius: 12px; padding: 9px 11px; min-width: 0; }
+        .ov-stats span { display: block; font-size: 10.5px; color: ${C.textMuted}; font-weight: 700; }
+        .ov-stats b { display: block; font-size: 15px; font-weight: 800; color: ${C.text}; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+        .ov-stack { display: flex; height: 10px; border-radius: 6px; overflow: hidden; background: ${C.border}; }
+        .ov-stack i { display: block; height: 100%; }
+        .ov-legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 11.5px; color: ${C.textMuted}; font-weight: 700; }
+        .ov-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+        .ov-bar { height: 6px; border-radius: 4px; background: ${C.border}; overflow: hidden; }
+        .ov-bar i { display: block; height: 100%; border-radius: 4px; }
+        .ov-empty { font-size: 12.5px; color: ${C.textMuted}; padding: 10px 0; text-align: center; }
+        .ov-charts { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(280px, 1fr); gap: 16px; }
+        .ov-seg { display: inline-flex; gap: 4px; }
+        .ov-seg button { height: 30px; padding: 0 11px; border-radius: 9px; border: 1px solid ${C.border}; background: ${C.surface}; color: ${C.textDim}; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; }
+        .ov-seg button.on { background: ${C.accent}; border-color: ${C.accent}; color: #fff; }
+        .ov-donut { position: relative; height: 210px; }
+        .ov-donut-c { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
+        .ov-donut-c b { font-size: 18px; font-weight: 800; color: ${C.text}; font-variant-numeric: tabular-nums; }
+        .ov-donut-c small { font-size: 11px; color: ${C.textMuted}; font-weight: 700; }
+        .ov-dl { display: flex; flex-direction: column; gap: 6px; }
+        .ov-dl div { display: flex; align-items: center; gap: 8px; font-size: 12px; color: ${C.textDim}; font-weight: 600; }
+        .ov-dl div i { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
+        .ov-dl div span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ov-dl div b { color: ${C.text}; font-variant-numeric: tabular-nums; }
+        .ov-pill { font-size: 10.5px; font-weight: 800; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+
+        @container ov (max-width: 1100px) { .ov-grid.three { grid-template-columns: 1fr 1fr; } .ov-grid.three > :last-child { grid-column: 1 / -1; } }
+        @container ov (max-width: 980px) { .ov-charts { grid-template-columns: 1fr; } }
+        @container ov (max-width: 900px) { .ov-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ov-grid, .ov-grid.three { grid-template-columns: 1fr; } .ov-grid.three > :last-child { grid-column: auto; } }
+        @container ov (max-width: 560px) {
+          .ov-hero { padding: 18px; border-radius: 18px; }
+          .ov-hero-acts { width: 100%; justify-content: space-between; }
+          .ov-kpi { padding: 14px; }
+          .ov-kpi b { font-size: 19px; }
+          .ov-card { padding: 14px; border-radius: 18px; }
+          .ov-alerts { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -2px; padding: 0 2px 2px; }
+          .ov-stats b { font-size: 13.5px; }
         }
-        .ov-kpi-card:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.45); }
-        .ov-card-glow {
-          position: absolute; top: 0; right: 0; width: 90px; height: 90px;
-          border-radius: 50%; opacity: 0.07; transform: translate(25px, -25px); pointer-events: none;
-        }
-        .ov-tr-hover { transition: background .15s; }
-        .ov-tr-hover:hover { background: ${C.surface}99 !important; }
-        @media (max-width: 1100px) { .ov-grid-4 { grid-template-columns: repeat(2, 1fr); } }
-        @media (max-width: 640px)  { .ov-grid-4 { grid-template-columns: 1fr; } .ov-grid-2 { grid-template-columns: 1fr; } }
       `}</style>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
-
-        {/* ── Page Header ── */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: -0.5 }}>Overview</h2>
-            <p style={{ margin: "5px 0 0", color: C.textMuted, fontSize: 13 }}>
-              Real-time project & financial snapshot &nbsp;·&nbsp;
-              {new Date().toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
-            </p>
+      <div className="ov">
+        <div className="ov-wrap">
+          <div className="ov-hero">
+            <div>
+              <h2>{greet}, {name.split(" ")[0]} 👋</h2>
+              <p>{now.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })} · Everything across people, delivery and finance</p>
+            </div>
+            <div className="ov-hero-acts">
+              {stamp && <span className="ov-stamp">Updated {stamp.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</span>}
+              <button className="il-btn il-btn-ghost" onClick={() => load(true)} disabled={refreshing}>{refreshing ? "Refreshing…" : "↻ Refresh"}</button>
+            </div>
           </div>
-          <Btn variant="ghost" small onClick={load}>↻ Refresh</Btn>
-        </div>
 
-        {/* ── Budget KPIs ── */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <SectionLabel text="Budget" />
-          <div className="ov-grid-4">
-            {budgetCards.map((item, i) => <KpiCard key={i} item={item} />)}
+          {alerts.length ? (
+            <div className="ov-alerts" role="list" aria-label="Today">
+              {alerts.map((a, i) => <button key={i} role="listitem" className="ov-alert" style={{ "--t": a.tone }} onClick={() => go(a.page)}>{a.ic} {a.t}</button>)}
+            </div>
+          ) : <div className="ov-allclear">✅ All clear — nothing needs your attention today.</div>}
+
+          <div className="ov-sec">Finance & delivery</div>
+          <div className="ov-kpis">
+            <Kpi page="project_management" icon="💰" label="Collected" value={fmt$(collected)} color={C.green} sub={`${collectRate}% of ${fmt$(billed)} billed`} bar={collectRate} />
+            <Kpi page="project_management" icon="⏳" label="Outstanding" value={fmt$(outstanding)} color={C.amber} sub={overdueAmt ? <span style={{ color: C.red, fontWeight: 700 }}>{fmt$(overdueAmt)} overdue</span> : "Nothing overdue"} />
+            <Kpi page="project_management" icon="🔥" label="Budget burned" value={fmt$(burnAll)} color={burnPct > 85 ? C.red : C.accent} sub={`${burnPct.toFixed(1)}% of ${fmt$(totalBudget)} · ${fmt$(Math.max(0, totalBudget - burnAll))} left`} bar={burnPct} />
+            <Kpi page="project_management" icon="📁" label="Active projects" value={String(activeP.length)} color={attnP.length ? C.red : C.purple} sub={attnP.length ? <span style={{ color: C.red, fontWeight: 700 }}>{attnP.length} need attention</span> : `${fmt$(activeBudget)} active budget`} />
           </div>
-        </div>
-
-        {/* ── Invoice & Operations KPIs ── */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <SectionLabel text="Invoices & Operations" />
-          <div className="ov-grid-4">
-            {invoiceCards.map((item, i) => <KpiCard key={i} item={item} />)}
+          <div className="ov-sec">People & operations</div>
+          <div className="ov-kpis">
+            <Kpi page="people" icon="👥" label="Headcount" value={String(emps.length)} color={C.accent} sub={joiners.length ? `+${joiners.length} joined in 30 days` : `${groups.length} group${groups.length === 1 ? "" : "s"}`} />
+            <Kpi page="attendance" icon="📥" label="Pending approvals" value={String(approvalsTotal)} color={approvalsTotal ? C.amber : C.green} sub={`${tsPending.length} timesheets · ${lvPending.length} leaves · ${clPending.length} claims`} />
+            <Kpi page="payslips" icon="💸" label="Last payroll" value={runLabel ? fmt$(runNet) : "—"} color={payrollDue ? C.amber : C.purple} sub={runLabel ? `${runLabel} · ${runSlips.length} payslip${runSlips.length === 1 ? "" : "s"}` : "No payroll run yet"} />
+            <Kpi page="subscriptions" icon="🔁" label="Subscriptions" value={fmt$(subCost)} color={subExpired.length ? C.red : C.accent} sub={`${subActive.length} active${subDue.length ? ` · ${subDue.length} renew soon` : ""}${subExpired.length ? ` · ${subExpired.length} expired` : ""}`} />
           </div>
-        </div>
 
-        {/* ── Charts ── */}
-        <div className="ov-grid-2">
-          <Card>
-            <h3 style={{ margin: "0 0 16px", fontSize: 11, fontWeight: 700, color: C.textMuted, letterSpacing: 1.2, textTransform: "uppercase" }}>Budget Breakdown</h3>
-            <ResponsiveContainer width="100%" height={220}>
-              <PieChart>
-                <Pie
-                  data={[
-                    { name: "Active", value: active_budget },
-                    { name: "Inactive", value: inactive_budget },
-                    { name: "Burned", value: total_burned_all },
-                  ]}
-                  cx="50%" cy="50%" outerRadius={82} innerRadius={52} dataKey="value" paddingAngle={3}
-                >
-                  {[C.green, C.textMuted, C.amber].map((col, i) => <Cell key={i} fill={col} />)}
-                </Pie>
-                <Tooltip formatter={(v) => fmt$(v)} contentStyle={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12 }} />
-                <Legend iconType="circle" iconSize={8} formatter={(v, e) => <span style={{ color: C.textDim, fontSize: 12 }}>{v}: {fmt$(e.payload.value)}</span>} />
-              </PieChart>
-            </ResponsiveContainer>
-          </Card>
+          <div className="ov-grid">
+            <Card title="Approvals queue" sub={approvalsTotal ? `${approvalsTotal} item${approvalsTotal === 1 ? "" : "s"} waiting for you` : "You're all caught up"} page="attendance" link="Review">
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <QRow ic="⏱" tone={C.accent} page="attendance" label="Timesheets" count={tsPending.length} detail={tsPending.length ? `${tsHours.toFixed(1)}h from ${tsPeople} employee${tsPeople === 1 ? "" : "s"}` : "No timesheets waiting"} />
+                <QRow ic="🌴" tone={C.green} page="attendance" label="Leave requests" count={lvPending.length} detail={lvPending.length ? lvPending.slice(0, 2).map(l => `${(l.employee_name || "").split(" ")[0]} ${fmtD(l.start_date)}`).join(" · ") : "No leave requests"} />
+                <QRow ic="🧾" tone={C.amber} page="attendance" label="Expense claims" count={clPending.length} detail={clPending.length ? `${fmt$(clPending.reduce((a, c) => a + num(c.amount), 0))} claimed${clToPay.length ? ` · ${clToPay.length} approved, to pay` : ""}` : clToPay.length ? `${clToPay.length} approved, awaiting payment` : "No claims waiting"} />
+                <QRow ic="📄" tone={C.purple} page="payslips" label="Payslip download requests" count={slipReq.length} detail={slipReq.length ? slipReq.slice(0, 3).map(s => (s.employee_name || "").split(" ")[0]).join(", ") : "No requests"} />
+              </div>
+            </Card>
 
-          <Card>
-            <h3 style={{ margin: "0 0 16px", fontSize: 11, fontWeight: 700, color: C.textMuted, letterSpacing: 1.2, textTransform: "uppercase" }}>Invoice Breakdown</h3>
-            <ResponsiveContainer width="100%" height={220}>
-              <PieChart>
-                <Pie
-                  data={[
-                    { name: "Collected", value: invoice_cleared },
-                    { name: "Outstanding", value: invoice_pending },
-                  ]}
-                  cx="50%" cy="50%" outerRadius={82} innerRadius={52} dataKey="value" paddingAngle={3}
-                >
-                  {[C.green, C.red].map((col, i) => <Cell key={i} fill={col} />)}
-                </Pie>
-                <Tooltip formatter={(v) => fmt$(v)} contentStyle={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12 }} />
-                <Legend iconType="circle" iconSize={8} formatter={(v, e) => <span style={{ color: C.textDim, fontSize: 12 }}>{v}: {fmt$(e.payload.value)}</span>} />
-              </PieChart>
-            </ResponsiveContainer>
-          </Card>
-        </div>
-
-        {/* ── Project Burn Rates ── */}
-        <Card>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
-            <h3 style={{ margin: 0, fontSize: 11, fontWeight: 700, color: C.textMuted, letterSpacing: 1.2, textTransform: "uppercase" }}>Project Burn Rate</h3>
-            <span style={{ fontSize: 11, color: C.textMuted, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 20, padding: "3px 10px", fontWeight: 600 }}>
-              {projects.length} projects
-            </span>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-            {projects.map(p => {
-              const pct = (((p.burned || 0) / p.budget) * 100).toFixed(1);
-              const statusColor = +pct > 85 ? C.red : +pct > 65 ? C.amber : C.green;
-              return (
-                <div key={p.id}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: statusColor, flexShrink: 0, boxShadow: `0 0 6px ${statusColor}88` }} />
-                      <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{p.name}</span>
-                      <StatusBadge status={p.status} />
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
-                      <span style={{ fontSize: 11, color: C.textMuted }}>{fmt$(p.burned || 0)} / {fmt$(p.budget)}</span>
-                      <span style={{ fontSize: 12, fontWeight: 800, color: statusColor, minWidth: 42, textAlign: "right" }}>{pct}%</span>
-                    </div>
-                  </div>
-                  <ProgressBar value={p.burned || 0} max={p.budget} />
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-
-        {/* ── Clients ── */}
-        <Card style={{ padding: 0, overflow: "hidden" }}>
-          <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <h3 style={{ margin: 0, fontSize: 11, fontWeight: 700, color: C.textMuted, letterSpacing: 1.2, textTransform: "uppercase" }}>Clients</h3>
-            <span style={{ fontSize: 11, color: C.textMuted, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 20, padding: "3px 10px", fontWeight: 600 }}>
-              {clients.length} total
-            </span>
-          </div>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead style={{ background: C.surface }}>
-                <tr>
-                  {["Client", "Email", "Phone", "GST Number", "Pay Day"].map(h => (
-                    <th key={h} style={{ padding: "10px 16px", fontSize: 11, fontWeight: 700, color: C.textMuted, letterSpacing: .5, textAlign: "left", textTransform: "uppercase", whiteSpace: "nowrap", borderBottom: `1px solid ${C.border}` }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {clients.length === 0 && (
-                  <tr><td colSpan={5} style={{ padding: 40, textAlign: "center", color: C.textMuted, fontSize: 13 }}>No clients yet.</td></tr>
-                )}
-                {clients.map((c) => (
-                  <tr key={c.id} className="ov-tr-hover" style={{ borderBottom: `1px solid ${C.border}22` }}>
-                    <td style={{ padding: "12px 16px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={{
-                          width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-                          background: C.accent + "22", border: `1px solid ${C.accent}33`,
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          fontSize: 12, fontWeight: 700, color: C.accent,
-                        }}>{mkAvi(c.client_name)}</div>
-                        <span style={{ fontWeight: 700, color: C.text, fontSize: 13 }}>{c.client_name}</span>
-                      </div>
-                    </td>
-                    <td style={{ padding: "12px 16px", fontSize: 12 }}>
-                      {c.email ? <a href={`mailto:${c.email}`} style={{ color: C.accent, textDecoration: "none" }}>{c.email}</a> : <span style={{ color: C.textMuted }}>—</span>}
-                    </td>
-                    <td style={{ padding: "12px 16px", fontSize: 12 }}>
-                      {c.phone_number ? <a href={`tel:${c.phone_number}`} style={{ color: C.text, textDecoration: "none" }}>{c.phone_number}</a> : <span style={{ color: C.textMuted }}>—</span>}
-                    </td>
-                    <td style={{ padding: "12px 16px", fontSize: 12, color: C.textMuted, fontFamily: "monospace" }}>{c.gst_number || "—"}</td>
-                    <td style={{ padding: "12px 16px" }}>
-                      {c.pay_day
-                        ? <span style={{ background: C.accent + "22", color: C.accent, padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600 }}>Day {c.pay_day}</span>
-                        : <span style={{ color: C.textMuted, fontSize: 12 }}>—</span>}
-                    </td>
-                  </tr>
+            <Card title="People" sub={`${emps.length} employees · ${onLeave.length} on leave today`} page="people">
+              <div className="ov-stats">
+                <div><span>New joiners (30d)</span><b>{joiners.length}</b></div>
+                <div><span>On leave today</span><b style={{ color: onLeave.length ? C.amber : C.text }}>{onLeave.length}</b></div>
+                <div><span>Leave next 7 days</span><b>{upcomingLeave.length}</b></div>
+              </div>
+              {groups.length > 0 && (
+                <>
+                  <div className="ov-stack">{groups.map((g, i) => <i key={g.k} title={`${g.k}: ${g.n}`} style={{ width: `${(g.n / Math.max(1, emps.length)) * 100}%`, background: g.c || PALETTE[i % PALETTE.length] }} />)}</div>
+                  <div className="ov-legend">{groups.slice(0, 5).map((g, i) => <span key={g.k}><i style={{ background: g.c || PALETTE[i % PALETTE.length] }} />{g.k} {g.n}</span>)}</div>
+                </>
+              )}
+              <div className="ov-list">
+                {onLeave.slice(0, 3).map(l => (
+                  <div key={`l${l.id}`} className="ov-li"><span className="ov-avi" style={{ background: C.amber + "22", color: C.amber }}>{mkAvi(l.employee_name || "")}</span><span className="ov-li-n"><b>{l.employee_name}</b><small>🌴 On leave until {fmtD(l.end_date)}</small></span></div>
                 ))}
-              </tbody>
-            </table>
+                {celebrations.slice(0, 4).map((c, i) => (
+                  <div key={`c${i}`} className="ov-li"><span className="ov-avi" style={{ background: C.purple + "22", color: C.purple }}>{mkAvi(c.e.name)}</span><span className="ov-li-n"><b>{c.kind} {c.e.name}</b><small>{c.label}</small></span><span className="ov-li-v" style={{ color: c.inDays === 0 ? C.purple : C.textDim }}>{when(c.inDays)}</span></div>
+                ))}
+                {!onLeave.length && !celebrations.length && <div className="ov-empty">No leave or celebrations in the next two weeks.</div>}
+              </div>
+            </Card>
           </div>
-        </Card>
 
+          <div className="ov-grid">
+            <Card title="Budget & spend" sub={`${fmt$(totalBudget)} total budget across ${projects.length} project${projects.length === 1 ? "" : "s"}`} page="project_management">
+              <div className="ov-stats">
+                <div><span>Timesheets</span><b>{fmt$(burnTs)}</b></div>
+                <div><span>Company expenses</span><b>{fmt$(burnCo)}</b></div>
+                <div><span>Expense claims</span><b>{fmt$(burnCl)}</b></div>
+              </div>
+              <div className="ov-stack" title={`${burnPct.toFixed(1)}% of budget used`}>
+                <i style={{ width: `${totalBudget ? (burnTs / totalBudget) * 100 : 0}%`, background: C.accent }} />
+                <i style={{ width: `${totalBudget ? (burnCo / totalBudget) * 100 : 0}%`, background: C.purple }} />
+                <i style={{ width: `${totalBudget ? (burnCl / totalBudget) * 100 : 0}%`, background: C.amber }} />
+              </div>
+              <div className="ov-legend"><span><i style={{ background: C.accent }} />Timesheets</span><span><i style={{ background: C.purple }} />Company</span><span><i style={{ background: C.amber }} />Claims</span><span style={{ marginLeft: "auto" }}>{fmt$(Math.max(0, totalBudget - burnAll))} remaining</span></div>
+              <div className="ov-list">
+                {[...pRows].filter(r => r.p.status === "active" || r.k.attention).sort((a, b) => (b.k.attention - a.k.attention) || b.k.burnPct - a.k.burnPct).slice(0, 4).map(({ p, k }) => (
+                  <div key={p.id} className="ov-li" style={{ flexWrap: "wrap" }}>
+                    <span className="ov-li-n"><b>{p.name}</b><small><span style={{ color: k.health.color, fontWeight: 800 }}>{k.health.icon} {k.health.label}</span>{p.client ? ` · ${p.client}` : ""}</small></span>
+                    <span className="ov-li-v">{Math.round(k.burnPct)}%<small>{fmt$(k.burned)} of {fmt$(k.budget)}</small></span>
+                    <span className="ov-bar" style={{ flexBasis: "100%" }}><i style={{ width: `${Math.min(100, k.burnPct)}%`, background: k.burnPct > 100 ? C.red : k.burnPct > 85 ? C.amber : C.accent }} /></span>
+                  </div>
+                ))}
+                {!pRows.length && <div className="ov-empty">No projects yet.</div>}
+              </div>
+            </Card>
+
+            <Card title="Invoices & receivables" sub={`${roots.length} invoice${roots.length === 1 ? "" : "s"} · ${clients.length} client${clients.length === 1 ? "" : "s"} · TDS ${fmt$(tdsTotal)}`} page="project_management">
+              <div className="ov-stats">
+                <div><span>Billed</span><b>{fmt$(billed)}</b></div>
+                <div><span>Collected</span><b style={{ color: C.green }}>{fmt$(collected)}</b></div>
+                <div><span>Outstanding</span><b style={{ color: outstanding ? C.amber : C.text }}>{fmt$(outstanding)}</b></div>
+              </div>
+              <div className="ov-stack">
+                <i style={{ width: `${(collected / Math.max(1, collected + outstanding)) * 100}%`, background: C.green }} />
+                <i style={{ width: `${((outstanding - overdueAmt) / Math.max(1, collected + outstanding)) * 100}%`, background: C.amber }} />
+                <i style={{ width: `${(overdueAmt / Math.max(1, collected + outstanding)) * 100}%`, background: C.red }} />
+              </div>
+              <div className="ov-legend"><span><i style={{ background: C.green }} />Collected</span><span><i style={{ background: C.amber }} />Due</span><span><i style={{ background: C.red }} />Overdue</span><span style={{ marginLeft: "auto" }}>{fmt$(coThisMonth)} company spend this month{coPending.length ? ` · ${coPending.length} pending` : ""}</span></div>
+              <div className="ov-list">
+                {[...overdueInv, ...roots.filter(i => i.status !== "cleared" && !overdueInv.includes(i)).sort((a, b) => day(a.payment_due_date || "9999").localeCompare(day(b.payment_due_date || "9999")))].slice(0, 4).map(i => {
+                  const dd = ilDaysPastDue(i, todayIso);
+                  return (
+                    <div key={i.id} className="ov-li">
+                      <span className="ov-li-n"><b>{i.client_name || "—"}</b><small>{i.invoice_number || `#${i.id}`}{i.payment_due_date ? ` · due ${fmtD(i.payment_due_date)}` : ""}</small></span>
+                      <span className="ov-li-v">{fmt$(ilOutstanding(i))}<small style={{ color: dd > 0 ? C.red : C.textMuted }}>{dd > 0 ? `${dd}d overdue` : dd !== null ? (dd === 0 ? "Due today" : `Due in ${-dd}d`) : "No due date"}</small></span>
+                    </div>
+                  );
+                })}
+                {!roots.some(i => i.status !== "cleared") && <div className="ov-empty">✅ Every invoice is paid.</div>}
+              </div>
+            </Card>
+          </div>
+
+          <div className="ov-grid three">
+            <Card title="Subscriptions" sub={`${subActive.length} active · ${fmt$(subCost)}`} page="subscriptions">
+              <div className="ov-list">
+                {[...subExpired.map(s => ({ s, x: true })), ...subDue.map(s => ({ s, x: false }))].slice(0, 5).map(({ s, x }) => {
+                  const n = Math.round((new Date(day(s.expire_date) + "T00:00:00") - today) / 86400000);
+                  return (
+                    <div key={s.id} className="ov-li">
+                      <span className="ov-avi" style={{ borderRadius: 9, background: (x ? C.red : C.amber) + "22", color: x ? C.red : C.amber }}>{mkAvi(s.app_name)}</span>
+                      <span className="ov-li-n"><b>{s.app_name}</b><small>{fmt$(s.amount)} · {x ? "expired" : "renews"} {fmtD(s.expire_date)}</small></span>
+                      <span className="ov-pill" style={{ background: (x ? C.red : C.amber) + "1c", color: x ? C.red : C.amber }}>{x ? `${-n}d ago` : n === 0 ? "Today" : `${n}d`}</span>
+                    </div>
+                  );
+                })}
+                {!subExpired.length && !subDue.length && <div className="ov-empty">No renewals in the next 30 days.</div>}
+              </div>
+            </Card>
+
+            <Card title="Onboarding" sub={obOpen.length ? `${obOpen.length} in progress` : "No one onboarding"} page="onboard">
+              <div className="ov-list">
+                {obOpen.slice(0, 5).map(o => {
+                  const n = obSteps(o);
+                  return (
+                    <div key={o.id} className="ov-li" style={{ flexWrap: "wrap" }}>
+                      <span className="ov-avi" style={{ background: C.green + "22", color: C.green }}>{mkAvi(o.employee_name || "")}</span>
+                      <span className="ov-li-n"><b>{o.employee_name || `Employee #${o.employee_id}`}</b><small>{o.joining_date ? `Joins ${fmtD(o.joining_date)}` : o.status === "pending" ? "Not started" : "In progress"}</small></span>
+                      <span className="ov-li-v">{n}/5<small>steps</small></span>
+                      <span className="ov-bar" style={{ flexBasis: "100%" }}><i style={{ width: `${(n / 5) * 100}%`, background: n === 5 ? C.green : C.accent }} /></span>
+                    </div>
+                  );
+                })}
+                {!obOpen.length && <div className="ov-empty">All onboarding is complete.</div>}
+              </div>
+            </Card>
+
+            <Card title="IT assets" sub={`${assets.length} asset${assets.length === 1 ? "" : "s"} · ${fmt$(assetValue)} in use`} page="infra">
+              <div className="ov-stats" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
+                <div><span>Assigned</span><b style={{ color: C.accent }}>{assetBy("assigned")}</b></div>
+                <div><span>Available</span><b style={{ color: C.green }}>{assetBy("available")}</b></div>
+                <div><span>In maintenance</span><b style={{ color: assetBy("maintenance") ? C.amber : C.text }}>{assetBy("maintenance")}</b></div>
+                <div><span>Retired</span><b style={{ color: C.textMuted }}>{assetBy("retired")}</b></div>
+              </div>
+              {assets.length > 0 && (
+                <div className="ov-stack">
+                  {[["assigned", C.accent], ["available", C.green], ["maintenance", C.amber], ["retired", C.textMuted]].map(([s, c]) => <i key={s} style={{ width: `${(assetBy(s) / assets.length) * 100}%`, background: c }} />)}
+                </div>
+              )}
+            </Card>
+          </div>
+
+          <div className="ov-sec">Finance & delivery charts</div>
+          <div className="ov-charts">
+            <section className="ov-card">
+              <div className="ov-h">
+                <div><b>Cash flow</b><small>Billed vs collected vs spend · net {cfNet < 0 ? "−" : ""}{fmt$(Math.abs(cfNet))} over {cfRange} months</small></div>
+                <div className="ov-seg">{[6, 12].map(n => <button key={n} className={cfRange === n ? "on" : ""} onClick={() => setCfRange(n)}>{n}M</button>)}</div>
+              </div>
+              {cfHas ? (
+                <div style={{ width: "100%", height: 260 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={months} barCategoryGap="22%" barGap={3}>
+                      <XAxis dataKey="name" stroke={C.border} tick={{ fill: C.textMuted, fontSize: 11 }} tickLine={false} />
+                      <YAxis stroke={C.border} tick={{ fill: C.textMuted, fontSize: 11 }} tickLine={false} axisLine={false} width={50} tickFormatter={tick} />
+                      <Tooltip cursor={{ fill: C.accentGlow }} contentStyle={tipStyle} formatter={(v, n) => [fmt$(v), n]}
+                        labelFormatter={(l, pl) => { const m = pl && pl[0] && pl[0].payload; return m ? `${l} · net ${m.collected - m.spend < 0 ? "−" : ""}${fmt$(Math.abs(m.collected - m.spend))}` : l; }} />
+                      <Bar dataKey="billed" name="Billed" fill={C.accent} radius={[5, 5, 0, 0]} />
+                      <Bar dataKey="collected" name="Collected" fill={C.green} radius={[5, 5, 0, 0]} />
+                      <Bar dataKey="spend" name="Spend" fill={C.purple} radius={[5, 5, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : <div className="ov-empty" style={{ padding: "60px 0" }}>No billing, payments or spend in the last {cfRange} months.</div>}
+              <div className="ov-legend"><span><i style={{ background: C.accent }} />Billed</span><span><i style={{ background: C.green }} />Collected</span><span><i style={{ background: C.purple }} />Spend (company expenses + approved claims)</span></div>
+            </section>
+
+            <section className="ov-card">
+              <div className="ov-h">
+                <div><b>Receivables aging</b><small>{fmt$(outstanding)} unpaid · by days past due</small></div>
+                <button className="il-link" onClick={() => go("project_management")}>Open →</button>
+              </div>
+              {agingData.length ? (
+                <>
+                  <div className="ov-donut">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={agingData} dataKey="value" nameKey="name" innerRadius="62%" outerRadius="88%" paddingAngle={2} stroke="none">
+                          {agingData.map(x => <Cell key={x.name} fill={x.color} />)}
+                        </Pie>
+                        <Tooltip contentStyle={tipStyle} formatter={(v, n, it) => [`${fmt$(v)} · ${it.payload.count} inv`, n]} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="ov-donut-c"><b>{fmt$(outstanding)}</b><small>{overdueAmt ? `${Math.round((overdueAmt / Math.max(1, outstanding)) * 100)}% overdue` : "nothing overdue"}</small></div>
+                  </div>
+                  <div className="ov-dl">{agingData.map(x => <div key={x.name}><i style={{ background: x.color }} /><span>{x.name} · {x.count}</span><b>{fmt$(x.value)}</b></div>)}</div>
+                </>
+              ) : <div className="ov-empty" style={{ padding: "60px 0" }}>✅ No unpaid invoices.</div>}
+            </section>
+          </div>
+
+          <div className="ov-charts">
+            <section className="ov-card">
+              <div className="ov-h">
+                <div><b>Projects: budget vs cost vs invoiced</b><small>Active and at-risk projects, largest budgets first</small></div>
+                <button className="il-link" onClick={() => go("project_management")}>Open →</button>
+              </div>
+              {projChart.length ? (
+                <div style={{ width: "100%", height: Math.max(220, projChart.length * 46 + 40) }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={projChart} layout="vertical" barCategoryGap="24%" barGap={2} margin={{ left: 4, right: 12 }}>
+                      <XAxis type="number" stroke={C.border} tick={{ fill: C.textMuted, fontSize: 11 }} tickLine={false} tickFormatter={tick} />
+                      <YAxis type="category" dataKey="name" stroke={C.border} tick={{ fill: C.textDim, fontSize: 11.5 }} tickLine={false} axisLine={false} width={124} />
+                      <Tooltip cursor={{ fill: C.accentGlow }} contentStyle={tipStyle} formatter={(v, n) => [fmt$(v), n]} labelFormatter={(l, pl) => (pl && pl[0] && pl[0].payload.full) || l} />
+                      <Bar dataKey="budget" name="Budget" fill={C.textMuted + "59"} radius={[0, 5, 5, 0]} />
+                      <Bar dataKey="burned" name="Cost burned" radius={[0, 5, 5, 0]}>
+                        {projChart.map(x => <Cell key={x.full} fill={x.burned > x.budget ? C.red : x.budget && x.burned / x.budget > .85 ? C.amber : C.accent} />)}
+                      </Bar>
+                      <Bar dataKey="invoiced" name="Invoiced" fill={C.green} radius={[0, 5, 5, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : <div className="ov-empty" style={{ padding: "60px 0" }}>No active projects.</div>}
+              <div className="ov-legend"><span><i style={{ background: C.textMuted + "59" }} />Budget</span><span><i style={{ background: C.accent }} />Cost burned</span><span><i style={{ background: C.amber }} />&gt;85% used</span><span><i style={{ background: C.red }} />Over budget</span><span><i style={{ background: C.green }} />Invoiced</span></div>
+            </section>
+
+            <section className="ov-card">
+              <div className="ov-h">
+                <div><b>Where the budget went</b><small>{fmt$(totalBudget)} total budget · {burnPct.toFixed(1)}% used</small></div>
+              </div>
+              {burnData.length ? (
+                <>
+                  <div className="ov-donut">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={burnData} dataKey="value" nameKey="name" innerRadius="62%" outerRadius="88%" paddingAngle={2} stroke="none">
+                          {burnData.map(x => <Cell key={x.name} fill={x.color} />)}
+                        </Pie>
+                        <Tooltip contentStyle={tipStyle} formatter={(v, n) => [`${fmt$(v)} · ${totalBudget ? ((v / totalBudget) * 100).toFixed(1) : 0}%`, n]} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="ov-donut-c"><b>{burnPct.toFixed(1)}%</b><small>of budget used</small></div>
+                  </div>
+                  <div className="ov-dl">{burnData.map(x => <div key={x.name}><i style={{ background: x.color }} /><span>{x.name}</span><b>{fmt$(x.value)}</b></div>)}</div>
+                </>
+              ) : <div className="ov-empty" style={{ padding: "60px 0" }}>No budget set yet.</div>}
+            </section>
+          </div>
+        </div>
       </div>
     </>
   );
@@ -3225,207 +3818,686 @@ function Dashboard() {
 // ════════════════════════════════════════════════════════
 // PROJECTS
 // ════════════════════════════════════════════════════════
-function Projects({ readOnly = false }) {
+// ── Projects helpers (module-level) ──
+const PRJ_STATUSES = ["active", "on-hold", "inactive", "completed", "closed"];
+const prjStatusMeta = s => ({
+  active: { label: "Active", color: C.green },
+  "on-hold": { label: "On hold", color: C.amber },
+  inactive: { label: "Inactive", color: C.textMuted },
+  completed: { label: "Completed", color: C.accent },
+  closed: { label: "Closed", color: C.purple },
+}[s] || { label: s || "—", color: C.textMuted });
+const prjDay = d => (d ? String(d).slice(0, 10) : "");
+const prjDate = d => { const s = prjDay(d); if (!s) return null; const [y, m, dd] = s.split("-").map(Number); return new Date(y, m - 1, dd); };
+const prjNum = v => parseFloat(v || 0) || 0;
+const prjInvAgg = invoices => {
+  const m = {};
+  (invoices || []).forEach(i => {
+    if (i.parent_invoice_id || i.project_id == null) return;
+    const a = (m[i.project_id] = m[i.project_id] || { invoiced: 0, collected: 0, outstanding: 0, count: 0, overdue: 0, list: [] });
+    const amt = prjNum(i.amount), tds = prjNum(i.tds_amount);
+    a.invoiced += amt; a.count += 1;
+    if (i.status === "cleared") a.collected += amt - tds;
+    else if (i.status === "partial") { a.collected += prjNum(i.payment_received); a.outstanding += prjNum(i.balance_amount); }
+    else a.outstanding += amt;
+    if (i.status !== "cleared" && i.payment_due_date && prjDay(i.payment_due_date) < isoDate(new Date())) a.overdue += 1;
+  });
+  (invoices || []).forEach(i => { if (i.project_id != null && m[i.project_id]) m[i.project_id].list.push(i); });
+  return m;
+};
+const prjCompute = (p, today) => {
+  const budget = prjNum(p.budget), burned = prjNum(p.burned), received = prjNum(p.received_amount);
+  const balance = budget - received;
+  const burnPct = budget ? (burned / budget) * 100 : 0;
+  const collPct = budget ? (received / budget) * 100 : 0;
+  const s = prjDate(p.start_date), e = prjDate(p.end_date);
+  const timePct = s && e && e > s ? Math.max(0, Math.min(100, ((today - s) / (e - s)) * 100)) : null;
+  const daysLeft = e ? Math.round((e - today) / 86400000) : null;
+  const durationDays = s && e ? Math.round((e - s) / 86400000) + 1 : null;
+  const live = p.status === "active" || p.status === "on-hold";
+  let health;
+  if (p.status === "completed" || p.status === "closed") health = { k: "done", label: "Delivered", color: C.accent, icon: "🏁" };
+  else if (budget && burned > budget) health = { k: "over", label: "Over budget", color: C.red, icon: "🔥" };
+  else if (p.status === "active" && daysLeft !== null && daysLeft < 0) health = { k: "overdue", label: "Past end date", color: C.red, icon: "⏰" };
+  else if (p.status === "on-hold") health = { k: "paused", label: "Paused", color: C.amber, icon: "⏸" };
+  else if (p.status === "inactive") health = { k: "idle", label: "Inactive", color: C.textMuted, icon: "💤" };
+  else if (burnPct > 85 || (timePct !== null && burnPct > timePct + 15)) health = { k: "risk", label: "At risk", color: C.amber, icon: "⚠️" };
+  else health = { k: "ok", label: "On track", color: C.green, icon: "✓" };
+  const attention = ["over", "overdue", "risk"].includes(health.k);
+  return { budget, burned, received, balance, burnPct, collPct, timePct, daysLeft, durationDays, live, health, attention, margin: budget - burned };
+};
+const prjPayload = (p, over = {}) => ({
+  name: p.name, client: p.client || "", budget: prjNum(p.budget), receivedAmount: prjNum(p.received_amount),
+  startDate: prjDay(p.start_date) || null, endDate: prjDay(p.end_date) || null, status: p.status,
+  // The API rewrites assignments on every update — always send the current ones so they aren't wiped.
+  assignedGroups: p.assigned_groups || [], assignedEmployees: p.assigned_employees || [],
+  ...over,
+});
+const prjPct = v => `${Math.round(v * 10) / 10}%`;
+const prjDaysLabel = d => d === null ? null : d < 0 ? `${-d}d overdue` : d === 0 ? "Ends today" : `${d}d left`;
+
+function PrjModal({ init, clients, onClose, onSave }) {
+  const isEdit = !!init.id;
+  const [f, setF] = useState(() => ({
+    name: init.name || "", client: init.client || "", budget: init.budget != null && init.budget !== "" ? String(prjNum(init.budget)) : "",
+    receivedAmount: String(prjNum(init.received_amount)), startDate: prjDay(init.start_date), endDate: prjDay(init.end_date), status: init.status || "active",
+  }));
+  const [touched, setTouched] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const set = (k, v) => setF(x => ({ ...x, [k]: v }));
+  const errs = {};
+  if (!f.name.trim()) errs.name = "Project name is required";
+  if (f.budget === "" || isNaN(+f.budget) || +f.budget < 0) errs.budget = "Enter a valid budget";
+  if (f.receivedAmount !== "" && (isNaN(+f.receivedAmount) || +f.receivedAmount < 0)) errs.receivedAmount = "Enter a valid amount";
+  if (f.startDate && f.endDate && f.endDate < f.startDate) errs.endDate = "End date must be after the start date";
+  const bal = (+f.budget || 0) - (+f.receivedAmount || 0);
+  const s = prjDate(f.startDate), e = prjDate(f.endDate);
+  const dur = s && e && e >= s ? Math.round((e - s) / 86400000) + 1 : null;
+  const clientNames = Array.from(new Set((clients || []).map(c => c.client_name).filter(Boolean))).sort();
+
+  useEffect(() => {
+    const h = ev => { if (ev.key === "Escape") onClose(); };
+    window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h);
+  }, [onClose]);
+
+  async function submit() {
+    setTouched(true);
+    if (Object.keys(errs).length) return;
+    setSaving(true);
+    const ok = await onSave({ ...f, name: f.name.trim(), client: f.client.trim(), budget: +f.budget, receivedAmount: +f.receivedAmount || 0, startDate: f.startDate || null, endDate: f.endDate || null });
+    if (!ok) setSaving(false);
+  }
+  const E = k => touched && errs[k] ? <div className="prm-err">{errs[k]}</div> : null;
+  return (
+    <div className="prm-backdrop" onMouseDown={onClose}>
+      <div className="prm" role="dialog" aria-modal="true" aria-label={isEdit ? "Edit project" : "New project"} onMouseDown={ev => ev.stopPropagation()}>
+        <div className="prm-head">
+          <div>
+            <div className="prm-title">{isEdit ? "Edit project" : "New project"}</div>
+            <div className="prm-sub">{isEdit ? <><span className="prj-code sm">{init.code}</span> Team assignments are kept as they are</> : "A project code is generated automatically"}</div>
+          </div>
+          <button className="prj-icon-btn" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+        <div className="prm-body">
+          <label className="prm-field full">
+            <span className="prm-lbl">Project name *</span>
+            <input className={`prm-input${touched && errs.name ? " err" : ""}`} value={f.name} onChange={ev => set("name", ev.target.value)} placeholder="e.g. Cloud Migration" autoFocus />
+            {E("name")}
+          </label>
+          <label className="prm-field full">
+            <span className="prm-lbl">Client</span>
+            <input className="prm-input" list="prm-clients" value={f.client} onChange={ev => set("client", ev.target.value)} placeholder="Select or type a client name" />
+            <datalist id="prm-clients">{clientNames.map(n => <option key={n} value={n} />)}</datalist>
+          </label>
+          <label className="prm-field">
+            <span className="prm-lbl">Budget (₹) *</span>
+            <input className={`prm-input${touched && errs.budget ? " err" : ""}`} type="number" min="0" inputMode="decimal" value={f.budget} onChange={ev => set("budget", ev.target.value)} placeholder="0" />
+            {E("budget")}
+          </label>
+          <label className="prm-field">
+            <span className="prm-lbl">Received (₹)</span>
+            <input className={`prm-input${touched && errs.receivedAmount ? " err" : ""}`} type="number" min="0" inputMode="decimal" value={f.receivedAmount} onChange={ev => set("receivedAmount", ev.target.value)} placeholder="0" />
+            {E("receivedAmount")}
+          </label>
+          <div className="prm-preview full" style={{ "--c": bal < 0 ? C.red : bal === 0 && +f.budget ? C.green : C.amber }}>
+            <div><span>Balance pending</span><b>{fmt$(Math.abs(bal))}{bal < 0 ? " over-received" : bal === 0 && +f.budget ? " · fully paid" : ""}</b></div>
+            <div className="prm-preview-bar"><i style={{ width: `${+f.budget ? Math.min(100, ((+f.receivedAmount || 0) / +f.budget) * 100) : 0}%` }} /></div>
+          </div>
+          <label className="prm-field">
+            <span className="prm-lbl">Start date</span>
+            <input className="prm-input" type="date" value={f.startDate} onChange={ev => set("startDate", ev.target.value)} />
+          </label>
+          <label className="prm-field">
+            <span className="prm-lbl">End date</span>
+            <input className={`prm-input${touched && errs.endDate ? " err" : ""}`} type="date" value={f.endDate} min={f.startDate || undefined} onChange={ev => set("endDate", ev.target.value)} />
+            {E("endDate")}
+          </label>
+          {dur && <div className="prm-hint full">📆 {dur} day{dur === 1 ? "" : "s"} · about {Math.max(1, Math.round(dur / 7))} week{Math.round(dur / 7) === 1 ? "" : "s"}</div>}
+          <div className="prm-field full">
+            <span className="prm-lbl">Status</span>
+            <div className="prm-seg" role="radiogroup" aria-label="Status">
+              {PRJ_STATUSES.map(k => {
+                const m = prjStatusMeta(k);
+                return <button key={k} type="button" role="radio" aria-checked={f.status === k} className={f.status === k ? "on" : ""} style={{ "--c": m.color }} onClick={() => set("status", k)}><i />{m.label}</button>;
+              })}
+            </div>
+          </div>
+        </div>
+        <div className="prm-foot">
+          <span className="prm-kbd">Esc to close</span>
+          <div className="prm-foot-acts">
+            <button className="prj-btn prj-btn-ghost" onClick={onClose} disabled={saving}>Cancel</button>
+            <button className="prj-btn prj-btn-primary" onClick={submit} disabled={saving || (touched && Object.keys(errs).length > 0)}>{saving ? "Saving…" : isEdit ? "Save changes" : "Create project"}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Projects({ readOnly = false, invoices = [], clients = [], onChanged }) {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
-  const [modal, setModal] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [modal, setModal] = useState(null);       // null | {} (new) | project
+  const [detailId, setDetailId] = useState(null);
+  const [q, setQ] = useState("");
+  const [fStatus, setFStatus] = useState("all");  // all | attention | <status>
+  const [sort, setSort] = useState("recent");
+  const [view, setView] = useState(() => localStorage.getItem("pp_prj_view") || "grid");
+  const [busyId, setBusyId] = useState(null);
+  const [copied, setCopied] = useState(null);
 
-  const load = useCallback(async () => {
-    setLoading(true); setErr("");
-    try { setProjects(await api.getProjects()); } catch (e) { setErr(e.message); } finally { setLoading(false); }
-  });
+  const load = async () => {
+    setErr("");
+    try { setProjects(await api.getProjects() || []); } catch (e) { setErr(e.message); } finally { setLoading(false); }
+  };
   useEffect(() => { load(); }, []);
+  useEffect(() => { localStorage.setItem("pp_prj_view", view); }, [view]);
 
   if (loading) return <Spinner />;
-  if (err) return <ErrBox msg={err} onRetry={load} />;
+  if (err && !projects.length) return <ErrBox msg={err} onRetry={load} />;
+
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const inv = prjInvAgg(invoices);
+  const rows = projects.map(p => ({ p, k: prjCompute(p, today), inv: inv[p.id] || { invoiced: 0, collected: 0, outstanding: 0, count: 0, overdue: 0, list: [] } }));
+
+  // portfolio KPIs (exclude closed from "open" money)
+  const open = rows.filter(r => r.p.status !== "closed");
+  const sum = (list, f) => list.reduce((a, r) => a + f(r), 0);
+  const tBudget = sum(open, r => r.k.budget), tReceived = sum(open, r => r.k.received), tBurned = sum(open, r => r.k.burned);
+  const tBalance = sum(open, r => Math.max(0, r.k.balance));
+  const attentionCount = rows.filter(r => r.k.attention).length;
+  const counts = rows.reduce((a, r) => { a[r.p.status] = (a[r.p.status] || 0) + 1; return a; }, {});
+
+  const shown = rows.filter(r => {
+    if (fStatus === "attention" && !r.k.attention) return false;
+    if (fStatus !== "all" && fStatus !== "attention" && r.p.status !== fStatus) return false;
+    if (q && !`${r.p.name} ${r.p.code} ${r.p.client || ""}`.toLowerCase().includes(q.toLowerCase())) return false;
+    return true;
+  }).sort((a, b) => {
+    switch (sort) {
+      case "name": return String(a.p.name).localeCompare(String(b.p.name));
+      case "budget": return b.k.budget - a.k.budget;
+      case "burn": return b.k.burnPct - a.k.burnPct;
+      case "balance": return b.k.balance - a.k.balance;
+      case "end": return (prjDay(a.p.end_date) || "9999").localeCompare(prjDay(b.p.end_date) || "9999");
+      default: return (b.p.id || 0) - (a.p.id || 0);
+    }
+  });
+  const detail = detailId != null ? rows.find(r => r.p.id === detailId) : null;
+
+  const errAlert = e => dialog.alert(e.message, { title: "Error", dtype: "error" });
+  const refresh = async () => { await load(); onChanged && onChanged(); };
+
+  async function saveProject(form) {
+    try {
+      if (modal && modal.id) await api.updateProject(modal.id, prjPayload(modal, form));
+      else await api.createProject({ ...form, assignedGroups: [], assignedEmployees: [] });
+      setModal(null); await refresh();
+      return true;
+    } catch (e) { errAlert(e); return false; }
+  }
+  async function setStatus(p, status) {
+    const m = prjStatusMeta(status);
+    if (!await dialog.confirm(`Change “${p.name}” to ${m.label}?${status === "closed" || status === "completed" ? " Employees won't be able to log time to it." : ""}`, { title: "Change status", dtype: "info" })) return;
+    setBusyId(p.id);
+    try { await api.updateProject(p.id, prjPayload(p, { status })); await refresh(); } catch (e) { errAlert(e); } finally { setBusyId(null); }
+  }
+  const copy = async code => {
+    try { await navigator.clipboard.writeText(code); } catch { /* clipboard unavailable */ }
+    setCopied(code); setTimeout(() => setCopied(c => (c === code ? null : c)), 1300);
+  };
+  function exportCSV() {
+    if (!shown.length) { dialog.alert("No projects to export."); return; }
+    const esc = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const head = ["Code", "Name", "Client", "Status", "Health", "Budget", "Received", "Balance", "Cost burned", "Burn %", "Invoiced", "Invoice outstanding", "Start", "End", "Days left"];
+    const csv = [head.join(","), ...shown.map(({ p, k, inv: iv }) => [esc(p.code), esc(p.name), esc(p.client), prjStatusMeta(p.status).label, k.health.label,
+      k.budget, k.received, k.balance, Math.round(k.burned), Math.round(k.burnPct * 10) / 10, iv.invoiced, iv.outstanding, prjDay(p.start_date), prjDay(p.end_date), k.daysLeft ?? ""].join(","))].join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a"); a.href = url; a.download = `projects_${isoDate(new Date())}.csv`;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  }
+
+  const Pill = ({ status }) => { const m = prjStatusMeta(status); return <span className="prj-pill" style={{ "--c": m.color }}><i />{m.label}</span>; };
+  const Health = ({ h }) => <span className="prj-health" style={{ "--c": h.color }}>{h.icon} {h.label}</span>;
+  const meter = (label, pct, color, marker) => (
+    <div className="prj-meter">
+      <div className="prj-meter-top"><span>{label}</span><b style={{ color }}>{prjPct(pct)}</b></div>
+      <div className="prj-meter-track">
+        <div style={{ width: `${Math.min(100, pct)}%`, background: color }} />
+        {marker != null && <em style={{ left: `${marker}%` }} title={`Time elapsed: ${Math.round(marker)}%`} />}
+      </div>
+    </div>
+  );
+  const burnColor = k => k.burnPct > 100 ? C.red : k.burnPct > 85 ? C.amber : C.accent;
+  const collColor = k => k.collPct >= 100 ? C.green : k.collPct > 50 ? C.accent : C.amber;
+  const statusActions = p => {
+    if (readOnly) return [];
+    const b = [];
+    if (p.status !== "active") b.push(["active", "▶ Reactivate"]);
+    if (p.status === "active") b.push(["on-hold", "⏸ Put on hold"]);
+    if (p.status === "active" || p.status === "on-hold") b.push(["completed", "🏁 Mark completed"]);
+    if (p.status !== "closed") b.push(["closed", "🔒 Close project"]);
+    return b;
+  };
+
+  const renderCard = ({ p, k, inv: iv }) => {
+    const dl = prjDaysLabel(k.daysLeft);
+    return (
+      <article key={p.id} className={`prj-card${k.attention ? " attn" : ""}`} style={{ "--hc": k.health.color }}>
+        <div className="prj-card-top">
+          <button className="prj-code" onClick={() => copy(p.code)} title="Copy project code">{copied === p.code ? "✓ Copied" : p.code}</button>
+          <Pill status={p.status} />
+          <span className="prj-spacer" />
+          {!readOnly && <button className="prj-icon-btn" onClick={() => setModal(p)} aria-label={`Edit ${p.name}`} title="Edit">✎</button>}
+        </div>
+        <button className="prj-card-main" onClick={() => setDetailId(p.id)} aria-label={`Open ${p.name} details`}>
+          <div className="prj-name">{p.name}</div>
+          <div className="prj-client">{p.client ? <>🏢 {p.client}</> : <span style={{ opacity: .6 }}>No client</span>}</div>
+          <div className="prj-tags">
+            <Health h={k.health} />
+            {dl && k.live && <span className={`prj-tag${k.daysLeft < 0 ? " bad" : k.daysLeft <= 14 ? " warn" : ""}`}>⏳ {dl}</span>}
+            {iv.overdue > 0 && <span className="prj-tag bad">🧾 {iv.overdue} overdue invoice{iv.overdue === 1 ? "" : "s"}</span>}
+          </div>
+          <div className="prj-money">
+            <div><span>Budget</span><b>{fmt$(k.budget)}</b></div>
+            <div><span>Received</span><b style={{ color: C.green }}>{fmt$(k.received)}</b></div>
+            <div><span>{k.balance < 0 ? "Over-received" : "Balance"}</span><b style={{ color: k.balance < 0 ? C.red : k.balance === 0 ? C.green : C.amber }}>{fmt$(Math.abs(k.balance))}</b></div>
+            <div><span>Cost burned</span><b style={{ color: burnColor(k) }}>{fmt$(k.burned)}</b></div>
+          </div>
+          {meter("Budget burned", k.burnPct, burnColor(k), k.live ? k.timePct : null)}
+          {meter("Collected", k.collPct, collColor(k))}
+        </button>
+        <div className="prj-card-foot">
+          <span>📅 {p.start_date ? fmtD(p.start_date) : "No start"} → {p.end_date ? fmtD(p.end_date) : "No end"}</span>
+          <span className="prj-foot-meta">
+            <span title="Assigned people">👥 {(p.assigned_employees || []).length}{(p.assigned_groups || []).length ? ` +${p.assigned_groups.length}g` : ""}</span>
+            <span title="Invoices">🧾 {iv.count}</span>
+          </span>
+        </div>
+      </article>
+    );
+  };
+
+  const renderList = () => (
+    <div className="prj-card prj-table">
+      <div className="prj-trow head">{["Project", "Status", "Budget", "Received", "Burned", "Timeline", ""].map((h, i) => <div key={i}>{h}</div>)}</div>
+      {shown.map(({ p, k }) => (
+        <div key={p.id} className="prj-trow" style={{ "--hc": k.health.color }} onClick={() => setDetailId(p.id)} role="button" tabIndex={0} onKeyDown={e => e.key === "Enter" && setDetailId(p.id)}>
+          <div className="prj-tproj">
+            <span className="prj-code sm">{p.code}</span>
+            <b>{p.name}</b>
+            <small>{p.client || "No client"}</small>
+          </div>
+          <div className="prj-tstat"><Pill status={p.status} /><Health h={k.health} /></div>
+          <div className="prj-tnum"><small>Budget</small>{fmt$(k.budget)}</div>
+          <div className="prj-tnum"><small>Received</small><span style={{ color: C.green }}>{fmt$(k.received)}</span><em>{prjPct(k.collPct)}</em></div>
+          <div className="prj-tnum"><small>Burned</small><span style={{ color: burnColor(k) }}>{fmt$(k.burned)}</span>
+            <div className="prj-mini"><i style={{ width: `${Math.min(100, k.burnPct)}%`, background: burnColor(k) }} /></div></div>
+          <div className="prj-tnum"><small>Ends</small>{p.end_date ? fmtD(p.end_date) : "—"}{k.live && prjDaysLabel(k.daysLeft) && <em style={{ color: k.daysLeft < 0 ? C.red : k.daysLeft <= 14 ? C.amber : undefined }}>{prjDaysLabel(k.daysLeft)}</em>}</div>
+          <div className="prj-tacts" onClick={e => e.stopPropagation()}>
+            {!readOnly && <button className="prj-icon-btn" onClick={() => setModal(p)} aria-label={`Edit ${p.name}`}>✎</button>}
+            <button className="prj-icon-btn" onClick={() => setDetailId(p.id)} aria-label={`Open ${p.name}`}>›</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  const renderDetail = () => {
+    const { p, k, inv: iv } = detail;
+    const invs = [...iv.list].sort((a, b) => prjDay(b.raised_date).localeCompare(prjDay(a.raised_date)));
+    return (
+      <div className="prd-backdrop" onMouseDown={() => setDetailId(null)}>
+        <aside className="prd" role="dialog" aria-modal="true" aria-label={`${p.name} details`} onMouseDown={e => e.stopPropagation()} onKeyDown={e => e.key === "Escape" && setDetailId(null)}>
+          <div className="prd-head" style={{ "--hc": k.health.color }}>
+            <div style={{ minWidth: 0 }}>
+              <div className="prj-card-top" style={{ marginBottom: 8 }}>
+                <button className="prj-code" onClick={() => copy(p.code)}>{copied === p.code ? "✓ Copied" : p.code}</button>
+                <Pill status={p.status} />
+              </div>
+              <div className="prd-title">{p.name}</div>
+              <div className="prj-client">{p.client ? `🏢 ${p.client}` : "No client"}</div>
+            </div>
+            <button className="prj-icon-btn" onClick={() => setDetailId(null)} aria-label="Close" autoFocus>✕</button>
+          </div>
+          <div className="prd-body">
+            <div className="prd-health" style={{ "--c": k.health.color }}>
+              <b>{k.health.icon} {k.health.label}</b>
+              <span>{k.health.k === "over" ? `Cost is ${fmt$(k.burned - k.budget)} over budget.`
+                : k.health.k === "overdue" ? `The end date passed ${-k.daysLeft} day${k.daysLeft === -1 ? "" : "s"} ago and it is still active.`
+                  : k.health.k === "risk" ? (k.timePct !== null ? `${prjPct(k.burnPct)} of budget used with ${Math.round(k.timePct)}% of the schedule elapsed.` : `${prjPct(k.burnPct)} of the budget is already used.`)
+                    : k.health.k === "ok" ? (k.timePct !== null ? `Spending (${prjPct(k.burnPct)}) is in line with time elapsed (${Math.round(k.timePct)}%).` : "Spending is within budget.")
+                      : k.health.k === "paused" ? "Work is on hold." : k.health.k === "done" ? "This project has been delivered." : "Not currently active."}</span>
+            </div>
+
+            <div className="prd-sec">Financials</div>
+            <div className="prd-grid">
+              {[["Budget", fmt$(k.budget), C.text], ["Received", fmt$(k.received), C.green], [k.balance < 0 ? "Over-received" : "Balance pending", fmt$(Math.abs(k.balance)), k.balance < 0 ? C.red : C.amber],
+                ["Cost burned", fmt$(k.burned), burnColor(k)], ["Budget left after cost", fmt$(k.margin), k.margin < 0 ? C.red : C.green], ["Collected", prjPct(k.collPct), collColor(k)]].map(([l, v, c]) => (
+                <div key={l} className="prd-stat"><span>{l}</span><b style={{ color: c }}>{v}</b></div>
+              ))}
+            </div>
+            {meter("Budget burned", k.burnPct, burnColor(k), k.live ? k.timePct : null)}
+            {k.live && k.timePct !== null && <div className="prd-note">The white marker shows how much of the schedule has elapsed.</div>}
+
+            <div className="prd-sec">Schedule</div>
+            <div className="prd-grid">
+              <div className="prd-stat"><span>Start</span><b>{p.start_date ? fmtD(p.start_date) : "—"}</b></div>
+              <div className="prd-stat"><span>End</span><b>{p.end_date ? fmtD(p.end_date) : "—"}</b></div>
+              <div className="prd-stat"><span>Duration</span><b>{k.durationDays ? `${k.durationDays} days` : "—"}</b></div>
+              <div className="prd-stat"><span>Remaining</span><b style={{ color: k.live && k.daysLeft !== null && k.daysLeft < 0 ? C.red : C.text }}>{k.daysLeft === null ? "—" : !k.live ? (k.daysLeft < 0 ? "Ended" : "Not running") : prjDaysLabel(k.daysLeft)}</b></div>
+              <div className="prd-stat"><span>People</span><b>{(p.assigned_employees || []).length}</b></div>
+              <div className="prd-stat"><span>Groups</span><b>{(p.assigned_groups || []).length}</b></div>
+            </div>
+            {k.timePct !== null && (
+              <div className="prj-meter-track" style={{ marginTop: 10 }} title={`${Math.round(k.timePct)}% of schedule elapsed`}>
+                <div style={{ width: `${k.timePct}%`, background: C.purple }} />
+              </div>
+            )}
+
+            <div className="prd-sec">Invoices <small>{iv.count} raised · {fmt$(iv.invoiced)}</small></div>
+            {invs.length === 0 ? <div className="prd-note">No invoices raised for this project yet.</div> : (
+              <>
+                <div className="prd-grid three">
+                  <div className="prd-stat"><span>Invoiced</span><b>{fmt$(iv.invoiced)}</b></div>
+                  <div className="prd-stat"><span>Collected</span><b style={{ color: C.green }}>{fmt$(iv.collected)}</b></div>
+                  <div className="prd-stat"><span>Outstanding</span><b style={{ color: iv.outstanding ? C.amber : C.green }}>{fmt$(iv.outstanding)}</b></div>
+                </div>
+                <div className="prd-invs">
+                  {invs.slice(0, 8).map(i => {
+                    const late = i.status !== "cleared" && i.payment_due_date && prjDay(i.payment_due_date) < isoDate(new Date());
+                    const c = i.status === "cleared" ? C.green : i.status === "partial" ? "#f97316" : late ? C.red : C.amber;
+                    return (
+                      <div key={i.id} className="prd-inv">
+                        <div style={{ minWidth: 0 }}><b>{i.invoice_number || `#${i.id}`}</b><small>Raised {i.raised_date ? fmtD(i.raised_date) : "—"}{i.payment_due_date ? ` · due ${fmtD(i.payment_due_date)}` : ""}</small></div>
+                        <div style={{ textAlign: "right" }}><b>{fmt$(i.amount)}</b><span className="prj-pill" style={{ "--c": c }}><i />{late ? "Overdue" : i.status}</span></div>
+                      </div>
+                    );
+                  })}
+                  {invs.length > 8 && <div className="prd-note">+{invs.length - 8} more in Client Budgets & Invoiced</div>}
+                </div>
+              </>
+            )}
+          </div>
+          {!readOnly && (
+            <div className="prd-foot">
+              {statusActions(p).map(([s, l]) => (
+                <button key={s} className="prj-btn prj-btn-ghost sm" disabled={busyId === p.id} onClick={() => setStatus(p, s)}>{l}</button>
+              ))}
+              <span className="prj-spacer" />
+              <button className="prj-btn prj-btn-primary sm" onClick={() => setModal(p)}>✎ Edit project</button>
+            </div>
+          )}
+        </aside>
+      </div>
+    );
+  };
+
+  const chips = [
+    ["all", "All", rows.length, C.accent],
+    ["attention", "Needs attention", attentionCount, C.red],
+    ...PRJ_STATUSES.map(s => [s, prjStatusMeta(s).label, counts[s] || 0, prjStatusMeta(s).color]).filter(c => c[2] > 0),
+  ];
 
   return (
     <>
       <style>{`
-        .prj-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 20px; }
-        .prj-card {
-          background: ${C.card}; border: 1px solid ${C.border}; border-radius: 16px;
-          display: flex; flex-direction: column; gap: 0; overflow: hidden;
-          transition: transform .2s, box-shadow .2s;
+        .prj { container-type: inline-size; container-name: prj; }
+        .prj-wrap { display: flex; flex-direction: column; gap: 16px; }
+        .prj-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 10px 16px; border-radius: 12px; font-size: 13px; font-weight: 700; cursor: pointer; border: 1px solid transparent; font-family: inherit; transition: transform .15s, opacity .15s, border-color .15s; white-space: nowrap; }
+        .prj-btn:hover:not(:disabled) { transform: translateY(-1px); }
+        .prj-btn:disabled { opacity: .5; cursor: not-allowed; }
+        .prj-btn.sm { padding: 7px 12px; font-size: 12.5px; border-radius: 10px; }
+        .prj-btn-primary { background: ${C.accent}; color: #fff; box-shadow: 0 8px 22px ${C.accent}40; }
+        .prj-btn-ghost { background: ${C.surface}; color: ${C.text}; border-color: ${C.border}; }
+        .prj-btn-ghost:hover:not(:disabled) { border-color: ${C.accent}77; }
+        .prj-icon-btn { width: 34px; height: 34px; border-radius: 10px; border: 1px solid ${C.border}; background: ${C.surface}; color: ${C.textDim}; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; font-family: inherit; flex-shrink: 0; }
+        .prj-icon-btn:hover { color: ${C.accent}; border-color: ${C.accent}77; }
+        .prj button:focus-visible, .prd button:focus-visible, .prm button:focus-visible, .prj-trow:focus-visible { outline: 2px solid ${C.accent}; outline-offset: 2px; }
+        .prj-spacer { flex: 1; }
+
+        .prj-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+        .prj-title { margin: 0; font-size: clamp(20px, 2.2vw, 24px); font-weight: 800; color: ${C.text}; letter-spacing: -.4px; }
+        .prj-subtitle { margin: 4px 0 0; color: ${C.textMuted}; font-size: 13px; }
+
+        .prj-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+        .prj-kpi { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 16px; padding: 14px 16px; min-width: 0; position: relative; overflow: hidden; }
+        .prj-kpi::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--c); }
+        .prj-kpi span { font-size: 11.5px; color: ${C.textMuted}; font-weight: 700; display: block; }
+        .prj-kpi b { display: block; font-size: 20px; font-weight: 800; color: ${C.text}; margin-top: 6px; letter-spacing: -.4px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .prj-kpi small { display: block; font-size: 11.5px; color: ${C.textMuted}; margin-top: 3px; font-weight: 600; }
+        .prj-kpi.click { cursor: pointer; font-family: inherit; text-align: left; }
+        .prj-kpi.click:hover { border-color: color-mix(in srgb, var(--c) 55%, ${C.border}); }
+
+        .prj-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .prj-search { flex: 1 1 240px; min-width: 0; background: ${C.surface}; border: 1px solid ${C.border}; border-radius: 12px; color: ${C.text}; padding: 10px 14px; font-size: 13px; outline: none; font-family: inherit; }
+        .prj-search:focus, .prj-select:focus { border-color: ${C.accent}; }
+        .prj-select { background-color: ${C.surface}; border: 1px solid ${C.border}; border-radius: 12px; color: ${C.text}; padding: 10px 12px; font-size: 13px; outline: none; font-family: inherit; }
+        .prj-seg { display: inline-flex; background: ${C.surface}; border: 1px solid ${C.border}; border-radius: 12px; padding: 3px; }
+        .prj-seg button { background: transparent; border: 1px solid transparent; color: ${C.textMuted}; border-radius: 9px; padding: 6px 12px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
+        .prj-seg button.on { background: ${C.card}; color: ${C.text}; border-color: ${C.border}; }
+        .prj-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+        .prj-chip { --c: ${C.accent}; display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 999px; border: 1px solid ${C.border}; background: ${C.surface}; color: ${C.textDim}; font-size: 12.5px; font-weight: 700; cursor: pointer; font-family: inherit; flex-shrink: 0; }
+        .prj-chip i { width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
+        .prj-chip b { font-size: 11.5px; padding: 1px 7px; border-radius: 999px; background: ${C.border}; color: ${C.text}; }
+        .prj-chip.on { border-color: var(--c); color: ${C.text}; background: color-mix(in srgb, var(--c) 14%, ${C.surface}); }
+        .prj-chip.on b { background: var(--c); color: #fff; }
+
+        .prj-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+        .prj-card { background: ${C.card}; border: 1px solid ${C.border}; border-radius: 20px; display: flex; flex-direction: column; min-width: 0; overflow: hidden; transition: transform .18s, box-shadow .18s, border-color .18s; }
+        .prj-grid .prj-card:hover { transform: translateY(-2px); box-shadow: 0 16px 40px -18px rgba(0,0,0,.7); border-color: color-mix(in srgb, var(--hc) 40%, ${C.border}); }
+        .prj-card.attn { border-color: color-mix(in srgb, var(--hc) 45%, ${C.border}); }
+        .prj-card-top { display: flex; align-items: center; gap: 8px; padding: 16px 18px 0; }
+        .prd .prj-card-top { padding: 0; }
+        .prj-code { font-size: 11px; font-weight: 800; color: ${C.accent}; letter-spacing: .6px; background: ${C.accent}18; border: 1px solid ${C.accent}33; padding: 4px 9px; border-radius: 8px; cursor: pointer; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; }
+        .prj-code.sm { padding: 2px 7px; font-size: 10.5px; cursor: default; display: inline-block; align-self: flex-start; width: fit-content; }
+        .prj-code:hover { border-color: ${C.accent}; }
+        .prj-pill { --c: ${C.textMuted}; display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 800; padding: 3px 9px; border-radius: 999px; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); border: 1px solid color-mix(in srgb, var(--c) 30%, transparent); white-space: nowrap; text-transform: capitalize; }
+        .prj-pill i { width: 6px; height: 6px; border-radius: 50%; background: var(--c); }
+        .prj-health { --c: ${C.green}; font-size: 11.5px; font-weight: 800; color: var(--c); padding: 3px 9px; border-radius: 8px; background: color-mix(in srgb, var(--c) 12%, transparent); white-space: nowrap; }
+        .prj-card-main { all: unset; box-sizing: border-box; cursor: pointer; display: flex; flex-direction: column; gap: 12px; padding: 12px 18px 16px; flex: 1; min-width: 0; }
+        .prj-name { font-size: 17px; font-weight: 800; color: ${C.text}; line-height: 1.25; letter-spacing: -.2px; overflow-wrap: anywhere; }
+        .prj-client { font-size: 12.5px; color: ${C.textMuted}; margin-top: -8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .prj-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+        .prj-tag { font-size: 11.5px; font-weight: 700; color: ${C.textDim}; padding: 3px 9px; border-radius: 8px; background: ${C.surface}; border: 1px solid ${C.border}; white-space: nowrap; }
+        .prj-tag.warn { color: ${C.amber}; border-color: ${C.amber}44; background: ${C.amber}12; }
+        .prj-tag.bad { color: ${C.red}; border-color: ${C.red}44; background: ${C.red}12; }
+        .prj-money { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .prj-money div { background: ${C.surface}; border: 1px solid ${C.border}66; border-radius: 12px; padding: 10px 12px; min-width: 0; }
+        .prj-money span { font-size: 11px; color: ${C.textMuted}; font-weight: 700; display: block; }
+        .prj-money b { display: block; font-size: 15.5px; font-weight: 800; color: ${C.text}; margin-top: 3px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .prj-meter-top { display: flex; justify-content: space-between; font-size: 11.5px; font-weight: 700; color: ${C.textMuted}; margin-bottom: 6px; }
+        .prj-meter-track { position: relative; height: 8px; border-radius: 6px; background: ${C.border}; }
+        .prj-meter-track div { height: 100%; border-radius: 6px; transition: width .5s ease; }
+        .prj-meter-track em { position: absolute; top: -3px; width: 3px; height: 14px; border-radius: 2px; background: ${C.text}; transform: translateX(-50%); box-shadow: 0 0 0 2px ${C.card}; }
+        .prj-card-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 11px 18px; border-top: 1px solid ${C.border}; font-size: 11.5px; color: ${C.textMuted}; font-weight: 600; flex-wrap: wrap; }
+        .prj-foot-meta { display: inline-flex; gap: 12px; }
+        .prj-empty { padding: 48px 20px; text-align: center; color: ${C.textMuted}; font-size: 13.5px; background: ${C.card}; border: 1px dashed ${C.border}; border-radius: 20px; }
+        .prj-empty div { font-size: 32px; margin-bottom: 8px; }
+
+        /* List view */
+        .prj-table { border-radius: 18px; }
+        .prj-trow { display: grid; grid-template-columns: minmax(200px, 2fr) minmax(150px, 1.2fr) repeat(4, minmax(100px, 1fr)) 84px; gap: 12px; align-items: center; padding: 12px 18px; border-bottom: 1px solid ${C.border}44; border-left: 3px solid var(--hc, transparent); cursor: pointer; font-size: 13px; color: ${C.text}; }
+        .prj-trow:last-child { border-bottom: none; }
+        .prj-trow:not(.head):hover { background: ${C.accentGlow}; }
+        .prj-trow.head { cursor: default; background: ${C.surface}; font-size: 11px; font-weight: 800; color: ${C.textMuted}; letter-spacing: .5px; text-transform: uppercase; padding: 9px 18px; border-left-color: transparent; }
+        .prj-tproj { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+        .prj-tproj b { font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .prj-tproj small, .prj-tnum em { font-size: 11.5px; color: ${C.textMuted}; font-style: normal; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .prj-tstat { display: flex; flex-direction: column; gap: 5px; align-items: flex-start; }
+        .prj-tnum { display: flex; flex-direction: column; gap: 2px; font-weight: 800; font-variant-numeric: tabular-nums; min-width: 0; }
+        .prj-tnum small { display: none; font-size: 10.5px; color: ${C.textMuted}; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; }
+        .prj-mini { height: 4px; border-radius: 4px; background: ${C.border}; overflow: hidden; margin-top: 3px; }
+        .prj-mini i { display: block; height: 100%; }
+        .prj-tacts { display: flex; gap: 6px; justify-content: flex-end; }
+
+        /* Detail drawer */
+        .prd-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); backdrop-filter: blur(3px); z-index: 1000; display: flex; justify-content: flex-end; }
+        .prd { width: min(520px, 100%); height: 100%; background: ${C.card}; border-left: 1px solid ${C.border}; display: flex; flex-direction: column; box-shadow: -30px 0 80px rgba(0,0,0,.5); animation: prdIn .22s ease-out; }
+        @keyframes prdIn { from { transform: translateX(40px); opacity: 0; } }
+        .prd-head { display: flex; justify-content: space-between; gap: 12px; padding: 20px 22px 16px; border-bottom: 1px solid ${C.border}; background: linear-gradient(180deg, color-mix(in srgb, var(--hc) 10%, transparent), transparent); }
+        .prd-title { font-size: 20px; font-weight: 800; color: ${C.text}; letter-spacing: -.3px; overflow-wrap: anywhere; margin-bottom: 10px; }
+        .prd .prj-client { margin-top: 0; }
+        .prd-body { flex: 1; overflow-y: auto; padding: 18px 22px 24px; display: flex; flex-direction: column; gap: 12px; }
+        .prd-health { --c: ${C.green}; border: 1px solid color-mix(in srgb, var(--c) 35%, transparent); background: color-mix(in srgb, var(--c) 10%, transparent); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px; }
+        .prd-health b { color: var(--c); font-size: 14px; }
+        .prd-health span { color: ${C.textDim}; font-size: 12.5px; }
+        .prd-sec { font-size: 12px; font-weight: 800; color: ${C.textMuted}; text-transform: uppercase; letter-spacing: .6px; margin-top: 8px; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+        .prd-sec small { text-transform: none; letter-spacing: 0; font-weight: 600; }
+        .prd-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+        .prd-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .prd-stat { background: ${C.surface}; border: 1px solid ${C.border}66; border-radius: 12px; padding: 10px 12px; min-width: 0; }
+        .prd-stat span { font-size: 11px; color: ${C.textMuted}; font-weight: 700; display: block; }
+        .prd-stat b { display: block; font-size: 14.5px; font-weight: 800; color: ${C.text}; margin-top: 3px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .prd-note { font-size: 12px; color: ${C.textMuted}; }
+        .prd-invs { display: flex; flex-direction: column; gap: 6px; }
+        .prd-inv { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 12px; background: ${C.surface}; border: 1px solid ${C.border}66; }
+        .prd-inv b { display: block; font-size: 13px; color: ${C.text}; font-variant-numeric: tabular-nums; }
+        .prd-inv small { display: block; font-size: 11.5px; color: ${C.textMuted}; margin-top: 2px; }
+        .prd-inv .prj-pill { margin-top: 4px; }
+        .prd-foot { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 14px 22px; border-top: 1px solid ${C.border}; background: ${C.surface}; }
+
+        /* Modal */
+        .prm-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.66); backdrop-filter: blur(3px); z-index: 1001; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .prm { width: 100%; max-width: 580px; max-height: min(92vh, 860px); display: flex; flex-direction: column; background: ${C.card}; border: 1px solid ${C.border}; border-radius: 22px; box-shadow: 0 30px 80px rgba(0,0,0,.6); overflow: hidden; animation: prmIn .18s ease-out; }
+        @keyframes prmIn { from { transform: translateY(12px); opacity: 0; } }
+        .prm-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 20px 22px 14px; border-bottom: 1px solid ${C.border}; }
+        .prm-title { font-size: 18px; font-weight: 800; color: ${C.text}; }
+        .prm-sub { font-size: 12.5px; color: ${C.textMuted}; margin-top: 4px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .prm-body { padding: 18px 22px; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .prm-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+        .prm-field.full, .prm-body .full { grid-column: 1 / -1; }
+        .prm-lbl { font-size: 12.5px; font-weight: 800; color: ${C.textDim}; }
+        .prm-input { width: 100%; box-sizing: border-box; background: ${C.surface}; border: 1px solid ${C.border}; border-radius: 12px; color: ${C.text}; padding: 10px 12px; font-size: 14px; font-family: inherit; outline: none; }
+        .prm-input:focus { border-color: ${C.accent}; box-shadow: 0 0 0 3px ${C.accentGlow}; }
+        .prm-input.err { border-color: ${C.red}; }
+        .prm-err { font-size: 12px; color: ${C.red}; font-weight: 600; }
+        .prm-hint { font-size: 12px; color: ${C.textMuted}; font-weight: 600; margin-top: -4px; }
+        .prm-preview { --c: ${C.amber}; border: 1px solid color-mix(in srgb, var(--c) 35%, ${C.border}); background: color-mix(in srgb, var(--c) 8%, ${C.surface}); border-radius: 12px; padding: 10px 14px; }
+        .prm-preview > div:first-child { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; color: ${C.textMuted}; font-weight: 700; flex-wrap: wrap; }
+        .prm-preview b { color: var(--c); font-size: 14.5px; }
+        .prm-preview-bar { height: 5px; border-radius: 4px; background: ${C.border}; margin-top: 8px; overflow: hidden; }
+        .prm-preview-bar i { display: block; height: 100%; background: ${C.green}; transition: width .3s; }
+        .prm-seg { display: flex; gap: 6px; flex-wrap: wrap; }
+        .prm-seg button { --c: ${C.accent}; display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px; border: 1px solid ${C.border}; background: ${C.surface}; color: ${C.textDim}; font-size: 12.5px; font-weight: 700; cursor: pointer; font-family: inherit; }
+        .prm-seg button i { width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
+        .prm-seg button.on { border-color: var(--c); color: ${C.text}; background: color-mix(in srgb, var(--c) 16%, ${C.surface}); }
+        .prm-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 14px 22px; border-top: 1px solid ${C.border}; background: ${C.surface}; }
+        .prm-foot-acts { display: flex; gap: 8px; }
+        .prm-kbd { font-size: 11.5px; color: ${C.textMuted}; }
+
+        @container prj (max-width: 1100px) {
+          .prj-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+          .prj-trow { grid-template-columns: minmax(180px, 2fr) minmax(130px, 1.2fr) repeat(3, minmax(90px, 1fr)) 84px; }
+          .prj-trow > :nth-child(6) { display: none; }
         }
-        .prj-card:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(0,0,0,0.45); }
-        .prj-stat { background: ${C.surface}; border-radius: 10px; padding: 12px 14px; }
-        .prj-stat-label { font-size: 11px; color: ${C.textMuted}; font-weight: 600; letter-spacing: .4px; text-transform: uppercase; margin-bottom: 5px; }
-        .prj-stat-value { font-size: 15px; font-weight: 800; letter-spacing: -0.3px; }
-        .prj-bar-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
-        .prj-bar-label { font-size: 11px; color: ${C.textMuted}; font-weight: 600; letter-spacing: .4px; }
-        .prj-bar-pct { font-size: 11px; font-weight: 700; }
-        @media (max-width: 760px) { .prj-grid { grid-template-columns: 1fr; } }
+        @container prj (max-width: 760px) {
+          .prj-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+          .prj-kpi:last-child { grid-column: 1 / -1; }
+          .prj-grid { grid-template-columns: 1fr; }
+          .prj-trow.head { display: none; }
+          .prj-trow, .prj-trow > :nth-child(6) { display: grid; }
+          .prj-trow { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-areas: "proj proj act" "st st st" "a b c"; padding: 14px; gap: 10px; }
+          .prj-trow > :nth-child(1) { grid-area: proj; }
+          .prj-trow > :nth-child(2) { grid-area: st; flex-direction: row; flex-wrap: wrap; }
+          .prj-trow > :nth-child(3) { grid-area: a; }
+          .prj-trow > :nth-child(4) { grid-area: b; }
+          .prj-trow > :nth-child(5) { grid-area: c; }
+          .prj-trow > :nth-child(6) { display: none; }
+          .prj-trow > :nth-child(7) { grid-area: act; align-self: start; }
+          .prj-tnum small { display: block; }
+        }
+        @container prj (max-width: 560px) {
+          .prj-header > div:last-child { width: 100%; }
+          .prj-header > div:last-child .prj-btn { flex: 1; }
+          .prj-toolbar > * { flex: 1 1 auto; }
+          .prj-search { flex: 1 1 100%; }
+          .prj-chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -2px; padding: 0 2px; }
+          .prj-kpi b { font-size: 17px; }
+          .prj-card-top { padding: 14px 14px 0; }
+          .prj-card-main { padding: 10px 14px 14px; }
+          .prj-card-foot { padding: 10px 14px; }
+          .prj-money b { font-size: 14px; }
+        }
+        @media (max-width: 640px) {
+          .prd-backdrop { align-items: flex-end; }
+          .prd { width: 100%; height: auto; max-height: 92vh; border-left: none; border-top: 1px solid ${C.border}; border-radius: 22px 22px 0 0; animation: prdUp .22s ease-out; }
+          @keyframes prdUp { from { transform: translateY(40px); opacity: 0; } }
+          .prd-head, .prd-body, .prd-foot { padding-left: 16px; padding-right: 16px; }
+          .prd-grid.three { grid-template-columns: 1fr 1fr; }
+          .prd-foot .prj-btn { flex: 1 1 auto; }
+          .prm-backdrop { align-items: flex-end; padding: 0; }
+          .prm { max-width: none; border-radius: 22px 22px 0 0; max-height: 94vh; }
+          .prm-head, .prm-body, .prm-foot { padding-left: 16px; padding-right: 16px; }
+          .prm-body { grid-template-columns: 1fr; }
+          .prm-kbd { display: none; }
+          .prm-foot-acts { flex: 1; }
+          .prm-foot-acts .prj-btn { flex: 1; }
+        }
       `}</style>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-        {/* Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: -0.5 }}>Projects</h2>
-            <p style={{ margin: "5px 0 0", color: C.textMuted, fontSize: 13 }}>
-              Manage project codes, budgets & receivables &nbsp;·&nbsp; {projects.length} total
-            </p>
+      <div className="prj">
+        <div className="prj-wrap">
+          <div className="prj-header">
+            <div>
+              <h3 className="prj-title">Projects</h3>
+              <p className="prj-subtitle">Budgets, spend and collections for every project · {rows.length} total</p>
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button className="prj-btn prj-btn-ghost" onClick={exportCSV}>📥 Export</button>
+              {!readOnly && <button className="prj-btn prj-btn-primary" onClick={() => setModal({})}>＋ New project</button>}
+            </div>
           </div>
-          {!readOnly && <Btn onClick={() => setModal("new")}>+ New Project</Btn>}
+
+          <div className="prj-kpis">
+            <div className="prj-kpi" style={{ "--c": C.accent }}><span>Open budget</span><b>{fmt$(tBudget)}</b><small>{open.length} open project{open.length === 1 ? "" : "s"}</small></div>
+            <div className="prj-kpi" style={{ "--c": C.green }}><span>Received</span><b>{fmt$(tReceived)}</b><small>{tBudget ? prjPct((tReceived / tBudget) * 100) : "0%"} of budget</small></div>
+            <div className="prj-kpi" style={{ "--c": C.amber }}><span>Balance pending</span><b>{fmt$(tBalance)}</b><small>Still to collect</small></div>
+            <div className="prj-kpi" style={{ "--c": C.purple }}><span>Cost burned</span><b>{fmt$(tBurned)}</b><small>{tBudget ? prjPct((tBurned / tBudget) * 100) : "0%"} of budget · approved hours</small></div>
+            <button className="prj-kpi click" style={{ "--c": attentionCount ? C.red : C.green }} onClick={() => setFStatus(attentionCount ? "attention" : "all")}>
+              <span>Needs attention</span><b style={{ color: attentionCount ? C.red : C.green }}>{attentionCount}</b><small>{attentionCount ? "Over budget, at risk or late →" : "Everything on track"}</small>
+            </button>
+          </div>
+
+          <div className="prj-toolbar">
+            <input className="prj-search" placeholder="Search name, code or client…" value={q} onChange={e => setQ(e.target.value)} aria-label="Search projects" />
+            <select className="prj-select" value={sort} onChange={e => setSort(e.target.value)} aria-label="Sort projects">
+              <option value="recent">Newest first</option>
+              <option value="name">Name A–Z</option>
+              <option value="budget">Largest budget</option>
+              <option value="burn">Highest burn %</option>
+              <option value="balance">Most pending</option>
+              <option value="end">Ending soonest</option>
+            </select>
+            <div className="prj-seg" role="tablist" aria-label="Layout">
+              <button role="tab" aria-selected={view === "grid"} className={view === "grid" ? "on" : ""} onClick={() => setView("grid")} title="Card view">▦ Cards</button>
+              <button role="tab" aria-selected={view === "list"} className={view === "list" ? "on" : ""} onClick={() => setView("list")} title="List view">☰ List</button>
+            </div>
+          </div>
+
+          <div className="prj-chips" role="tablist" aria-label="Filter projects">
+            {chips.map(([k, l, n, c]) => (
+              <button key={k} role="tab" aria-selected={fStatus === k} className={`prj-chip${fStatus === k ? " on" : ""}`} style={{ "--c": c }} onClick={() => setFStatus(k)}>
+                {k !== "all" && <i />}{l}<b>{n}</b>
+              </button>
+            ))}
+          </div>
+
+          {shown.length === 0 ? (
+            <div className="prj-empty">
+              <div>{rows.length ? "🔍" : "📁"}</div>
+              {rows.length ? "No projects match your filters." : "No projects yet."}
+              {!rows.length && !readOnly && <div style={{ marginTop: 14, fontSize: 13 }}><button className="prj-btn prj-btn-primary" onClick={() => setModal({})}>＋ Create the first project</button></div>}
+            </div>
+          ) : view === "list" ? renderList() : <div className="prj-grid">{shown.map(renderCard)}</div>}
         </div>
-
-        {/* Cards */}
-        <div className="prj-grid">
-          {projects.map(p => {
-            const burned = p.burned || 0;
-            const received = p.received_amount || 0;
-            const balance = p.budget - received;
-            const burnPct = p.budget ? ((burned / p.budget) * 100).toFixed(1) : 0;
-            const collPct = p.budget ? ((received / p.budget) * 100).toFixed(1) : 0;
-            const burnColor = +burnPct > 85 ? C.red : +burnPct > 65 ? C.amber : C.accent;
-            const balColor = balance < 0 ? C.red : balance === 0 ? C.green : C.amber;
-            const collColor = +collPct >= 100 ? C.green : +collPct > 50 ? C.accent : C.amber;
-
-            return (
-              <div key={p.id} className="prj-card">
-                {/* Card Header */}
-                <div style={{ padding: "18px 20px 16px", borderBottom: `1px solid ${C.border}` }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-                    <span style={{
-                      fontSize: 11, fontWeight: 700, color: C.accent, letterSpacing: .8,
-                      background: C.accent + "18", border: `1px solid ${C.accent}33`,
-                      padding: "3px 8px", borderRadius: 6,
-                    }}>{p.code}</span>
-                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                      <StatusBadge status={p.status} />
-                      {!readOnly && (
-                        <button onClick={() => setModal(p)} style={{
-                          background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8,
-                          color: C.textDim, cursor: "pointer", fontSize: 13, padding: "4px 10px",
-                          transition: "border-color .15s, color .15s",
-                        }}
-                          onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
-                          onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.textDim; }}
-                        >✏ Edit</button>
-                      )}
-                    </div>
-                  </div>
-                  <div style={{ fontSize: 17, fontWeight: 700, color: C.text, lineHeight: 1.3 }}>{p.name}</div>
-                  {p.client && (
-                    <div style={{ fontSize: 12, color: C.textMuted, marginTop: 4, display: "flex", alignItems: "center", gap: 5 }}>
-                      <span style={{ fontSize: 10 }}>🏢</span>{p.client}
-                    </div>
-                  )}
-                </div>
-
-                {/* Stats Grid */}
-                <div style={{ padding: "16px 20px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                  <div className="prj-stat">
-                    <div className="prj-stat-label">Budget</div>
-                    <div className="prj-stat-value" style={{ color: C.text }}>{fmt$(p.budget)}</div>
-                  </div>
-                  <div className="prj-stat">
-                    <div className="prj-stat-label">Received</div>
-                    <div className="prj-stat-value" style={{ color: C.green }}>{fmt$(received)}</div>
-                  </div>
-                  <div className="prj-stat">
-                    <div className="prj-stat-label">Balance Pending</div>
-                    <div className="prj-stat-value" style={{ color: balColor }}>{fmt$(Math.abs(balance))}{balance < 0 && <span style={{ fontSize: 10, marginLeft: 4 }}>over</span>}</div>
-                  </div>
-                  <div className="prj-stat">
-                    <div className="prj-stat-label">Cost Burned</div>
-                    <div className="prj-stat-value" style={{ color: burnColor }}>{fmt$(burned)}</div>
-                  </div>
-                </div>
-
-                {/* Progress Bars */}
-                <div style={{ padding: "0 20px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
-                  <div>
-                    <div className="prj-bar-row">
-                      <span className="prj-bar-label">Burn Rate</span>
-                      <span className="prj-bar-pct" style={{ color: burnColor }}>{burnPct}%</span>
-                    </div>
-                    <ProgressBar value={burned} max={p.budget} />
-                  </div>
-                  <div>
-                    <div className="prj-bar-row">
-                      <span className="prj-bar-label">Collection Rate</span>
-                      <span className="prj-bar-pct" style={{ color: collColor }}>{collPct}%</span>
-                    </div>
-                    <ProgressBar value={received} max={p.budget} color={collColor} />
-                  </div>
-                </div>
-
-                {/* Footer — dates */}
-                <div style={{
-                  padding: "10px 20px", borderTop: `1px solid ${C.border}`,
-                  display: "flex", justifyContent: "space-between", alignItems: "center",
-                  fontSize: 11, color: C.textMuted,
-                }}>
-                  <span>📅 {fmtD(p.start_date)}</span>
-                  <span style={{ color: C.border }}>→</span>
-                  <span>{fmtD(p.end_date)}</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Modal */}
-        {modal && (
-          <Modal title={modal === "new" ? "New Project" : "Edit Project"} onClose={() => setModal(false)}>
-            <ProjectForm
-              init={modal === "new"
-                ? { name: "", client: "", budget: "", receivedAmount: "0", startDate: "", endDate: "", status: "active" }
-                : { name: modal.name, client: modal.client || "", budget: modal.budget, receivedAmount: modal.received_amount || 0, startDate: modal.start_date?.slice(0, 10) || "", endDate: modal.end_date?.slice(0, 10) || "", status: modal.status }}
-              saving={saving}
-              onCancel={() => setModal(false)}
-              onSave={async (form) => {
-                setSaving(true);
-                try {
-                  if (modal === "new") await api.createProject({ ...form, budget: +form.budget, receivedAmount: +form.receivedAmount, assignedGroups: [], assignedEmployees: [] });
-                  else await api.updateProject(modal.id, { ...form, budget: +form.budget, receivedAmount: +form.receivedAmount });
-                  setModal(false); await load();
-                } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setSaving(false); }
-              }}
-            />
-          </Modal>
-        )}
       </div>
+
+      {detail && renderDetail()}
+      {modal && <PrjModal key={modal.id || "new"} init={modal} clients={clients} onClose={() => setModal(null)} onSave={saveProject} />}
     </>
-  );
-}
-
-function ProjectForm({ init, saving, onCancel, onSave }) {
-  const [form, setForm] = useState(init);
-  const balance = (+form.budget || 0) - (+form.receivedAmount || 0);
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <Inp label="Project Name" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} required placeholder="e.g. Cloud Migration" />
-      <Inp label="Client Name" value={form.client} onChange={v => setForm(f => ({ ...f, client: v }))} />
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <Inp label="Budget (INR)" type="number" value={form.budget} onChange={v => setForm(f => ({ ...f, budget: v }))} required />
-        <Inp label="Received Amount (INR)" type="number" value={form.receivedAmount} onChange={v => setForm(f => ({ ...f, receivedAmount: v }))} />
-      </div>
-      {/* Live balance preview */}
-      <div style={{
-        background: C.surface, border: `1px solid ${balance < 0 ? C.red : balance === 0 ? C.green : C.amber}44`,
-        borderRadius: 8, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center",
-      }}>
-        <span style={{ fontSize: 12, color: C.textMuted, fontWeight: 600 }}>Balance Pending</span>
-        <span style={{ fontSize: 15, fontWeight: 800, color: balance < 0 ? C.red : balance === 0 ? C.green : C.amber }}>
-          {fmt$(Math.abs(balance))}{balance < 0 ? " (over-received)" : balance === 0 ? " (fully paid)" : ""}
-        </span>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <Inp label="Start Date" type="date" value={form.startDate} onChange={v => setForm(f => ({ ...f, startDate: v }))} />
-        <Inp label="End Date" type="date" value={form.endDate} onChange={v => setForm(f => ({ ...f, endDate: v }))} />
-      </div>
-      <Inp label="Status" value={form.status} onChange={v => setForm(f => ({ ...f, status: v }))}
-        options={[{ value: "active", label: "Active" }, { value: "on-hold", label: "On Hold" }, { value: "inactive", label: "Inactive" }, { value: "completed", label: "Completed" }, { value: "closed", label: "Closed" }]} />
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-        <Btn variant="ghost" onClick={onCancel}>Cancel</Btn>
-        <Btn onClick={() => onSave(form)} disabled={saving}>{saving ? "Saving…" : init.name ? "Save Changes" : "Create Project"}</Btn>
-      </div>
-    </div>
   );
 }
 
@@ -3866,14 +4938,23 @@ function Timesheets({ currentUser, viewOnly }) {
   const [filterEmp, setFilterEmp] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [search, setSearch] = useState("");
+  const [team, setTeam] = useState({ employees: [], leaves: [], accounts: null });
+  const [subFilter, setSubFilter] = useState("all");
+  const [subSearch, setSubSearch] = useState("");
 
   const load = async (silent) => {
     silent ? setRefreshing(true) : setLoading(true);
     setErr("");
     try {
       const params = {}; if (viewOnly) params.employee_id = currentUser.employee_id;
-      const [ts, pr] = await Promise.all([api.getTimesheets(params), api.getProjects()]);
+      const [ts, pr, em, lv, ac] = await Promise.all([
+        api.getTimesheets(params), api.getProjects(),
+        viewOnly ? null : api.getEmployees().catch(() => []),
+        viewOnly ? null : api.getLeaves({ status: "approved" }).catch(() => []),
+        viewOnly || currentUser.role !== "admin" ? null : api.getAccounts().catch(() => null),
+      ]);
       setRows(ts || []); setProjects(pr || []);
+      if (!viewOnly) setTeam({ employees: em || [], leaves: lv || [], accounts: ac });
     } catch (e) { setErr(e.message); } finally { setLoading(false); setRefreshing(false); }
   };
   useEffect(() => { load(); }, []);
@@ -3994,6 +5075,96 @@ function Timesheets({ currentUser, viewOnly }) {
     return true;
   }).sort((a, b) => tsDay(a).localeCompare(tsDay(b)) || String(a.employee_name).localeCompare(String(b.employee_name)));
   const approvable = listRows.filter(r => r.status === "pending" && !isMine(r));
+
+  // ── team submission status (admin / manager) ──
+  const subRoster = viewOnly ? [] : (() => {
+    const inactive = new Set(), activeAcc = new Set();
+    (team.accounts || []).forEach(a => (a.active ? activeAcc : inactive).add(a.employee_id));
+    return team.employees.filter(e =>
+      e.id !== currentUser.employee_id &&
+      (currentUser.role === "admin" || e.manager_id === currentUser.employee_id) &&
+      !(inactive.has(e.id) && !activeAcc.has(e.id)) &&
+      !(e.joining_date && String(e.joining_date).slice(0, 10) > wEnd)
+    ).map(e => {
+      const mine = weekRows.filter(r => r.employee_id === e.id);
+      const hrs = {}; mine.forEach(r => { const d = tsDay(r); hrs[d] = (hrs[d] || 0) + (+r.hours || 0); });
+      const leaveDays = {};
+      team.leaves.filter(l => l.employee_id === e.id && (l.status || "approved") === "approved").forEach(l => {
+        weekDays.slice(0, 5).forEach(d => {
+          const iso = isoDate(d);
+          if (iso >= String(l.start_date).slice(0, 10) && iso <= String(l.end_date).slice(0, 10)) leaveDays[iso] = l.is_half_day ? 0.5 : 1;
+        });
+      });
+      const leaveTotal = Object.values(leaveDays).reduce((a, b) => a + b, 0);
+      const expected = Math.max(0, (5 - leaveTotal) * TS_DAY_TARGET);
+      const total = sumH(mine);
+      const n = k => mine.filter(r => r.status === k).length;
+      const pending = mine.filter(r => r.status === "pending");
+      const status = !mine.length ? (leaveTotal >= 5 ? "leave" : "missing")
+        : n("rejected") ? "rejected" : pending.length ? "pending" : "approved";
+      return { e, hrs, leaveDays, leaveTotal, expected, total, pending, status, short: mine.length > 0 && total < expected && todayIso > isoDate(weekDays[4]) };
+    }).sort((a, b) => {
+      const order = { missing: 0, rejected: 1, pending: 2, approved: 3, leave: 4 };
+      return order[a.status] - order[b.status] || String(a.e.name).localeCompare(String(b.e.name));
+    });
+  })();
+  const SUB_META = {
+    missing: { label: "Not submitted", color: C.red, icon: "⛔" },
+    pending: { label: "Awaiting approval", color: C.amber, icon: "⏳" },
+    approved: { label: "Approved", color: C.green, icon: "✅" },
+    rejected: { label: "Rejected", color: C.purple, icon: "↩" },
+    leave: { label: "On leave", color: C.textDim, icon: "🌴" },
+  };
+  const subCounts = subRoster.reduce((a, r) => { a[r.status] = (a[r.status] || 0) + 1; return a; }, {});
+  const subExpected = subRoster.filter(r => r.status !== "leave").length;
+  const subDone = (subCounts.pending || 0) + (subCounts.approved || 0);
+  const subPct = subExpected ? Math.round((subDone / subExpected) * 100) : 0;
+  const subShown = subRoster.filter(r =>
+    (subFilter === "all" || r.status === subFilter) &&
+    (!subSearch || `${r.e.name} ${r.e.designation || ""} ${r.e.group_name || ""} ${r.e.custom_employee_id || ""}`.toLowerCase().includes(subSearch.toLowerCase())));
+
+  async function approveEmployeeWeek(r) {
+    if (!await dialog.confirm(`Approve ${r.pending.length} pending entr${r.pending.length === 1 ? "y" : "ies"} (${tsH(sumH(r.pending))}) for ${r.e.name}?`, { title: "Approve week", dtype: "info" })) return;
+    setBusy(true);
+    try { for (const t of r.pending) await api.approveTimesheet(t.id); } catch (e) { errAlert(e); }
+    await load(true); setBusy(false);
+  }
+  const subPendingRows = subShown.filter(r => r.pending.length);
+  const subPendingEntries = subPendingRows.flatMap(r => r.pending);
+  async function approveAllSubmitted() {
+    if (!subPendingEntries.length) return;
+    const who = subPendingRows.length === 1 ? subPendingRows[0].e.name : `${subPendingRows.length} employees`;
+    if (!await dialog.confirm(`Approve all ${subPendingEntries.length} submitted entr${subPendingEntries.length === 1 ? "y" : "ies"} (${tsH(sumH(subPendingEntries))}) from ${who} for ${periodLabel}?`, { title: "Approve all", dtype: "info" })) return;
+    setBusy(true);
+    let ok = 0; const failed = [];
+    for (const t of subPendingEntries) {
+      try { await api.approveTimesheet(t.id); ok++; } catch (e) { failed.push(`${t.employee_name} (${tsDay(t)}): ${e.message}`); }
+    }
+    await load(true); setBusy(false);
+    if (failed.length) dialog.alert(`${ok} approved, ${failed.length} failed:\n${failed.slice(0, 5).join("\n")}${failed.length > 5 ? `\n…and ${failed.length - 5} more` : ""}`, { title: "Some approvals failed", dtype: "warning" });
+    else dialog.alert(`${ok} entr${ok === 1 ? "y" : "ies"} approved for ${who}.`, { title: "Approved", dtype: "success" });
+  }
+  async function copyMissing() {
+    const names = subRoster.filter(r => r.status === "missing").map(r => r.e.name);
+    if (!names.length) return;
+    const text = `Timesheet not submitted for ${periodLabel}:\n${names.map(n => `• ${n}`).join("\n")}`;
+    try { await navigator.clipboard.writeText(text); dialog.alert(`${names.length} name${names.length === 1 ? "" : "s"} copied — paste into email or chat as a reminder.`, { title: "Copied", dtype: "success" }); }
+    catch { dialog.alert(text, { title: "Not submitted" }); }
+  }
+  function downloadSubmissionCSV() {
+    const esc = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const days = weekDays.map(isoDate);
+    const csv = [["Employee", "Employee ID", "Designation", "Status", ...days, "Total hours", "Expected hours", "Leave days"].join(","),
+    ...subRoster.map(r => [esc(r.e.name), esc(r.e.custom_employee_id), esc(r.e.designation), SUB_META[r.status].label,
+    ...days.map(d => r.hrs[d] || (r.leaveDays[d] ? "Leave" : 0)), r.total, r.expected, r.leaveTotal].join(","))].join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a"); a.href = url; a.download = `timesheet_submissions_${wStart}.csv`;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  }
+  const viewEmployeeEntries = name => {
+    setFilterEmp(name); setFilterStatus("all"); setSearch("");
+    setTimeout(() => document.getElementById("ts-weekly-list")?.scrollIntoView({ behavior: "smooth", block: "start" }), 30);
+  };
 
   async function bulkApprove() {
     if (!approvable.length) return;
@@ -4148,6 +5319,81 @@ function Timesheets({ currentUser, viewOnly }) {
     );
   };
 
+  const renderSubmissions = () => (
+    <div className="ts-card ts-sub">
+      <div className="ts-sub-head">
+        <div style={{ minWidth: 0 }}>
+          <div className="ts-sub-title">Team submission status</div>
+          <div className="ts-muted">{periodLabel} · {currentUser.role === "admin" ? "All employees" : "Your direct reports"}</div>
+        </div>
+        <div className="ts-sub-prog" title={`${subDone} of ${subExpected} submitted`}>
+          <div className="ts-sub-prog-txt"><b>{subDone}</b>/{subExpected} submitted <span>{subPct}%</span></div>
+          <div className="ts-sub-bar"><div style={{ width: `${subPct}%`, background: subPct === 100 ? C.green : C.accent }} /></div>
+        </div>
+      </div>
+
+      <div className="ts-sub-chips" role="tablist" aria-label="Filter by submission status">
+        {[["all", "All", subRoster.length, C.accent], ...Object.entries(SUB_META).map(([k, m]) => [k, m.label, subCounts[k] || 0, m.color])].map(([k, l, n, c]) => (
+          <button key={k} role="tab" aria-selected={subFilter === k} className={`ts-sub-chip${subFilter === k ? " on" : ""}`} style={{ "--c": c }} onClick={() => setSubFilter(k)}>
+            {k !== "all" && <i />}{l}<b>{n}</b>
+          </button>
+        ))}
+      </div>
+
+      <div className="ts-sub-tools">
+        <input className="ts-search" placeholder="Search name, ID, designation…" value={subSearch} onChange={e => setSubSearch(e.target.value)} aria-label="Search employees" />
+        <div className="ts-spacer" />
+        {subPendingEntries.length > 0 && (
+          <button className="ts-btn ts-btn-success" onClick={approveAllSubmitted} disabled={busy} title="Approve every submitted entry shown below for this week">
+            {busy ? "Approving…" : `✓ Approve all (${subPendingRows.length} ${subPendingRows.length === 1 ? "person" : "people"} · ${subPendingEntries.length} entr${subPendingEntries.length === 1 ? "y" : "ies"})`}
+          </button>
+        )}
+        {(subCounts.missing || 0) > 0 && <button className="ts-btn ts-btn-ghost" onClick={copyMissing}>📋 Copy not-submitted ({subCounts.missing})</button>}
+        <button className="ts-btn ts-btn-ghost" onClick={downloadSubmissionCSV} disabled={!subRoster.length}>📥 Export</button>
+      </div>
+
+      <div className="ts-srow head">
+        <div>Employee</div>
+        <div className="ts-sdays">{weekDays.map((d, i) => <span key={i} className={i >= 5 ? "we" : ""}>{DAY_NAMES[i].slice(0, 2)}<em>{d.getDate()}</em></span>)}</div>
+        <div>Hours</div><div>Status</div><div />
+      </div>
+      {subShown.length === 0 ? (
+        <div className="ts-empty"><div>{subRoster.length ? "🔍" : "👥"}</div>{subRoster.length ? "No employees match this filter" : "No employees to track"}</div>
+      ) : subShown.map(r => {
+        const m = SUB_META[r.status];
+        const pctH = r.expected ? Math.min(100, (r.total / r.expected) * 100) : (r.total ? 100 : 0);
+        return (
+          <div key={r.e.id} className="ts-srow" style={{ "--sc": m.color }}>
+            <div className="ts-lemp">
+              <span className="ts-avi" style={{ background: (r.e.group_color || C.accent) + "22", color: r.e.group_color || C.accent }}>{mkAvi(r.e.name)}</span>
+              <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                <span className="ts-sname">{r.e.name}</span>
+                <small className="ts-ssub">{[r.e.custom_employee_id, r.e.designation || r.e.group_name].filter(Boolean).join(" · ") || "—"}</small>
+              </span>
+            </div>
+            <div className="ts-sdays">
+              {weekDays.map((d, i) => {
+                const iso = isoDate(d), h = r.hrs[iso] || 0, lv = r.leaveDays[iso];
+                const cls = h ? (h >= TS_DAY_TARGET ? "full" : "part") : lv ? "lv" : (i >= 5 || iso > todayIso) ? "off" : "miss";
+                return <span key={iso} className={`ts-sday ${cls}`} title={`${DAY_NAMES[i]} ${d.getDate()}: ${h ? tsH(h) : lv ? (lv < 1 ? "Half-day leave" : "On leave") : "Nothing submitted"}`}>{h ? Math.round(h * 10) / 10 : lv ? "L" : "·"}</span>;
+              })}
+            </div>
+            <div className="ts-shrs">
+              <div><b style={{ color: r.short ? C.amber : C.text }}>{tsH(r.total)}</b><span> / {r.expected}h</span></div>
+              <div className="ts-sbar"><div style={{ width: `${pctH}%`, background: r.short ? C.amber : r.total ? C.green : C.border }} /></div>
+              {r.leaveTotal > 0 && r.status !== "leave" && <small>🌴 {r.leaveTotal}d leave</small>}
+            </div>
+            <div><span className="ts-pill" style={{ color: m.color, background: m.color + "1a", borderColor: m.color + "33" }}><i style={{ background: m.color }} />{m.label}</span></div>
+            <div className="ts-sacts">
+              {r.pending.length > 0 && <button className="ts-btn ts-btn-success sm" onClick={() => approveEmployeeWeek(r)} disabled={busy}>✓ Approve ({r.pending.length})</button>}
+              {r.total > 0 && <button className="ts-btn ts-btn-ghost sm" onClick={() => viewEmployeeEntries(r.e.name)}>View</button>}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
   const panelRows = dayPanel ? (byDay[dayPanel] || []) : [];
 
   return (
@@ -4290,6 +5536,47 @@ function Timesheets({ currentUser, viewOnly }) {
         .ts-empty { padding: 44px 20px; text-align: center; color: ${C.textMuted}; font-size: 13.5px; }
         .ts-empty div { font-size: 30px; margin-bottom: 8px; }
 
+        /* Team submission status */
+        .ts-sub { padding: 0; overflow: hidden; }
+        .ts-sub-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; padding: 16px 18px 12px; }
+        .ts-sub-title { font-size: 14.5px; font-weight: 800; color: ${C.text}; }
+        .ts-sub-prog { min-width: 220px; flex: 0 1 320px; }
+        .ts-sub-prog-txt { font-size: 12.5px; color: ${C.textMuted}; font-weight: 600; display: flex; align-items: baseline; gap: 4px; margin-bottom: 6px; }
+        .ts-sub-prog-txt b { color: ${C.text}; font-size: 16px; font-weight: 800; }
+        .ts-sub-prog-txt span { margin-left: auto; color: ${C.text}; font-weight: 800; }
+        .ts-sub-bar, .ts-sbar { height: 8px; border-radius: 6px; background: ${C.border}; overflow: hidden; }
+        .ts-sub-bar div, .ts-sbar div { height: 100%; border-radius: 6px; transition: width .5s ease; }
+        .ts-sbar { height: 4px; margin-top: 4px; }
+        .ts-sub-chips { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 18px 12px; }
+        .ts-sub-chip { --c: ${C.accent}; display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 999px; border: 1px solid ${C.border}; background: ${C.surface}; color: ${C.textDim}; font-size: 12.5px; font-weight: 700; cursor: pointer; font-family: inherit; transition: all .15s; }
+        .ts-sub-chip i { width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
+        .ts-sub-chip b { font-size: 11.5px; padding: 1px 7px; border-radius: 999px; background: ${C.border}; color: ${C.text}; font-variant-numeric: tabular-nums; }
+        .ts-sub-chip:hover { border-color: color-mix(in srgb, var(--c) 55%, ${C.border}); }
+        .ts-sub-chip.on { border-color: var(--c); color: ${C.text}; background: color-mix(in srgb, var(--c) 14%, ${C.surface}); }
+        .ts-sub-chip.on b { background: var(--c); color: #fff; }
+        .ts-sub-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 0 18px 14px; border-bottom: 1px solid ${C.border}; }
+        .ts-btn.sm { padding: 6px 11px; font-size: 12px; border-radius: 9px; }
+        .ts-srow { display: grid; grid-template-columns: minmax(170px, 1.5fr) minmax(250px, 2fr) minmax(110px, .9fr) 150px minmax(150px, 1fr); gap: 12px; align-items: center; padding: 10px 18px; border-bottom: 1px solid ${C.border}44; border-left: 3px solid var(--sc, transparent); font-size: 13px; }
+        .ts-srow:last-child { border-bottom: none; }
+        .ts-srow:not(.head):hover { background: ${C.accentGlow}; }
+        .ts-srow.head { background: ${C.surface}; font-size: 11px; font-weight: 800; color: ${C.textMuted}; letter-spacing: .5px; text-transform: uppercase; padding: 8px 18px; border-left-color: transparent; }
+        .ts-sname { font-weight: 700; color: ${C.text}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ts-ssub { font-size: 11.5px; color: ${C.textMuted}; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ts-sdays { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+        .ts-srow.head .ts-sdays span { text-align: center; display: flex; flex-direction: column; line-height: 1.2; }
+        .ts-srow.head .ts-sdays span em { font-style: normal; font-size: 10.5px; color: ${C.textDim}; }
+        .ts-srow.head .ts-sdays span.we { opacity: .6; }
+        .ts-sday { height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 11.5px; font-weight: 800; font-variant-numeric: tabular-nums; border: 1px solid ${C.border}; background: ${C.surface}; color: ${C.textMuted}; }
+        .ts-sday.full { background: ${C.green}22; border-color: ${C.green}55; color: ${C.green}; }
+        .ts-sday.part { background: ${C.amber}1c; border-color: ${C.amber}55; color: ${C.amber}; }
+        .ts-sday.lv { background: ${C.purple}1c; border-color: ${C.purple}44; color: ${C.purple}; }
+        .ts-sday.miss { background: ${C.red}12; border-color: ${C.red}40; color: ${C.red}; border-style: dashed; }
+        .ts-sday.off { opacity: .55; }
+        .ts-shrs { min-width: 0; font-size: 12px; color: ${C.textMuted}; }
+        .ts-shrs b { font-size: 14px; font-variant-numeric: tabular-nums; }
+        .ts-shrs small { display: block; margin-top: 3px; font-size: 11px; font-weight: 600; }
+        .ts-sacts { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+
         /* Day panel + entry modal */
         .tsm-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.66); backdrop-filter: blur(3px); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; }
         .tsm { width: 100%; max-width: 560px; max-height: min(92vh, 860px); display: flex; flex-direction: column; background: ${C.card}; border: 1px solid ${C.border}; border-radius: 22px; box-shadow: 0 30px 80px rgba(0,0,0,.6); overflow: hidden; animation: tsmIn .18s ease-out; }
@@ -4361,6 +5648,14 @@ function Timesheets({ currentUser, viewOnly }) {
           .ts-day-empty { margin: 0; text-align: left; padding: 6px 0; }
           .ts-lrow { grid-template-columns: 1.3fr 0.9fr 0.8fr 0.5fr 0.9fr 1fr; }
           .ts-lrow > :nth-child(5) { display: none; }
+          .ts-srow.head { display: none; }
+          .ts-srow { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "emp st" "days days" "hrs act"; gap: 10px; padding: 14px 16px; }
+          .ts-srow > :nth-child(1) { grid-area: emp; }
+          .ts-srow > :nth-child(2) { grid-area: days; }
+          .ts-srow > :nth-child(3) { grid-area: hrs; }
+          .ts-srow > :nth-child(4) { grid-area: st; justify-self: end; }
+          .ts-srow > :nth-child(5) { grid-area: act; align-self: end; }
+          .ts-sday { height: 34px; }
         }
         @container ts (max-width: 640px) {
           .ts-wrap { gap: 14px; }
@@ -4390,6 +5685,16 @@ function Timesheets({ currentUser, viewOnly }) {
           .ts-legend-scale { margin-left: 0; }
           .ts-list-head { padding: 14px; }
           .ts-filters, .ts-filters > * { width: 100%; }
+          .ts-sub-head, .ts-sub-chips, .ts-sub-tools { padding-left: 14px; padding-right: 14px; }
+          .ts-sub-prog { flex: 1 1 100%; min-width: 0; }
+          .ts-sub-chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+          .ts-sub-chip { flex-shrink: 0; }
+          .ts-card.ts-sub { padding: 0; }
+          .ts-sub-tools > * { flex: 1 1 0; }
+          .ts-sub-tools .ts-search, .ts-sub-tools .ts-btn-success { flex: 1 1 100%; }
+          .ts-sub-tools .ts-spacer { display: none; }
+          .ts-srow { padding: 12px 14px; }
+          .ts-sdays { gap: 3px; }
           .ts-search { min-width: 0; box-sizing: border-box; }
           .ts-lrow.head { display: none; }
           .ts-lrow { grid-template-columns: 1fr auto; grid-template-areas: "emp hrs" "proj st" "date act"; padding: 14px; gap: 8px; }
@@ -4455,6 +5760,8 @@ function Timesheets({ currentUser, viewOnly }) {
             </div>
           )}
 
+          {!viewOnly && isWeek && renderSubmissions()}
+
           {/* Summary */}
           <div className="ts-summary">
             <div className="ts-card">
@@ -4499,7 +5806,7 @@ function Timesheets({ currentUser, viewOnly }) {
 
           {/* Manager / admin list */}
           {!viewOnly && (
-            <div className="ts-card" style={{ padding: 0, overflow: "hidden" }}>
+            <div id="ts-weekly-list" className="ts-card" style={{ padding: 0, overflow: "hidden", scrollMarginTop: 90 }}>
               <div className="ts-list-head">
                 <div>
                   <div style={{ fontSize: 14.5, fontWeight: 800, color: C.text }}>Weekly requests</div>
@@ -12769,7 +14076,7 @@ export default function App() {
           {activePage === "employee-home" && <EmployeeHome currentUser={currentUser} defaultTab={portalTab} navFn={navWithTab} onTabChange={setPortalTab} />}
           {activePage === "resumes" && <AdminCompanyResume />}
         </>) : (<>
-          {activePage === "dashboard" && <Dashboard />}
+          {activePage === "dashboard" && <Dashboard navFn={navWithTab} currentUser={currentUser} />}
           {activePage === "project_management" && <ProjectManagement readOnly={isManager} currentUser={currentUser} />}
           {activePage === "people" && <PeopleHub readOnly={isManager} currentUser={currentUser} />}
           {activePage === "attendance" && <AttendanceClaims currentUser={currentUser} />}
