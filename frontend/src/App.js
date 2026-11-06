@@ -822,8 +822,19 @@ function ProjectDashboard({ projects = [], invoices = [], clients = [], onOpen =
   const ago = d => { const n = Math.round((new Date(todayIso + "T00:00:00") - new Date(d + "T00:00:00")) / 86400000); return n === 0 ? "Today" : n === 1 ? "Yesterday" : n < 30 ? `${n}d ago` : fmtD(d); };
 
   // ── Expense breakdown ──
-  const byPurpose = Object.values(spentList.reduce((m, e) => { const k = (e.purpose || "Other").trim(); (m[k] = m[k] || { k, v: 0, n: 0 }).v += cxTotal(e); m[k].n += 1; return m; }, {})).sort((a, b) => b.v - a.v).slice(0, 5);
-  const statusSplit = CX_STATUSES.map(s => ({ s, v: spentList.filter(e => e.status === s).reduce((a, e) => a + cxTotal(e), 0) }));
+  // Group recurring entries ("X October 2026 - monthly Salary", "X Sept 2026 - …") under one purpose.
+  const MONTH_RX = /\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sept|sep|oct|nov|dec)\.?(?=\b|\d)/gi;
+  const purposeKey = t => (t || "Other").replace(MONTH_RX, " ").replace(/\b(19|20)\d{2}\b/g, " ").replace(/\s*[-–—:|,]\s*/g, " – ").replace(/\s+/g, " ").replace(/^[\s–]+|[\s–]+$/g, "").trim() || "Other";
+  const byPurpose = Object.values(spentList.reduce((m, e) => {
+    const label = purposeKey(e.purpose); const k = label.toLowerCase();
+    (m[k] = m[k] || { k, label, v: 0, n: 0 }).v += cxTotal(e); m[k].n += 1; return m;
+  }, {})).sort((a, b) => b.v - a.v).slice(0, 5);
+  // Status totals are all-time so they match the Company Expenses tab cards exactly.
+  const expAllTotal = expenses.reduce((a, e) => a + cxTotal(e), 0);
+  const statusSplit = CX_STATUSES.map(s => {
+    const l = expenses.filter(e => e.status === s);
+    return { s, v: l.reduce((a, e) => a + cxTotal(e), 0), n: l.length };
+  });
 
   const tick = v => v >= 100000 ? `₹${(v / 100000).toFixed(1)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`;
   const Head = ({ title, sub, tab, label = "View all" }) => (
@@ -1029,19 +1040,20 @@ ${pmSharedCss()}
 
           <div className="dsh-grid">
             <div className="dsh-card">
-              <Head title="Company expenses" sub={`${fmt$(spent)} spent ${periodLabel} · ${spentList.length} entr${spentList.length === 1 ? "y" : "ies"}`} tab="company_expenses" />
+              <Head title="Company expenses" sub={`${fmt$(expAllTotal)} total · ${expenses.length} entr${expenses.length === 1 ? "y" : "ies"} · ${fmt$(spent)} ${periodLabel}`} tab="company_expenses" />
               {!expLoaded ? <div className="dsh-empty">Loading…</div> : (
                 <>
                   <div className="dsh-mini-stats">
-                    {statusSplit.map(x => <div key={x.s}><span style={{ color: cxMeta(x.s).color }}>{cxMeta(x.s).label}</span><b>{fmt$(x.v)}</b></div>)}
+                    {statusSplit.map(x => <div key={x.s}><span style={{ color: cxMeta(x.s).color }}>{cxMeta(x.s).label} · {x.n}</span><b>{fmt$(x.v)}</b></div>)}
                   </div>
-                  {spent > 0 && <div className="dsh-stack">{statusSplit.map(x => <i key={x.s} style={{ width: `${(x.v / spent) * 100}%`, background: cxMeta(x.s).color }} title={`${cxMeta(x.s).label}: ${fmt$(x.v)}`} />)}</div>}
+                  {expAllTotal > 0 && <div className="dsh-stack">{statusSplit.map(x => <i key={x.s} style={{ width: `${(x.v / expAllTotal) * 100}%`, background: cxMeta(x.s).color }} title={`${cxMeta(x.s).label}: ${fmt$(x.v)}`} />)}</div>}
+                  <div style={{ fontSize: 11.5, color: C.textMuted, fontWeight: 600, marginTop: -4 }}>Status totals are for all time, same as the Company Expenses tab.</div>
                   {byPurpose.length === 0 ? <div className="dsh-empty">No expenses {periodLabel}.</div> : (
                     <div className="dsh-list">
-                      <div style={{ fontSize: 11.5, color: C.textMuted, fontWeight: 800, textTransform: "uppercase", letterSpacing: .5, padding: "4px 8px 0" }}>Top spend</div>
+                      <div style={{ fontSize: 11.5, color: C.textMuted, fontWeight: 800, textTransform: "uppercase", letterSpacing: .5, padding: "4px 8px 0" }}>Top spend · {periodLabel}</div>
                       {byPurpose.map(x => (
                         <button key={x.k} className="dsh-row" onClick={() => onOpen("company_expenses")}>
-                          <span className="dsh-row-n"><b>{x.k}</b><small>{x.n} entr{x.n === 1 ? "y" : "ies"} · {spent ? Math.round((x.v / spent) * 100) : 0}% of spend</small></span>
+                          <span className="dsh-row-n"><b title={x.label}>{x.label}</b><small>{x.n} entr{x.n === 1 ? "y" : "ies"} · {spent ? Math.round((x.v / spent) * 100) : 0}% of spend</small></span>
                           <span className="dsh-row-v">{fmt$(x.v)}</span>
                           <span className="dsh-bar" style={{ height: 5 }}><i style={{ width: `${spent ? (x.v / byPurpose[0].v) * 100 : 0}%`, background: C.purple, borderRadius: 5 }} /></span>
                         </button>
