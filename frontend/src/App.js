@@ -3062,6 +3062,7 @@ function LoginPage({ onLogin }) {
   return (
     <div className="lg">
       <style>{`
+        .lg { box-sizing: border-box; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
         .lg { min-height: 100vh; min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(420px, 1fr); background: #070A12; color: #E2E8F0; font-family: 'DM Sans','Segoe UI',system-ui,sans-serif; }
         .lg *, .lg *::before, .lg *::after { box-sizing: border-box; }
 
@@ -14043,6 +14044,15 @@ function AppShell({ currentUser, darkMode, onToggleTheme, onLogout, page, portal
         }
         @media (min-width: 768px) { .sh-mlogo { display: none !important; } }
         @media (prefers-reduced-motion: reduce) { .sh *, .sh *::before, .sh *::after { animation: none !important; transition: none !important; } }
+      `}</style>
+      {/* Installed app (iPhone/Android full-screen): keep the header & menus clear of the status bar / notch */}
+      <style>{`
+        .sh-header { box-sizing: border-box; height: calc(68px + env(safe-area-inset-top, 0px)); padding-top: env(safe-area-inset-top, 0px); }
+        .sh-side { padding-top: env(safe-area-inset-top, 0px); padding-left: env(safe-area-inset-left, 0px); box-sizing: border-box; }
+        @media (max-width: 767px) {
+          .sh-header { height: calc(60px + env(safe-area-inset-top, 0px)); padding-left: max(14px, env(safe-area-inset-left, 0px)); padding-right: max(14px, env(safe-area-inset-right, 0px)); }
+          .sh-pal-bg { padding-top: env(safe-area-inset-top, 0px); }
+        }
       `}</style>
 
       {/* ── Sidebar ── */}
