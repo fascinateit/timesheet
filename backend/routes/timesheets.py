@@ -23,7 +23,7 @@ def list_timesheets():
     status   = request.args.get("status")
 
     # Employees can only see their own timesheets.
-    if user["role"] == "employee":
+    if user["role"] in ("employee", "contractor", "intras"):
         emp_id = user["employee_id"]
 
     sql  = """
@@ -64,7 +64,7 @@ def create_timesheet():
     user = json.loads(get_jwt_identity())
     d    = request.get_json(silent=True) or {}
 
-    emp_id  = user["employee_id"] if user["role"] in ("employee", "manager") else d.get("employeeId")
+    emp_id  = user["employee_id"] if user["role"] in ("employee", "manager", "contractor", "intras") else d.get("employeeId")
     proj_id = d.get("projectId")
     date    = d.get("date")
     hours   = d.get("hours")
@@ -108,11 +108,15 @@ def update_timesheet(tid):
     if not existing_timesheet:
         return jsonify(error="Timesheet not found"), 404
 
-    if existing_timesheet["status"] not in ("draft", "pending"):
-        return jsonify(error="Only draft or pending timesheets can be updated"), 400
+    was_rejected = existing_timesheet["status"] == "rejected"
+    if existing_timesheet["status"] not in ("draft", "pending", "rejected"):
+        return jsonify(error="Only draft, pending or rejected timesheets can be updated"), 400
+    # A rejected entry can only be corrected by the employee who logged it.
+    if was_rejected and existing_timesheet["employee_id"] != user.get("employee_id"):
+        return jsonify(error="Only the employee who logged this entry can correct a rejected timesheet"), 403
 
     # Access control
-    if user["role"] in ("employee", "manager"):
+    if user["role"] in ("employee", "manager", "contractor", "intras"):
         if existing_timesheet["employee_id"] != user["employee_id"]:
             # Check if user is manager of the timesheet owner
             emp = query("SELECT manager_id FROM employees WHERE id=%s", (existing_timesheet["employee_id"],), fetch="one")
@@ -147,6 +151,12 @@ def update_timesheet(tid):
 
     if not update_fields:
         return jsonify(error="No valid fields provided for update (hours, projectId, task)"), 400
+
+    # Correcting a rejected entry: send it straight back for approval ("resubmit"),
+    # or keep it as a draft so it goes out with the next "Submit week".
+    if was_rejected:
+        update_fields.append("status = %s")
+        update_values.append("pending" if d.get("resubmit") else "draft")
 
     sql = "UPDATE timesheets SET " + ", ".join(update_fields) + " WHERE id = %s"
     update_values.append(tid)
@@ -236,7 +246,7 @@ def delete_timesheet(tid):
     user = json.loads(get_jwt_identity())
     ts = query("SELECT employee_id FROM timesheets WHERE id=%s", (tid,), fetch="one")
     if not ts: return jsonify(error="Not found"), 404
-    if user["role"] in ("employee", "manager") and ts["employee_id"] != user["employee_id"]:
+    if user["role"] in ("employee", "manager", "contractor", "intras") and ts["employee_id"] != user["employee_id"]:
         if user["role"] == "manager":
             emp = query("SELECT manager_id FROM employees WHERE id=%s", (ts["employee_id"],), fetch="one")
             if not emp or emp.get("manager_id") != user["employee_id"]:

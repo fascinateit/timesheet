@@ -40,6 +40,7 @@ export const api = {
   getEmployee: (id) => req("GET", `/employees/${id}`),
   createEmployee: (d) => req("POST", "/employees/", d),
   updateEmployee: (id, d) => req("PUT", `/employees/${id}`, d),
+  updateEmployeeStatus: (id, status, relievingDate) => req("PATCH", `/employees/${id}/status`, { status, relievingDate }),
   deleteEmployee: (id) => req("DELETE", `/employees/${id}`),
   getEmployeeProjects: (id) => req("GET", `/employees/${id}/projects`),
   updateEmployeeProjects: (id, projectIds) => req("PUT", `/employees/${id}/projects`, { projectIds }),

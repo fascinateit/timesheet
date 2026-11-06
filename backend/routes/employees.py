@@ -1,6 +1,7 @@
 """routes/employees.py"""
 from flask import Blueprint, request, jsonify, current_app
-from flask_jwt_extended import jwt_required
+from flask_jwt_extended import jwt_required, get_jwt_identity
+import json
 from db import query, execute, get_conn
 
 employees_bp = Blueprint("employees", __name__)
@@ -17,8 +18,29 @@ EMP_SELECT = """
 """
 
 
+_status_ready = False
+
+
+def _ensure_status_columns():
+    """Add employment_status / relieving_date once if the migration wasn't run."""
+    global _status_ready
+    if _status_ready:
+        return
+    try:
+        if not query("SHOW COLUMNS FROM employees LIKE 'employment_status'"):
+            execute("ALTER TABLE employees ADD COLUMN employment_status ENUM('working','resigned') NOT NULL DEFAULT 'working'")
+        if not query("SHOW COLUMNS FROM employees LIKE 'relieving_date'"):
+            execute("ALTER TABLE employees ADD COLUMN relieving_date DATE NULL")
+        _status_ready = True
+    except Exception:
+        current_app.logger.exception("Could not add employee status columns")
+
+
 def _fmt(row):
-    for k in ("joining_date", "dob", "created_at", "updated_at"):
+    if row is not None:
+        row.setdefault("employment_status", "working")
+        row.setdefault("relieving_date", None)
+    for k in ("joining_date", "dob", "created_at", "updated_at", "relieving_date"):
         if row and row.get(k) and hasattr(row[k], "isoformat"):
             row[k] = row[k].isoformat()
     return row
@@ -27,6 +49,7 @@ def _fmt(row):
 @employees_bp.route("/", methods=["GET"])
 @jwt_required()
 def list_employees():
+    _ensure_status_columns()
     rows = query(EMP_SELECT + " ORDER BY e.name")
     return jsonify([_fmt(r) for r in rows]), 200
 
@@ -91,6 +114,30 @@ def update_employee(eid):
     except Exception as e:
         current_app.logger.exception("Employee %s update failed", eid)
         return jsonify(error=f"Could not save employee: {e}"), 400
+    row = query(EMP_SELECT + " WHERE e.id=%s", (eid,), fetch="one")
+    return jsonify(_fmt(row)), 200
+
+
+@employees_bp.route("/<int:eid>/status", methods=["PATCH"])
+@jwt_required()
+def update_employee_status(eid):
+    """Set an employee as currently working or resigned (admin only).
+    Kept separate from the full-record PUT so profile edits never change it."""
+    user = json.loads(get_jwt_identity())
+    if user.get("role") != "admin":
+        return jsonify(error="Only admins can change employment status"), 403
+    d = request.get_json(silent=True) or {}
+    status = d.get("status")
+    if status not in ("working", "resigned"):
+        return jsonify(error="status must be 'working' or 'resigned'"), 400
+    relieving = d.get("relievingDate") or None
+    if status == "resigned" and not relieving:
+        return jsonify(error="relievingDate (last working day) is required"), 400
+    _ensure_status_columns()
+    if not query("SELECT id FROM employees WHERE id=%s", (eid,), fetch="one"):
+        return jsonify(error="Not found"), 404
+    execute("UPDATE employees SET employment_status=%s, relieving_date=%s WHERE id=%s",
+            (status, relieving if status == "resigned" else None, eid))
     row = query(EMP_SELECT + " WHERE e.id=%s", (eid,), fetch="one")
     return jsonify(_fmt(row)), 200
 

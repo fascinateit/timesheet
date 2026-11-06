@@ -28,6 +28,43 @@ def create_app():
     CORS(app, resources={r"/api/*": {"origins": "*"}})
     JWTManager(app)
 
+    # ── Contractor accounts: timesheets only ─────────────────────────────
+    # Contractors may sign in and manage their own timesheets; every other API is refused,
+    # even if called directly (the UI hides the other pages as well).
+    import json as _json, re as _re
+    from flask import request as _req, jsonify as _jsonify
+    from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity
+
+    _CONTRACTOR_ALLOWED = [
+        (r"^/api/auth(/.*)?$", {"GET", "POST", "PUT", "PATCH"}),
+        (r"^/api/timesheets/?$", {"GET", "POST"}),
+        (r"^/api/timesheets/submit-week/?$", {"POST"}),
+        (r"^/api/timesheets/\d+/?$", {"PUT", "DELETE"}),
+        (r"^/api/projects/?$", {"GET"}),
+    ]
+
+    @app.before_request
+    def _contractor_guard():
+        if _req.method == "OPTIONS" or not _req.path.startswith("/api/"):
+            return None
+        try:
+            verify_jwt_in_request(optional=True)
+            ident = get_jwt_identity()
+        except Exception:
+            return None  # let the route's own @jwt_required() report token problems
+        if not ident:
+            return None
+        try:
+            role = (_json.loads(ident) if isinstance(ident, str) else ident).get("role")
+        except Exception:
+            return None
+        if role != "contractor":
+            return None
+        for pattern, methods in _CONTRACTOR_ALLOWED:
+            if _re.match(pattern, _req.path) and _req.method in methods:
+                return None
+        return _jsonify(error="Contractor accounts can only access timesheets"), 403
+
     # ── Blueprints ────────────────────────────────────────────────────────
     from routes.auth import auth_bp
     from routes.employees import employees_bp

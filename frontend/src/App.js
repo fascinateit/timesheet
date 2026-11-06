@@ -3331,7 +3331,7 @@ function Dashboard({ navFn = () => {}, currentUser }) {
   const coPending = coExp.filter(e => e.status === "pending");
 
   // ── People ──
-  const emps = arr(d.employees);
+  const emps = arr(d.employees).filter(e => e.employment_status !== "resigned" || (e.relieving_date && day(e.relieving_date) >= todayIso));
   const joiners = emps.filter(e => day(e.joining_date) && day(e.joining_date) >= minus(30) && day(e.joining_date) <= todayIso);
   const groups = Object.values(emps.reduce((m, e) => { const k = e.group_name || "Unassigned"; (m[k] = m[k] || { k, n: 0, c: e.group_color }).n += 1; return m; }, {})).sort((a, b) => b.n - a.n);
   const nextOcc = iso => {
@@ -4811,22 +4811,23 @@ function TsEntryModal({ init, projects, recentIds, dayTotals, onClose, onSubmit,
   const list = projects.filter(p => !q || `${p.code} ${p.name}`.toLowerCase().includes(q));
   const recents = recentIds.map(id => projects.find(p => p.id === id)).filter(Boolean).slice(0, 4);
 
-  async function submit() {
+  const rejected = isEdit && init.status === "rejected";
+  async function submit(resubmit) {
     setTried(true);
     if (!valid || busy) return;
-    setBusy(true);
-    const ok = await onSubmit({ id: init.id, dates: days, projectId: +projectId, hours: h, task: task.trim() });
+    setBusy(rejected ? (resubmit ? "resubmit" : "draft") : true);
+    const ok = await onSubmit({ id: init.id, dates: days, projectId: +projectId, hours: h, task: task.trim(), resubmit: !!resubmit });
     setBusy(false);
     if (ok) onClose();
   }
 
-  const title = isEdit ? "Edit entry" : "Log time";
+  const title = rejected ? "Fix rejected entry" : isEdit ? "Edit entry" : "Log time";
   const dateLabel = new Date(init.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" });
 
   return (
     <div className="tsm-backdrop" onClick={onClose}>
       <div className="tsm" role="dialog" aria-modal="true" aria-label={title} onClick={e => e.stopPropagation()}
-        onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit(); }}>
+        onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit(rejected); }}>
         <div className="tsm-head">
           <div>
             <div className="tsm-title">{title}</div>
@@ -4836,6 +4837,12 @@ function TsEntryModal({ init, projects, recentIds, dayTotals, onClose, onSubmit,
         </div>
 
         <div className="tsm-body">
+          {rejected && (
+            <div className="tsm-rej" role="status">
+              <b>✕ Rejected by your manager</b>
+              <span>Correct the project, hours or description below, then <b>Save &amp; resubmit</b> to send it for approval again. Choose <b>Save as draft</b> to resubmit later with the rest of the week.</span>
+            </div>
+          )}
           {/* Project */}
           <div className="tsm-field">
             <label className="tsm-lbl">Project</label>
@@ -4925,10 +4932,15 @@ function TsEntryModal({ init, projects, recentIds, dayTotals, onClose, onSubmit,
         <div className="tsm-foot">
           {isEdit && onDelete ? <button className="ts-btn ts-btn-danger" onClick={async () => { if (await onDelete(init.id)) onClose(); }}>🗑 Delete</button> : <span className="tsm-mini tsm-kbd">Ctrl/⌘ + Enter to save</span>}
           <div style={{ display: "flex", gap: 8 }}>
-            <button className="ts-btn ts-btn-ghost" onClick={onClose}>Cancel</button>
-            <button className="ts-btn ts-btn-primary" onClick={submit} disabled={busy || (tried && !valid)}>
-              {busy ? "Saving…" : isEdit ? "Save changes" : days.length > 1 ? `Log ${days.length} days · ${tsH((h || 0) * days.length)}` : "Save entry"}
-            </button>
+            {rejected ? (<>
+              <button className="ts-btn ts-btn-ghost" onClick={() => submit(false)} disabled={!!busy || (tried && !valid)}>{busy === "draft" ? "Saving…" : "Save as draft"}</button>
+              <button className="ts-btn ts-btn-primary" onClick={() => submit(true)} disabled={!!busy || (tried && !valid)}>{busy === "resubmit" ? "Resubmitting…" : "📤 Save & resubmit"}</button>
+            </>) : (<>
+              <button className="ts-btn ts-btn-ghost" onClick={onClose}>Cancel</button>
+              <button className="ts-btn ts-btn-primary" onClick={() => submit(false)} disabled={busy || (tried && !valid)}>
+                {busy ? "Saving…" : isEdit ? "Save changes" : days.length > 1 ? `Log ${days.length} days · ${tsH((h || 0) * days.length)}` : "Save entry"}
+              </button>
+            </>)}
           </div>
         </div>
       </div>
@@ -4980,11 +4992,11 @@ function Timesheets({ currentUser, viewOnly }) {
 
   const errAlert = e => dialog.alert(e.message, { title: "Error", dtype: "error" });
   const isMine = r => r.employee_id === currentUser.employee_id;
-  const canEdit = r => viewOnly && isMine(r) && (r.status === "draft" || r.status === "pending");
+  const canEdit = r => viewOnly && isMine(r) && (r.status === "draft" || r.status === "pending" || r.status === "rejected");
 
-  async function saveEntry({ id, dates, projectId, hours, task }) {
+  async function saveEntry({ id, dates, projectId, hours, task, resubmit }) {
     try {
-      if (id) await api.updateTimesheet(id, { projectId, hours, task });
+      if (id) await api.updateTimesheet(id, { projectId, hours, task, ...(resubmit ? { resubmit: true } : {}) });
       else for (const date of dates) await api.createTimesheet({ employeeId: currentUser.employee_id, projectId, date, hours, task });
       await load(true);
       return true;
@@ -5095,6 +5107,8 @@ function Timesheets({ currentUser, viewOnly }) {
     (team.accounts || []).forEach(a => (a.active ? activeAcc : inactive).add(a.employee_id));
     return team.employees.filter(e =>
       e.id !== currentUser.employee_id &&
+      // Only people working this week: resigned employees drop off after their last working day.
+      !(e.employment_status === "resigned" && (!e.relieving_date || String(e.relieving_date).slice(0, 10) < wStart)) &&
       (currentUser.role === "admin" || e.manager_id === currentUser.employee_id) &&
       !(inactive.has(e.id) && !activeAcc.has(e.id)) &&
       !(e.joining_date && String(e.joining_date).slice(0, 10) > wEnd)
@@ -5214,7 +5228,7 @@ function Timesheets({ currentUser, viewOnly }) {
 
   // ── week status banner (employee) ──
   const banner = !viewOnly || !isWeek ? null
-    : ws.rejected ? { tone: C.red, icon: "⚠️", text: `${ws.rejected} entr${ws.rejected === 1 ? "y was" : "ies were"} rejected this week. Review and log corrected hours.` }
+    : ws.rejected ? { tone: C.red, icon: "⚠️", text: `${ws.rejected} entr${ws.rejected === 1 ? "y was" : "ies were"} rejected this week. Fix ${ws.rejected === 1 ? "it" : "them"} and resubmit for approval.`, fix: true }
       : ws.draft ? { tone: C.accent, icon: "📝", text: `${ws.draft} draft entr${ws.draft === 1 ? "y" : "ies"} (${tsH(ws.draftH)}) not yet submitted.`, action: true }
         : ws.pending ? { tone: C.amber, icon: "⏳", text: "This week is submitted and awaiting manager approval." }
           : ws.total > 0 && ws.approved === ws.total ? { tone: C.green, icon: "✅", text: "All hours for this week are approved." }
@@ -5242,7 +5256,7 @@ function Timesheets({ currentUser, viewOnly }) {
     const pc = tsProjColor(r.project_id);
     const editable = canEdit(r);
     return (
-      <button key={r.id} className={`ts-entry${r.status === "draft" ? " draft" : ""}`} style={{ "--pc": pc }} onClick={() => onEntryClick(r)}
+      <button key={r.id} className={`ts-entry${r.status === "draft" ? " draft" : ""}${r.status === "rejected" ? " rej" : ""}`} style={{ "--pc": pc }} onClick={() => onEntryClick(r)}
         title={`${r.project_code} · ${tsH(r.hours)} · ${tsStatusLabel(r.status)}${r.task ? `\n${r.task}` : ""}`}>
         <div className="ts-entry-top">
           <span className="ts-entry-code">{r.project_code}</span>
@@ -5252,7 +5266,7 @@ function Timesheets({ currentUser, viewOnly }) {
         {r.task ? <div className="ts-entry-task">{r.task}</div> : <div className="ts-entry-task muted">{r.project_name}</div>}
         <div className="ts-entry-foot">
           <span className="ts-entry-st" style={{ color: tsStatusColor(r.status) }}><i style={{ background: tsStatusColor(r.status) }} />{tsStatusLabel(r.status)}</span>
-          {editable && <span className="ts-entry-edit" aria-hidden>✎</span>}
+          {editable && (r.status === "rejected" ? <span className="ts-entry-fix">Fix ›</span> : <span className="ts-entry-edit" aria-hidden>✎</span>)}
         </div>
       </button>
     );
@@ -5491,6 +5505,11 @@ function Timesheets({ currentUser, viewOnly }) {
         .ts-entry { text-align: left; font-family: inherit; cursor: pointer; width: 100%; background: ${C.card}; border: 1px solid ${C.border}; border-left: 3px solid var(--pc); border-radius: 10px; padding: 8px 9px; display: flex; flex-direction: column; gap: 3px; transition: transform .12s, border-color .12s, box-shadow .12s; min-width: 0; }
         .ts-entry:hover { transform: translateY(-1px); box-shadow: 0 6px 18px -8px rgba(0,0,0,.6); border-color: color-mix(in srgb, var(--pc) 50%, ${C.border}); border-left-color: var(--pc); }
         .ts-entry.draft { border-style: dashed; border-left-style: solid; }
+        .ts-entry.rej { border-color: ${C.red}66; background: color-mix(in srgb, ${C.red} 7%, ${C.card}); }
+        .ts-entry-fix { font-size: 10.5px; font-weight: 800; color: ${C.red}; background: ${C.red}18; border: 1px solid ${C.red}44; border-radius: 6px; padding: 1px 6px; }
+        .tsm-rej { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 12px; border: 1px solid ${C.red}44; background: ${C.red}10; font-size: 12.5px; color: ${C.textDim}; line-height: 1.5; }
+        .tsm-rej > b { color: ${C.red}; font-size: 13px; }
+        .tsm-rej span b { color: ${C.text}; }
         .ts-entry-top { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
         .ts-entry-code { font-size: 11.5px; font-weight: 800; color: var(--pc); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .ts-entry-h { font-size: 12.5px; font-weight: 800; color: ${C.text}; font-variant-numeric: tabular-nums; flex-shrink: 0; }
@@ -5770,6 +5789,10 @@ function Timesheets({ currentUser, viewOnly }) {
           {banner && (
             <div className="ts-banner" style={{ color: banner.tone, background: banner.tone + "12", borderColor: banner.tone + "40" }} role="status">
               <b style={{ fontSize: 16 }}>{banner.icon}</b><span>{banner.text}</span>
+              {banner.fix && (() => {
+                const firstRej = [...weekMine].filter(r => r.status === "rejected").sort((a, b) => tsDay(a).localeCompare(tsDay(b)))[0];
+                return firstRej ? <button className="ts-btn ts-btn-danger" style={{ padding: "7px 12px" }} onClick={() => openEdit(firstRej)}>✎ Fix now</button> : null;
+              })()}
             </div>
           )}
 
@@ -5904,7 +5927,7 @@ function Timesheets({ currentUser, viewOnly }) {
                     </div>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
-                    {canEdit(r) && <button className="ts-btn ts-btn-ghost" style={{ padding: "7px 12px" }} onClick={() => { setDayPanel(null); openEdit(r); }}>✎ Edit</button>}
+                    {canEdit(r) && <button className={`ts-btn ${r.status === "rejected" ? "ts-btn-danger" : "ts-btn-ghost"}`} style={{ padding: "7px 12px" }} onClick={() => { setDayPanel(null); openEdit(r); }}>{r.status === "rejected" ? "✎ Fix & resubmit" : "✎ Edit"}</button>}
                     {!viewOnly && r.status === "pending" && !isMine(r) && (<>
                       <button className="ts-btn ts-btn-success" style={{ padding: "7px 12px" }} onClick={() => handleApprove(r.id)}>✓ Approve</button>
                       <button className="ts-btn ts-btn-danger" style={{ padding: "7px 12px" }} onClick={() => handleReject(r.id)}>✕ Reject</button>
@@ -6904,7 +6927,7 @@ function UserAccounts() {
                   </div></Td>
                   <Td>{a.group_name ? <Badge color={a.group_color || C.accent}>{a.group_name}</Badge> : <span style={{ color: C.textMuted, fontSize: 12 }}>—</span>}</Td>
                   <Td><span style={{ fontSize: 13, fontWeight: 600, color: C.accent, fontFamily: "monospace" }}>{a.username}</span></Td>
-                  <Td><Badge color={a.role === "admin" ? C.purple : C.green}>{a.role}</Badge></Td>
+                  <Td><Badge color={a.role === "admin" ? C.purple : a.role === "contractor" ? "#06b6d4" : a.role === "manager" ? C.accent : a.role === "intras" ? C.amber : C.green}>{{ intras: "intern", contractor: "contractor" }[a.role] || a.role}</Badge></Td>
                   <Td><button onClick={() => toggleActive(a.id, a.active)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
                     <StatusBadge status={a.active ? "active" : "inactive"} />
                   </button></Td>
@@ -6943,7 +6966,7 @@ function UserAccounts() {
             <Inp label="Username" value={form.username} onChange={v => setForm(f => ({ ...f, username: v }))} required placeholder="e.g. john.doe" />
             <Inp label="Password" type="password" value={form.password} onChange={v => setForm(f => ({ ...f, password: v }))} required placeholder="Min 4 characters" />
             <Inp label="Role" value={form.role} onChange={v => setForm(f => ({ ...f, role: v }))}
-              options={[{ value: "employee", label: "Employee" }, { value: "intras", label: "Intern" }, { value: "admin", label: "Admin" }, { value: "manager", label: "Manager" }]} />
+              options={[{ value: "employee", label: "Employee" }, { value: "intras", label: "Intern" }, { value: "contractor", label: "Contractor (timesheets only)" }, { value: "admin", label: "Admin" }, { value: "manager", label: "Manager" }]} />
             {formErr && <div style={{ background: C.red + "18", border: `1px solid ${C.red}44`, borderRadius: 8, padding: "10px 14px", fontSize: 12, color: C.red }}>⚠ {formErr}</div>}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
               <Btn variant="ghost" onClick={() => { setModal(false); setFormErr(""); }}>Cancel</Btn>
@@ -6958,7 +6981,7 @@ function UserAccounts() {
             <Inp label="Username" value={editForm.username || ""} onChange={v => setEditForm(f => ({ ...f, username: v }))} required />
             <Inp label="New Password (blank = keep)" type="password" value={editForm.newPass || ""} onChange={v => setEditForm(f => ({ ...f, newPass: v }))} placeholder="Enter new password…" />
             <Inp label="Role" value={editForm.role || "employee"} onChange={v => setEditForm(f => ({ ...f, role: v }))}
-              options={[{ value: "employee", label: "Employee" }, { value: "intras", label: "Intern" }, { value: "admin", label: "Admin" }, { value: "manager", label: "Manager" }]} />
+              options={[{ value: "employee", label: "Employee" }, { value: "intras", label: "Intern" }, { value: "contractor", label: "Contractor (timesheets only)" }, { value: "admin", label: "Admin" }, { value: "manager", label: "Manager" }]} />
             <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
               <input type="checkbox" checked={!!editForm.active} onChange={e => setEditForm(f => ({ ...f, active: e.target.checked }))} />
               <span style={{ fontSize: 13, color: C.textDim }}>Account Active</span>
@@ -10151,6 +10174,11 @@ function AdminEmployees({ readOnly = false, currentUser }) {
   // Pagination
   const [empPage, setEmpPage] = useState(1);
   const [empPerPage, setEmpPerPage] = useState(10);
+  const [fStatus, setFStatus] = useState("all");      // all | working | resigned
+  const [q, setQ] = useState("");
+  const [statusModal, setStatusModal] = useState(null); // employee being marked resigned
+  const [relDate, setRelDate] = useState("");
+  useEffect(() => { setEmpPage(1); }, [fStatus, q]);
 
   const load = useCallback(async () => {
     setLoading(true); setErr("");
@@ -10171,8 +10199,38 @@ function AdminEmployees({ readOnly = false, currentUser }) {
     } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); } finally { setSaving(false); }
   }
 
+  async function setStatus(emp, status, relievingDate) {
+    try {
+      const upd = await api.updateEmployeeStatus(emp.id, status, relievingDate || null);
+      setEmployees(list => list.map(e => (e.id === emp.id ? { ...e, ...upd } : e)));
+      setStatusModal(null);
+    } catch (e) { dialog.alert(e.message, { title: "Error", dtype: "error" }); }
+  }
+  async function markWorking(emp) {
+    if (!await dialog.confirm(`Mark ${emp.name} as currently working again? They will reappear in timesheet approvals.`, { title: "Mark as working", dtype: "info" })) return;
+    setStatus(emp, "working");
+  }
+
   if (loading) return <Spinner />;
   if (err) return <ErrBox msg={err} onRetry={load} />;
+
+  const todayIso = isoDate(new Date());
+  const isResigned = e => e.employment_status === "resigned";
+  const counts = { all: employees.length, working: employees.filter(e => !isResigned(e)).length, resigned: employees.filter(isResigned).length };
+  const shown = employees.filter(e =>
+    (fStatus === "all" || (fStatus === "resigned" ? isResigned(e) : !isResigned(e))) &&
+    (!q || `${e.name} ${e.email} ${e.custom_employee_id || ""} ${e.designation || ""}`.toLowerCase().includes(q.toLowerCase())));
+  const statusCell = e => {
+    if (!isResigned(e)) return <Badge color={C.green}>● Currently working</Badge>;
+    const d = e.relieving_date ? String(e.relieving_date).slice(0, 10) : "";
+    const serving = d && d >= todayIso;
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 3, alignItems: "flex-start" }}>
+        <Badge color={serving ? C.amber : C.textMuted}>{serving ? "Serving notice" : "Resigned"}</Badge>
+        {d && <span style={{ fontSize: 11, color: C.textMuted }}>Last day {fmtD(d)}</span>}
+      </div>
+    );
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
@@ -10184,22 +10242,39 @@ function AdminEmployees({ readOnly = false, currentUser }) {
         {!readOnly && <Btn onClick={() => setModal("new")}>+ New Employee</Btn>}
       </div>
 
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }} role="tablist" aria-label="Employment status">
+          {[["all", "All", C.accent], ["working", "Currently working", C.green], ["resigned", "Resigned", C.textMuted]].map(([k, l, c]) => (
+            <button key={k} role="tab" aria-selected={fStatus === k} onClick={() => setFStatus(k)} style={{
+              display: "inline-flex", alignItems: "center", gap: 7, padding: "7px 13px", borderRadius: 999, cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, fontWeight: 700,
+              border: `1px solid ${fStatus === k ? c : C.border}`, background: fStatus === k ? c + "1f" : C.surface, color: fStatus === k ? C.text : C.textDim,
+            }}>
+              {k !== "all" && <i style={{ width: 7, height: 7, borderRadius: "50%", background: c, display: "inline-block" }} />}{l}
+              <b style={{ fontSize: 11, padding: "1px 7px", borderRadius: 999, background: fStatus === k ? c : C.border, color: fStatus === k ? "#fff" : C.text }}>{counts[k]}</b>
+            </button>
+          ))}
+        </div>
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search name, email, ID…" aria-label="Search employees"
+          style={{ flex: "1 1 220px", maxWidth: 360, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, padding: "9px 12px", fontSize: 13, outline: "none", fontFamily: "inherit" }} />
+      </div>
+
       <Card style={{ padding: 0, overflow: "hidden" }}>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead style={{ background: C.surface }}><tr>
-              {["Emp ID", "Employee", "Email", "Group", "Manager", "Joining Date", "CTC", ...(isAdminOnly ? ["Gratuity"] : []), "Actions"].map(h => <Th key={h}>{h}</Th>)}
+              {["Emp ID", "Employee", "Status", "Email", "Group", "Manager", "Joining Date", "CTC", ...(isAdminOnly ? ["Gratuity"] : []), "Actions"].map(h => <Th key={h}>{h}</Th>)}
             </tr></thead>
             <tbody>
-              {employees.slice((empPage - 1) * empPerPage, empPage * empPerPage).map((emp, idx) => {
+              {shown.slice((empPage - 1) * empPerPage, empPage * empPerPage).map((emp, idx) => {
                 const grp = groups.find(g => g.id === emp.group_id);
                 return (
-                  <tr key={emp.id} style={{ borderBottom: `1px solid ${C.border} 22`, background: idx % 2 === 0 ? "transparent" : C.bg + "44" }}>
+                  <tr key={emp.id} style={{ borderBottom: `1px solid ${C.border} 22`, background: idx % 2 === 0 ? "transparent" : C.bg + "44", opacity: isResigned(emp) && !(emp.relieving_date && String(emp.relieving_date).slice(0, 10) >= todayIso) ? 0.62 : 1 }}>
                     <Td style={{ fontSize: 13, fontWeight: 700, color: C.textDim }}>{emp.custom_employee_id || "—"}</Td>
                     <Td><div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <Avatar initials={emp.avatar} color={emp.group_color || C.accent} size={32} />
                       <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{emp.name}</span>
                     </div></Td>
+                    <Td>{statusCell(emp)}</Td>
                     <Td style={{ fontSize: 12, color: C.textDim }}>{emp.email}</Td>
                     <Td>{grp ? <Badge color={grp.color}>{grp.name}</Badge> : <span style={{ color: C.textMuted, fontSize: 12 }}>—</span>}</Td>
                     <Td style={{ fontSize: 12, color: C.textDim }}>{emp.manager_name || "—"}</Td>
@@ -10209,15 +10284,18 @@ function AdminEmployees({ readOnly = false, currentUser }) {
                     <Td><div style={{ display: "flex", gap: 6 }}>
                       <Btn small variant="secondary" onClick={() => setViewModal(emp)}>👁 View</Btn>
                       {!readOnly && <Btn small variant="ghost" onClick={() => setModal(emp)}>✏ Edit</Btn>}
+                      {isAdminOnly && !readOnly && (isResigned(emp)
+                        ? <Btn small variant="ghost" onClick={() => markWorking(emp)}>↺ Rejoined</Btn>
+                        : <Btn small variant="danger" onClick={() => { setRelDate(todayIso); setStatusModal(emp); }}>Mark resigned</Btn>)}
                     </div></Td>
                   </tr>
                 );
               })}
-              {employees.length === 0 && <tr><td colSpan={(readOnly ? 7 : 8) + (isAdminOnly ? 1 : 0)} style={{ padding: 40, textAlign: "center", color: C.textMuted }}>No employees found.</td></tr>}
+              {shown.length === 0 && <tr><td colSpan={9 + (isAdminOnly ? 1 : 0)} style={{ padding: 40, textAlign: "center", color: C.textMuted }}>{employees.length ? "No employees match this filter." : "No employees found."}</td></tr>}
             </tbody>
           </table>
         </div>
-        <PaginationControls page={empPage} setPage={setEmpPage} perPage={empPerPage} setPerPage={setEmpPerPage} total={employees.length} />
+        <PaginationControls page={empPage} setPage={setEmpPage} perPage={empPerPage} setPerPage={setEmpPerPage} total={shown.length} />
       </Card>
 
       {/* Create / Edit employee modal */}
@@ -10228,6 +10306,22 @@ function AdminEmployees({ readOnly = false, currentUser }) {
             groups={groups} employees={employees} saving={saving} onCancel={() => setModal(null)} onSave={saveEmp}
             btnLabel={modal === "new" ? "Create Employee" : "Save Changes"}
           />
+        </Modal>
+      )}
+
+      {/* Mark resigned */}
+      {statusModal && (
+        <Modal title="Mark as resigned" onClose={() => setStatusModal(null)} maxWidth={420}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ fontSize: 13.5, color: C.textDim, lineHeight: 1.5 }}>
+              <b style={{ color: C.text }}>{statusModal.name}</b> will be shown as resigned. They stay in timesheet approvals until their last working day, then drop off. Past timesheets, payslips and records are kept.
+            </div>
+            <Inp label="Last working day *" type="date" value={relDate} onChange={setRelDate} required />
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <Btn variant="ghost" onClick={() => setStatusModal(null)}>Cancel</Btn>
+              <Btn variant="danger" disabled={!relDate} onClick={() => setStatus(statusModal, "resigned", relDate)}>Mark resigned</Btn>
+            </div>
+          </div>
         </Modal>
       )}
 
@@ -10244,6 +10338,7 @@ function AdminEmployees({ readOnly = false, currentUser }) {
                   {viewModal.group_name ? <Badge color={viewModal.group_color}>{viewModal.group_name}</Badge> : null}
                   {viewModal.designation && <span style={{ fontSize: 12, color: C.text, fontWeight: 600 }}>• {viewModal.designation}</span>}
                   {viewModal.location && <span style={{ fontSize: 12, color: C.textDim }}>({viewModal.location})</span>}
+                  {statusCell(viewModal)}
                 </div>
               </div>
             </div>
@@ -13541,6 +13636,10 @@ function buildNav(user) {
   const portalPage = role === "manager" ? "mywork" : "employee-home";
   const portal = PORTAL_TABS.filter(t => !(intern && t.noIntern)).map(t => ({ id: `${portalPage}:${t.tab}`, page: portalPage, tab: t.tab, label: t.label, icon: t.icon }));
   const adminItem = id => { const n = ADMIN_NAV.find(x => x.id === id); return n && { id, page: id, label: n.label.replace("Generate ", "").replace(" (Client)", ""), icon: n.icon }; };
+  if (role === "contractor") {
+    // Contractors only log and submit their own timesheets.
+    return { groups: [{ title: "My work", items: [{ id: "contractor-ts", page: "contractor-ts", label: "My Timesheets", icon: "⏱" }] }], home: "contractor-ts", portalPage: null };
+  }
   if (role === "admin") {
     return { groups: ADMIN_GROUPS.map(g => ({ title: g.title, items: g.ids.map(adminItem).filter(Boolean) })), home: "dashboard", portalPage: null };
   }
@@ -13716,11 +13815,11 @@ function AppShell({ currentUser, darkMode, onToggleTheme, onLogout, page, portal
   const go = i => { onNavigate(i.page, i.tab); setDrawer(false); setPalette(false); setMenu(null); };
   const name = currentUser.emp_name || currentUser.username || "";
   const first = name.split(" ")[0];
-  const roleLabel = { admin: "Administrator", manager: "Manager", intras: "Intern" }[currentUser.role] || "Employee";
-  const roleColor = { admin: C.purple, manager: C.green, intras: C.amber }[currentUser.role] || C.accent;
+  const roleLabel = { admin: "Administrator", manager: "Manager", intras: "Intern", contractor: "Contractor" }[currentUser.role] || "Employee";
+  const roleColor = { admin: C.purple, manager: C.green, intras: C.amber, contractor: "#06b6d4" }[currentUser.role] || C.accent;
   const initials = currentUser.avatar || mkAvi(name);
 
-  const quick = portalPage
+  const quick = currentUser.role === "contractor" ? [] : portalPage
     ? [{ label: "Log time", icon: "⏱", page: portalPage, tab: "timesheets" }, { label: "Request leave", icon: "🌴", page: portalPage, tab: "leave" }, { label: "New expense claim", icon: "💳", page: portalPage, tab: "expenses" }]
     : [{ label: "Generate payslip", icon: "💰", page: "payslips" }, { label: "Onboard employee", icon: "🧑‍💼", page: "onboard" }, { label: "View reports", icon: "◫", page: "reports" }];
 
@@ -13735,7 +13834,7 @@ function AppShell({ currentUser, darkMode, onToggleTheme, onLogout, page, portal
   const ql = q.trim().toLowerCase();
   const results = actions.filter(a => !ql || `${a.label} ${a.group || ""} ${a.kind}`.toLowerCase().includes(ql)).slice(0, 12);
 
-  const mobileTabs = portalPage
+  const mobileTabs = currentUser.role === "contractor" ? items : portalPage
     ? [items.find(i => i.page === home), ...["timesheets", "leave", portalPage && currentUser.role !== "intras" ? "pay" : "expenses"].map(t => items.find(i => i.tab === t))].filter(Boolean)
     : ["dashboard", "people", "attendance", "payslips"].map(id => items.find(i => i.id === id)).filter(Boolean);
 
@@ -14187,7 +14286,7 @@ export default function App() {
     localStorage.setItem("pp_token", data.access_token);
     localStorage.setItem("pp_user", JSON.stringify(data.user));
     setCurrentUser(data.user);
-    setPage(data.user.role === "admin" ? "dashboard" : "emp-dashboard");
+    setPage(data.user.role === "admin" ? "dashboard" : data.user.role === "contractor" ? "contractor-ts" : "emp-dashboard");
   }
 
   function handleLogout() {
@@ -14209,7 +14308,9 @@ export default function App() {
       <style>{themeVars}</style>
       <AppShell currentUser={currentUser} darkMode={darkMode} onToggleTheme={toggleTheme} onLogout={handleLogout}
         page={activePage} portalTab={portalTab} onNavigate={navWithTab}>
-        {!isAdmin ? (<>
+        {currentUser.role === "contractor" ? (
+          <Timesheets currentUser={currentUser} viewOnly />
+        ) : !isAdmin ? (<>
           {activePage === "emp-dashboard" && <EmployeeDashboard currentUser={currentUser} navFn={navWithTab} />}
           {activePage === "employee-home" && <EmployeeHome currentUser={currentUser} defaultTab={portalTab} navFn={navWithTab} onTabChange={setPortalTab} />}
           {activePage === "resumes" && <AdminCompanyResume />}

@@ -1,10 +1,37 @@
 """routes/accounts.py"""
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required
 import bcrypt
 from db import query, execute
 
 accounts_bp = Blueprint("accounts", __name__)
+
+VALID_ROLES = ("admin", "manager", "employee", "intras", "contractor")
+_contractor_ready = False
+
+
+def _ensure_contractor_role():
+    """Add 'contractor' to the user_accounts.role ENUM once, if the migration wasn't run."""
+    global _contractor_ready
+    if _contractor_ready:
+        return
+    col = query("SHOW COLUMNS FROM user_accounts LIKE 'role'", fetch="one")
+    if col and "contractor" not in str(col.get("Type", "")):
+        execute("ALTER TABLE user_accounts MODIFY COLUMN role "
+                "ENUM('admin','manager','employee','intras','contractor') NOT NULL DEFAULT 'employee'")
+    _contractor_ready = True
+
+
+def _check_role(role):
+    if role not in VALID_ROLES:
+        return f"Invalid role '{role}'"
+    if role == "contractor":
+        try:
+            _ensure_contractor_role()
+        except Exception as e:
+            current_app.logger.exception("Could not add contractor role")
+            return f"Contractor role is not set up in the database yet (run database/migrate_contractor_role.sql): {e}"
+    return None
 
 
 def _fmt(row):
@@ -42,6 +69,9 @@ def create_account():
 
     if not username or not password:
         return jsonify(error="username and password are required"), 400
+    role_err = _check_role(role)
+    if role_err:
+        return jsonify(error=role_err), 400
     if len(password) < 4:
         return jsonify(error="password must be at least 4 characters"), 400
     existing = query("SELECT id FROM user_accounts WHERE username=%s", (username,), fetch="one")
@@ -75,6 +105,9 @@ def update_account(aid):
     role     = d.get("role", "employee")
     active   = 1 if d.get("active", True) else 0
     new_pass = d.get("newPassword") or d.get("newPass") or ""
+    role_err = _check_role(role)
+    if role_err:
+        return jsonify(error=role_err), 400
 
     if new_pass:
         pw_hash = bcrypt.hashpw(new_pass.encode(), bcrypt.gensalt()).decode()
