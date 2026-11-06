@@ -3258,6 +3258,7 @@ function LoginPage({ onLogin }) {
           </div>
         </div>
       </main>
+      <InstallBanner />
     </div>
   );
 }
@@ -13561,6 +13562,122 @@ function buildNav(user) {
   };
 }
 
+// ════════════════════════════════════════════════════════
+// INSTALL AS APP (PWA)
+// ════════════════════════════════════════════════════════
+const pwaIsStandalone = () => (typeof window !== "undefined") && ((window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true);
+const pwaIsIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const pwaIsMobile = () => /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+function usePwaInstall() {
+  const [canPrompt, setCanPrompt] = useState(() => !!window.__pwaPrompt);
+  const [installed, setInstalled] = useState(pwaIsStandalone);
+  useEffect(() => {
+    const onReady = () => setCanPrompt(true);
+    const onDone = () => { setCanPrompt(false); setInstalled(true); };
+    window.addEventListener("pwa-installable", onReady);
+    window.addEventListener("pwa-installed", onDone);
+    return () => { window.removeEventListener("pwa-installable", onReady); window.removeEventListener("pwa-installed", onDone); };
+  }, []);
+  // Returns true if the native prompt was shown; false means "show manual instructions".
+  const install = async () => {
+    const p = window.__pwaPrompt;
+    if (!p) return false;
+    p.prompt();
+    try { const { outcome } = await p.userChoice; if (outcome === "accepted") setInstalled(true); } catch { /* ignore */ }
+    window.__pwaPrompt = null; setCanPrompt(false);
+    return true;
+  };
+  return { canPrompt, installed, ios: pwaIsIOS(), install };
+}
+
+function InstallGuide({ onClose }) {
+  const ios = pwaIsIOS();
+  const android = /android/i.test(navigator.userAgent);
+  useEffect(() => {
+    const h = e => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h);
+  }, [onClose]);
+  const steps = ios
+    ? [["1", <>Tap the <b>Share</b> button <span className="pwa-key">⬆︎</span> in Safari's toolbar</>], ["2", <>Scroll down and tap <b>Add to Home Screen</b> <span className="pwa-key">＋</span></>], ["3", <>Tap <b>Add</b> — the FIT Portal icon appears on your home screen</>]]
+    : android
+      ? [["1", <>Open the browser menu <span className="pwa-key">⋮</span> (top-right in Chrome)</>], ["2", <>Tap <b>Install app</b> or <b>Add to Home screen</b></>], ["3", <>Confirm <b>Install</b> — open FIT Portal from your home screen</>]]
+      : [["1", <>In Chrome or Edge, click the <b>install icon</b> <span className="pwa-key">⊕</span> at the right of the address bar</>], ["2", <>Or open the browser menu and choose <b>Install FIT Portal</b> / <b>Apps → Install</b></>], ["3", <>On iPhone/iPad use Safari → Share → <b>Add to Home Screen</b></>]];
+  return (
+    <div className="pwa-bg" onMouseDown={onClose}>
+      <div className="pwa-sheet" role="dialog" aria-modal="true" aria-label="Install the app" onMouseDown={e => e.stopPropagation()}>
+        <div className="pwa-head">
+          <img src="/icons/icon-192.png" alt="" />
+          <div><b>Install FIT Portal</b><small>Opens full-screen like a native app, with its own home-screen icon</small></div>
+          <button className="pwa-x" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+        <ol className="pwa-steps">{steps.map(([n, t]) => <li key={n}><span>{n}</span><div>{t}</div></li>)}</ol>
+        {ios && !/safari/i.test(navigator.userAgent.replace(/crios|fxios|edgios/gi, "x")) && <div className="pwa-note">On iPhone and iPad this works in <b>Safari</b>. If you're in another browser, open this page in Safari first.</div>}
+        <ul className="pwa-perks"><li>⚡ Faster start</li><li>📱 Full-screen, no browser bars</li><li>🔒 Same secure login</li></ul>
+        <button className="pwa-ok" onClick={onClose}>Got it</button>
+      </div>
+    </div>
+  );
+}
+
+const pwaCss = () => `
+  .pwa-bg { position: fixed; inset: 0; z-index: 2000; background: rgba(0,0,0,.6); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .pwa-sheet { width: 100%; max-width: 440px; background: ${C.card}; border: 1px solid ${C.border}; border-radius: 22px; padding: 20px; box-shadow: 0 30px 80px rgba(0,0,0,.6); display: flex; flex-direction: column; gap: 16px; }
+  .pwa-head { display: flex; gap: 14px; align-items: center; }
+  .pwa-head img { width: 54px; height: 54px; border-radius: 14px; flex-shrink: 0; box-shadow: 0 8px 24px rgba(129,78,199,.35); }
+  .pwa-head div { flex: 1; min-width: 0; }
+  .pwa-head b { display: block; font-size: 17px; color: ${C.text}; }
+  .pwa-head small { display: block; font-size: 12.5px; color: ${C.textMuted}; margin-top: 2px; line-height: 1.4; }
+  .pwa-x { width: 34px; height: 34px; border-radius: 10px; border: 1px solid ${C.border}; background: ${C.surface}; color: ${C.textDim}; cursor: pointer; flex-shrink: 0; font-family: inherit; }
+  .pwa-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  .pwa-steps li { display: flex; gap: 12px; align-items: flex-start; font-size: 13.5px; color: ${C.textDim}; line-height: 1.5; }
+  .pwa-steps li > span { width: 26px; height: 26px; border-radius: 50%; background: ${C.accent}; color: #fff; font-weight: 800; font-size: 13px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .pwa-steps b { color: ${C.text}; }
+  .pwa-key { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 6px; border: 1px solid ${C.border}; background: ${C.surface}; color: ${C.text}; font-size: 12px; margin: 0 2px; }
+  .pwa-note { font-size: 12.5px; color: ${C.amber}; background: ${C.amber}12; border: 1px solid ${C.amber}40; border-radius: 12px; padding: 10px 12px; }
+  .pwa-perks { list-style: none; margin: 0; padding: 0; display: flex; gap: 8px; flex-wrap: wrap; }
+  .pwa-perks li { font-size: 12px; font-weight: 700; color: ${C.textDim}; background: ${C.surface}; border: 1px solid ${C.border}; border-radius: 999px; padding: 5px 10px; }
+  .pwa-ok { height: 44px; border-radius: 12px; border: none; background: ${C.accent}; color: #fff; font-weight: 800; font-size: 14px; cursor: pointer; font-family: inherit; }
+  .pwa-banner { position: fixed; left: 50%; transform: translateX(-50%); bottom: 20px; z-index: 1500; width: min(520px, calc(100% - 24px)); display: flex; align-items: center; gap: 12px; padding: 12px 12px 12px 14px; border-radius: 18px; background: color-mix(in srgb, ${C.card} 94%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid ${C.border}; box-shadow: 0 18px 50px rgba(0,0,0,.5); animation: pwaUp .3s ease-out; }
+  @keyframes pwaUp { from { transform: translate(-50%, 20px); opacity: 0; } }
+  .pwa-banner img { width: 42px; height: 42px; border-radius: 11px; flex-shrink: 0; }
+  .pwa-banner div { flex: 1; min-width: 0; }
+  .pwa-banner b { display: block; font-size: 14px; color: ${C.text}; }
+  .pwa-banner small { display: block; font-size: 12px; color: ${C.textMuted}; }
+  .pwa-banner .go { height: 38px; padding: 0 16px; border-radius: 11px; border: none; background: ${C.accent}; color: #fff; font-weight: 800; font-size: 13px; cursor: pointer; font-family: inherit; white-space: nowrap; }
+  .pwa-banner .no { width: 32px; height: 32px; border-radius: 9px; border: none; background: transparent; color: ${C.textMuted}; cursor: pointer; font-size: 15px; font-family: inherit; flex-shrink: 0; }
+  @media (max-width: 767px) { .pwa-banner.above-nav { bottom: calc(80px + env(safe-area-inset-bottom)); } }
+  @media (max-width: 640px) { .pwa-bg { align-items: flex-end; padding: 0; } .pwa-sheet { max-width: none; border-radius: 22px 22px 0 0; padding-bottom: calc(20px + env(safe-area-inset-bottom)); } }
+`;
+
+// Bottom banner inviting phone/tablet users to install. Dismiss hides it for 14 days.
+function InstallBanner({ aboveNav }) {
+  const { canPrompt, installed, ios, install } = usePwaInstall();
+  const [guide, setGuide] = useState(false);
+  const [hidden, setHidden] = useState(() => {
+    const t = +localStorage.getItem("pp_install_dismissed") || 0;
+    return Date.now() - t < 14 * 86400000;
+  });
+  const [ready, setReady] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setReady(true), 1500); return () => clearTimeout(t); }, []);
+  const show = ready && !installed && !hidden && pwaIsMobile() && (canPrompt || ios);
+  const dismiss = () => { localStorage.setItem("pp_install_dismissed", String(Date.now())); setHidden(true); };
+  return (
+    <>
+      {(show || guide) && <style>{pwaCss()}</style>}
+      {show && !guide && (
+        <div className={`pwa-banner${aboveNav ? " above-nav" : ""}`} role="region" aria-label="Install app">
+          <img src="/icons/icon-192.png" alt="" />
+          <div><b>Install FIT Portal</b><small>Add it to your home screen for one-tap access</small></div>
+          <button className="go" onClick={async () => { if (!(await install())) setGuide(true); }}>Install</button>
+          <button className="no" onClick={dismiss} aria-label="Not now" title="Not now">✕</button>
+        </div>
+      )}
+      {guide && <InstallGuide onClose={() => { setGuide(false); dismiss(); }} />}
+    </>
+  );
+}
+
 function AppShell({ currentUser, darkMode, onToggleTheme, onLogout, page, portalTab, onNavigate, children }) {
   const { groups, home, portalPage } = buildNav(currentUser);
   const items = groups.flatMap(g => g.items.map(i => ({ ...i, group: g.title })));
@@ -13570,6 +13687,9 @@ function AppShell({ currentUser, darkMode, onToggleTheme, onLogout, page, portal
   const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem("pp_nav_collapsed") === "1"; } catch { return false; } });
   const [drawer, setDrawer] = useState(false);
   const [palette, setPalette] = useState(false);
+  const pwa = usePwaInstall();
+  const [installGuide, setInstallGuide] = useState(false);
+  const doInstall = async () => { if (!(await pwa.install())) setInstallGuide(true); };
   const [menu, setMenu] = useState(null); // "profile" | "quick" | null
   const [q, setQ] = useState("");
   const [sel, setSel] = useState(0);
@@ -13609,6 +13729,7 @@ function AppShell({ currentUser, darkMode, onToggleTheme, onLogout, page, portal
     ...quick.map(a => ({ ...a, id: `q-${a.label}`, kind: "Action", run: () => go(a) })),
     { id: "theme", label: darkMode ? "Switch to light theme" : "Switch to dark theme", icon: darkMode ? "☀" : "🌙", kind: "Preference", run: () => { onToggleTheme(); setPalette(false); } },
     { id: "collapse", label: collapsed ? "Expand sidebar" : "Collapse sidebar", icon: "⇤", kind: "Preference", run: () => { setCollapsed(c => !c); setPalette(false); } },
+    ...(pwa.installed ? [] : [{ id: "install", label: "Install app on this device", icon: "📲", kind: "App", run: () => { setPalette(false); doInstall(); } }]),
     { id: "logout", label: "Sign out", icon: "↩", kind: "Account", run: () => onLogout() },
   ];
   const ql = q.trim().toLowerCase();
@@ -13834,6 +13955,7 @@ function AppShell({ currentUser, darkMode, onToggleTheme, onLogout, page, portal
           </div>
           <button className="sh-search" onClick={() => setPalette(true)} aria-label="Search or jump to (Ctrl+K)">🔍 <span>Search or jump to…</span><kbd>⌘K</kbd></button>
           <div className="sh-actions">
+            {!pwa.installed && (pwa.canPrompt || pwa.ios) && <button className="sh-icon" onClick={doInstall} title="Install app" aria-label="Install app">📲</button>}
             <button className="sh-icon" onClick={onToggleTheme} title={darkMode ? "Light theme" : "Dark theme"} aria-label="Toggle theme">{darkMode ? "☀" : "🌙"}</button>
             <button className="sh-prof sh-pop-trigger" onClick={() => setMenu(m => m === "profile" ? null : "profile")} aria-haspopup="menu" aria-expanded={menu === "profile"}>
               <div className="sh-avi" style={{ background: `linear-gradient(135deg, ${roleColor}, ${C.accent})` }}>{initials}</div>
@@ -13851,6 +13973,7 @@ function AppShell({ currentUser, darkMode, onToggleTheme, onLogout, page, portal
                 {portalPage && <button role="menuitem" className="sh-pop-item" onClick={() => go({ page: portalPage, tab: "profile" })}><span>👤</span>My profile</button>}
                 {portalPage && currentUser.role !== "intras" && <button role="menuitem" className="sh-pop-item" onClick={() => go({ page: portalPage, tab: "pay" })}><span>💰</span>My payslips</button>}
                 <button role="menuitem" className="sh-pop-item" onClick={() => { onToggleTheme(); setMenu(null); }}><span>{darkMode ? "☀" : "🌙"}</span>{darkMode ? "Light theme" : "Dark theme"}</button>
+                {!pwa.installed && <button role="menuitem" className="sh-pop-item" onClick={() => { setMenu(null); doInstall(); }}><span>📲</span>Install app<small style={{ marginLeft: "auto", color: C.textMuted, fontSize: 11.5 }}>Phone · tablet · desktop</small></button>}
                 <button role="menuitem" className="sh-pop-item" onClick={() => { setPalette(true); setMenu(null); }}><span>⌘</span>Command menu <small style={{ marginLeft: "auto", color: C.textMuted, fontSize: 11.5 }}>Ctrl/⌘ K</small></button>
                 <div style={{ height: 1, background: C.border, margin: "6px 0" }} />
                 <button role="menuitem" className="sh-pop-item danger" onClick={onLogout}><span>↩</span>Sign out</button>
@@ -13876,6 +13999,9 @@ function AppShell({ currentUser, darkMode, onToggleTheme, onLogout, page, portal
         ))}
         <button className={drawer ? "on" : ""} onClick={() => setDrawer(true)}><span>☰</span><span>More</span></button>
       </nav>
+
+      <InstallBanner aboveNav />
+      {installGuide && <><style>{pwaCss()}</style><InstallGuide onClose={() => setInstallGuide(false)} /></>}
 
       {/* ── Command palette ── */}
       {palette && (
